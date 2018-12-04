@@ -1,0 +1,24 @@
+[package]
+name = "clickhouse-rs"
+version = "0.1.1"
+authors = ["Mikhail Sukharev <suharev7@gmail.com>"]
+license = "MIT"
+homepage = "https://github.com/suharev7/clickhouse-rs"
+repository = "https://github.com/suharev7/clickhouse-rs"
+description = "clickhouse-rs is a library for accessing a Yandex ClickHouse database over native interface from the tokio."
+keywords = ["clickhouse"]
+
+[dependencies]
+log = "0.3.6"
+futures = "0.1"
+tokio = "0.1.11"
+hostname = "^0.1"
+
+rand="0.5"
+
+chrono = "0.4"
+chrono-tz = "0.5"
+
+[dev-dependencies]
+env_logger = "0.3.0"
+

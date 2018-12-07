@@ -7,7 +7,7 @@ use chrono::prelude::*;
 use chrono_tz::Tz;
 use tokio::prelude::*;
 
-use clickhouse_rs::{Block, Client, Options};
+use clickhouse_rs::{Block, Client, Options, IoFuture};
 use Tz::UTC;
 
 #[test]
@@ -287,4 +287,49 @@ fn test_with_totals() {
         .map_err(|err| panic!("Exception: {}", err));
 
     tokio::run(done);
+}
+
+#[test]
+fn test_concurrent_queries() {
+    fn query_sum(n: u64) -> IoFuture<u64> {
+        let sql = format!("SELECT number FROM system.numbers LIMIT {}", n);
+
+        let options = Options::new("127.0.0.1:9000".parse().unwrap());
+        Box::new(
+            Client::connect(options)
+                .and_then(move |c| c.ping())
+                .and_then(move |c| c.query_all(sql.as_str()))
+                .and_then(move |(_, block)| {
+                    let mut total = 0_u64;
+                    for row in 0_usize..block.row_count() {
+                        let x: u64 = block.get(row, "number")?;
+                        total += x;
+                    }
+                    Ok(total)
+                }),
+        )
+    }
+
+    let m = 250000_u64;
+
+    let expected = (m*1) * ((m*1) - 1) / 2
+        + (m*2) * ((m*2) - 1) / 2
+        + (m*3) * ((m*3) - 1) / 2
+        + (m*4) * ((m*4) - 1) / 2;
+
+    let requests = vec![
+        query_sum(m*1),
+        query_sum(m*2),
+        query_sum(m*3),
+        query_sum(m*4),
+    ];
+
+    let done = future::join_all(requests)
+        .and_then(move |xs| {
+            let actual: u64 = xs.iter().sum();
+            assert_eq!(actual, expected);
+            Ok(())
+        }).map_err(|_| eprintln!("database error"));
+
+    tokio::run(done)
 }

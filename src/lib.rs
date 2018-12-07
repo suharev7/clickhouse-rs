@@ -19,7 +19,7 @@ use tokio::prelude::*;
 pub use block::Block;
 use block::BlockEx;
 use io::ClickhouseTransport;
-use io::IoFuture;
+pub use io::IoFuture;
 use types::query::QueryEx;
 pub use types::ClickhouseError;
 use types::{ClickhouseResult, Cmd, Context, Packet, Query};

@@ -1,12 +1,14 @@
 [package]
 name = "clickhouse-rs"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Mikhail Sukharev <suharev7@gmail.com>"]
 license = "MIT"
 homepage = "https://github.com/suharev7/clickhouse-rs"
 repository = "https://github.com/suharev7/clickhouse-rs"
-description = "clickhouse-rs is a library for accessing a Yandex ClickHouse database over native interface from the tokio."
-keywords = ["clickhouse"]
+description = "Tokio based asynchronous Yandex ClickHouse client library."
+readme = "README.md"
+keywords = ["tokio", "database", "clickhouse"]
+categories = ["database"]
 
 [dependencies]
 log = "0.3.6"
@@ -14,11 +16,14 @@ futures = "0.1"
 tokio = "0.1.11"
 hostname = "^0.1"
 
-rand="0.5"
-
 chrono = "0.4"
 chrono-tz = "0.5"
 
+lz4 = "1.23.1"
+clickhouse-rs-cityhash-sys = { path = "clickhouse-rs-cityhash-sys", version = "0.1.0" }
+
+byteorder = "1.2.7"
+
 [dev-dependencies]
 env_logger = "0.3.0"
-
+rand="0.5"

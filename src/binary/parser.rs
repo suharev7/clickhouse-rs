@@ -12,6 +12,7 @@ use Block;
 pub struct Parser<T> {
     reader: T,
     tz: Option<Tz>,
+    compress: bool,
 }
 
 /// The parser can be used to parse clickhouse responses into values.  Generally
@@ -23,8 +24,12 @@ impl<'a, T: Read> Parser<T> {
     /// than one value can be behind the reader in which case the parser can
     /// be invoked multiple times.  In other words: the stream does not have
     /// to be terminated.
-    pub fn new(reader: T, tz: Option<Tz>) -> Parser<T> {
-        Parser { reader, tz }
+    pub fn new(reader: T, tz: Option<Tz>, compress: bool) -> Parser<T> {
+        Parser {
+            reader,
+            tz,
+            compress,
+        }
     }
 
     /// parses a single value out of the stream.  If there are multiple
@@ -50,7 +55,8 @@ impl<'a, T: Read> Parser<T> {
         match self.tz {
             None => Err(ClickhouseError::UnexpectedPacket.into()),
             Some(tz) => {
-                let block = Block::load(&mut self.reader, tz)?;
+                let _ = self.reader.read_string()?;
+                let block = Block::load(&mut self.reader, tz, self.compress)?;
                 Ok(Packet::Block(block))
             }
         }

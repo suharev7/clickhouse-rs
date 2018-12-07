@@ -10,9 +10,15 @@ use tokio::prelude::*;
 use clickhouse_rs::{Block, Client, Options};
 use Tz::UTC;
 
+const COMPRESSION: bool = true;
+
 #[test]
 fn test_ping() {
-    let options = Options::new("127.0.0.1:9000".parse().unwrap());
+    let mut options = Options::new("127.0.0.1:9000".parse().unwrap());
+    if COMPRESSION {
+        options = options.with_compression();
+    }
+
     let done = Client::connect(options)
         .and_then(|c| c.ping())
         .and_then(|_| Ok(()))
@@ -29,7 +35,11 @@ fn test_create_table() {
                click_time DateTime\
                ) Engine=Memory";
 
-    let options = Options::new("127.0.0.1:9000".parse().unwrap());
+    let mut options = Options::new("127.0.0.1:9000".parse().unwrap());
+    if COMPRESSION {
+        options = options.with_compression();
+    }
+
     let done = Client::connect(options)
         .and_then(|c| c.ping())
         .and_then(move |c| c.execute("DROP TABLE IF EXISTS clickhouse_test_create_table"))
@@ -103,7 +113,11 @@ fn test_insert() {
 
     let expected = block.clone();
 
-    let options = Options::new("127.0.0.1:9000".parse().unwrap());
+    let mut options = Options::new("127.0.0.1:9000".parse().unwrap());
+    if COMPRESSION {
+        options = options.with_compression();
+    }
+
     let done = Client::connect(options)
         .and_then(|c| c.ping())
         .and_then(move |c| c.execute("DROP TABLE IF EXISTS clickhouse_test_insert"))
@@ -147,7 +161,11 @@ fn test_select() {
             ],
         );
 
-    let options = Options::new("127.0.0.1:9000".parse().unwrap());
+    let mut options = Options::new("127.0.0.1:9000".parse().unwrap());
+    if COMPRESSION {
+        options = options.with_compression();
+    }
+
     let done = Client::connect(options)
         .and_then(|c| c.ping())
         .and_then(|c| c.execute("DROP TABLE IF EXISTS clickhouse_test_select"))
@@ -198,7 +216,11 @@ fn test_select() {
 
 #[test]
 fn test_simple_select() {
-    let options = Options::new("127.0.0.1:9000".parse().unwrap());
+    let mut options = Options::new("127.0.0.1:9000".parse().unwrap());
+    if COMPRESSION {
+        options = options.with_compression();
+    }
+
     let done = Client::connect(options)
         .and_then(|c| c.ping())
         .and_then(|c| c.query_all("SELECT a FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a) ORDER BY a ASC"))
@@ -237,7 +259,11 @@ fn test_simple_select() {
 fn test_temporary_table() {
     let ddl = "CREATE TEMPORARY TABLE clickhouse_test_temporary_table (ID UInt64);";
 
-    let options = Options::new("127.0.0.1:9000".parse().unwrap());
+    let mut options = Options::new("127.0.0.1:9000".parse().unwrap());
+    if COMPRESSION {
+        options = options.with_compression();
+    }
+
     let done = Client::connect(options)
         .and_then(|c| c.ping())
         .and_then(move |c| c.execute(ddl))
@@ -276,7 +302,11 @@ fn test_with_totals() {
         .add_column("country", vec!["EN", "RU", ""])
         .add_column("country", vec![2u64, 4, 6]);
 
-    let options = Options::new("127.0.0.1:9000".parse().unwrap());
+    let mut options = Options::new("127.0.0.1:9000".parse().unwrap());
+    if COMPRESSION {
+        options = options.with_compression();
+    }
+
     let done = Client::connect(options)
         .and_then(|c| c.ping())
         .and_then(|c| c.execute("DROP TABLE IF EXISTS clickhouse_test_with_totals"))

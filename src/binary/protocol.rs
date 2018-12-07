@@ -5,6 +5,7 @@ pub const CLIENT_QUERY: u64 = 1;
 pub const CLIENT_DATA: u64 = 2;
 pub const CLIENT_PING: u64 = 4;
 
+pub const COMPRESS_ENABLE: u64 = 1;
 pub const COMPRESS_DISABLE: u64 = 0;
 
 pub const STATE_COMPLETE: u64 = 2;

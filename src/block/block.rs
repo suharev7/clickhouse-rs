@@ -1,16 +1,22 @@
 use std::cmp;
 use std::fmt;
+use std::io::{self, Cursor};
 
+use byteorder::{LittleEndian, WriteBytesExt};
 use chrono_tz::Tz;
+use clickhouse_rs_cityhash_sys::{city_hash_128, UInt128};
+use lz4::liblz4::{LZ4_compressBound, LZ4_compress_default, LZ4_decompress_safe};
 
 use binary::{protocol, Encoder, ReadEx};
 use block::chunk_iterator::ChunkIterator;
 use block::BlockInfo;
 use column::{self, Column, ColumnFrom};
 use types::{FromSql, FromSqlError, FromSqlResult};
-use ClickhouseResult;
+use {ClickhouseError, ClickhouseResult};
 
 const INSERT_BLOCK_SIZE: usize = 1048576;
+
+const DBMS_MAX_COMPRESSED_SIZE: u32 = 0x40000000; // 1GB
 
 pub trait ColumnIdx {
     fn get_index(&self, columns: &Vec<Column>) -> FromSqlResult<usize>;
@@ -23,8 +29,8 @@ pub struct Block {
 }
 
 pub trait BlockEx {
-    fn write(&self, encoder: &mut Encoder);
-    fn send_data(&self, encoder: &mut Encoder);
+    fn write(&self, encoder: &mut Encoder, compress: bool);
+    fn send_data(&self, encoder: &mut Encoder, compress: bool);
     fn concat(blocks: &[Block]) -> Block;
     fn chunks(&self, n: usize) -> ChunkIterator;
 }
@@ -85,20 +91,26 @@ impl Block {
         Block::default()
     }
 
-    pub fn load<R: ReadEx>(reader: &mut R, tz: Tz) -> ClickhouseResult<Block> {
-        let mut block = Block::default();
+    pub fn load<R: ReadEx>(reader: &mut R, tz: Tz, compress: bool) -> ClickhouseResult<Block> {
+        if compress {
+            let tmp = decompress(reader)?;
+            let mut cursor = Cursor::new(&tmp);
+            Block::load(&mut cursor, tz, false)
+        } else {
+            let mut block = Block::default();
 
-        block.info = BlockInfo::read(reader)?;
+            block.info = BlockInfo::read(reader)?;
 
-        let num_columns = reader.read_uvarint()?;
-        let num_rows = reader.read_uvarint()?;
+            let num_columns = reader.read_uvarint()?;
+            let num_rows = reader.read_uvarint()?;
 
-        for _ in 0..num_columns {
-            let column = Column::read(reader, num_rows as usize, tz)?;
-            block.append_column(column);
+            for _ in 0..num_columns {
+                let column = Column::read(reader, num_rows as usize, tz)?;
+                block.append_column(column);
+            }
+
+            Ok(block)
         }
-
-        Ok(block)
     }
 
     /// Return the number of rows in the current block.
@@ -157,21 +169,55 @@ impl Block {
 }
 
 impl BlockEx for Block {
-    fn write(&self, encoder: &mut Encoder) {
-        self.info.write(encoder);
-        encoder.uvarint(self.column_count() as u64);
-        encoder.uvarint(self.row_count() as u64);
+    fn write(&self, encoder: &mut Encoder, compress: bool) {
+        if compress {
+            let mut tmp_encoder = Encoder::new();
+            self.write(&mut tmp_encoder, false);
+            let tmp = tmp_encoder.get_buffer();
 
-        for column in &self.columns {
-            column.write(encoder);
+            let mut buf = Vec::new();
+            let size;
+            unsafe {
+                buf.resize(9 + LZ4_compressBound(tmp.len() as i32) as usize, 0_u8);
+                size = LZ4_compress_default(
+                    tmp.as_ptr() as *const i8,
+                    (buf.as_mut_ptr() as *mut i8).add(9),
+                    tmp.len() as i32,
+                    buf.len() as i32,
+                );
+            }
+            buf.resize(9 + size as usize, 0u8);
+
+            let buf_len = buf.len() as u32;
+            {
+                let mut cursor = Cursor::new(&mut buf);
+                cursor.write_u8(0x82).unwrap();
+                cursor.write_u32::<LittleEndian>(buf_len).unwrap();
+                cursor.write_u32::<LittleEndian>(tmp.len() as u32).unwrap();
+            }
+
+            let hash = city_hash_128(&buf);
+            encoder.write(hash.lo);
+            encoder.write(hash.hi);
+            encoder.write_bytes(buf.as_ref());
+        } else {
+            self.info.write(encoder);
+            encoder.uvarint(self.column_count() as u64);
+            encoder.uvarint(self.row_count() as u64);
+
+            for column in &self.columns {
+                column.write(encoder);
+            }
         }
     }
 
-    fn send_data(&self, encoder: &mut Encoder) {
+    fn send_data(&self, encoder: &mut Encoder, compress: bool) {
+        // TODO compress
+
         encoder.uvarint(protocol::CLIENT_DATA);
         encoder.string(""); // temporary table
         for chunk in self.chunks(INSERT_BLOCK_SIZE) {
-            chunk.write(encoder);
+            chunk.write(encoder, compress);
         }
     }
 
@@ -267,6 +313,60 @@ fn text_cells(data: &Column) -> Vec<String> {
     (0..data.len()).map(|i| format!("{}", data.at(i))).collect()
 }
 
+fn decompress<R: ReadEx>(reader: &mut R) -> ClickhouseResult<Vec<u8>> {
+    let h = UInt128 {
+        lo: reader.read_scalar()?,
+        hi: reader.read_scalar()?,
+    };
+
+    let method: u8 = reader.read_scalar()?;
+    if method != 0x82 {
+        let message: String = format!("unsupported compression method {}", method);
+        return Err(raise_error(message));
+    }
+
+    let compressed: u32 = reader.read_scalar()?;
+    let original: u32 = reader.read_scalar()?;
+
+    if compressed > DBMS_MAX_COMPRESSED_SIZE {
+        return Err(raise_error("compressed data too big".to_string()));
+    }
+
+    let mut tmp = vec![0u8; compressed as usize];
+    {
+        let mut cursor = Cursor::new(&mut tmp);
+        cursor.write_u8(0x82)?;
+        cursor.write_u32::<LittleEndian>(compressed)?;
+        cursor.write_u32::<LittleEndian>(original)?;
+    }
+    reader.read_bytes(&mut tmp[9..])?;
+
+    if h != city_hash_128(&tmp) {
+        return Err(raise_error("data was corrupted".to_string()));
+    }
+
+    let data = vec![0u8; original as usize];
+    let status;
+    unsafe {
+        status = LZ4_decompress_safe(
+            (tmp.as_mut_ptr() as *const i8).add(9),
+            data.as_ptr() as *mut i8,
+            (compressed - 9) as i32,
+            original as i32,
+        )
+    }
+
+    if status < 0 {
+        return Err(raise_error("can't decompress data".to_string()));
+    }
+
+    Ok(data)
+}
+
+fn raise_error(message: String) -> ClickhouseError {
+    ClickhouseError::IoError(io::Error::new(io::ErrorKind::Other, message))
+}
+
 #[cfg(test)]
 mod test {
     use std::io::Cursor;
@@ -276,19 +376,73 @@ mod test {
     use binary::Encoder;
     use block::{Block, BlockEx};
 
+    use super::decompress;
+
     #[test]
     fn test_write_default() {
-        let expected = [1, 0, 2, 255, 255, 255, 255, 0, 0, 0];
+        let expected = [1_u8, 0, 2, 255, 255, 255, 255, 0, 0, 0];
         let mut encoder = Encoder::new();
-        Block::default().write(&mut encoder);
+        Block::default().write(&mut encoder, false);
         assert_eq!(encoder.get_buffer_ref(), &expected)
+    }
+
+    #[test]
+    fn test_compress_block() {
+        let expected = vec![
+            245_u8, 5, 222, 235, 225, 158, 59, 108, 225, 31, 65, 215, 66, 66, 36, 92, 130, 34, 0,
+            0, 0, 23, 0, 0, 0, 240, 8, 1, 0, 2, 255, 255, 255, 255, 0, 1, 1, 1, 115, 6, 83, 116,
+            114, 105, 110, 103, 3, 97, 98, 99,
+        ];
+
+        let block = Block::new().add_column("s", vec!["abc"]);
+
+        let mut encoder = Encoder::new();
+        block.write(&mut encoder, true);
+
+        let actual = encoder.get_buffer();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_decompress_block() {
+        let expected = Block::new().add_column("s", vec!["abc"]);
+
+        let source = vec![
+            245_u8, 5, 222, 235, 225, 158, 59, 108, 225, 31, 65, 215, 66, 66, 36, 92, 130, 34, 0,
+            0, 0, 23, 0, 0, 0, 240, 8, 1, 0, 2, 255, 255, 255, 255, 0, 1, 1, 1, 115, 6, 83, 116,
+            114, 105, 110, 103, 3, 97, 98, 99,
+        ];
+
+        let mut cursor = Cursor::new(&source[..]);
+        let actual = Block::load(&mut cursor, Tz::UTC, true).unwrap();
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_decompress() {
+        let expected = vec![
+            1u8, 0, 2, 255, 255, 255, 255, 0, 1, 1, 1, 115, 6, 83, 116, 114, 105, 110, 103, 3, 97,
+            98, 99,
+        ];
+
+        let source = vec![
+            245_u8, 5, 222, 235, 225, 158, 59, 108, 225, 31, 65, 215, 66, 66, 36, 92, 130, 34, 0,
+            0, 0, 23, 0, 0, 0, 240, 8, 1, 0, 2, 255, 255, 255, 255, 0, 1, 1, 1, 115, 6, 83, 116,
+            114, 105, 110, 103, 3, 97, 98, 99,
+        ];
+
+        let mut cursor = Cursor::new(&source[..]);
+        let actual = decompress(&mut cursor).unwrap();
+
+        assert_eq!(actual, expected);
     }
 
     #[test]
     fn test_read_empty_block() {
         let source = [1, 0, 2, 255, 255, 255, 255, 0, 0, 0];
         let mut cursor = Cursor::new(&source[..]);
-        match Block::load(&mut cursor, Tz::Zulu) {
+        match Block::load(&mut cursor, Tz::Zulu, false) {
             Ok(block) => assert!(block.is_empty()),
             Err(_) => panic!("test_read_empty_block"),
         }

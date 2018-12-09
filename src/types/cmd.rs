@@ -9,7 +9,7 @@ pub enum Cmd {
     Hello(Context),
     Ping,
     SendQuery(Query, Context),
-    SendData(Block),
+    SendData(Block, Context),
     Union(Box<Cmd>, Box<Cmd>),
 }
 
@@ -26,7 +26,7 @@ fn encode_command(cmd: &Cmd) -> Vec<u8> {
         Cmd::Hello(context) => encode_hello(context),
         Cmd::Ping => encode_ping(),
         Cmd::SendQuery(query, context) => encode_query(query, context),
-        Cmd::SendData(block) => encode_data(&block),
+        Cmd::SendData(block, context) => encode_data(&block, context),
         Cmd::Union(first, second) => encode_union(first.as_ref(), second.as_ref()),
     }
 }
@@ -79,18 +79,20 @@ fn encode_query(query: &Query, context: &Context) -> Vec<u8> {
     encoder.string(""); // settings
     encoder.uvarint(protocol::STATE_COMPLETE);
 
-    encoder.uvarint(protocol::COMPRESS_DISABLE);
+    encoder.uvarint(match context.compression {
+        true => protocol::COMPRESS_ENABLE,
+        false => protocol::COMPRESS_DISABLE,
+    });
 
     encoder.string(&query.get_sql());
-
-    Block::default().send_data(&mut encoder);
+    Block::default().send_data(&mut encoder, context.compression);
 
     encoder.get_buffer()
 }
 
-fn encode_data(block: &Block) -> Vec<u8> {
+fn encode_data(block: &Block, context: &Context) -> Vec<u8> {
     let mut encoder = Encoder::new();
-    block.send_data(&mut encoder);
+    block.send_data(&mut encoder, context.compression);
     encoder.get_buffer()
 }
 

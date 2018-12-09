@@ -85,6 +85,7 @@ pub struct Context {
     pub username: String,
     pub password: String,
     pub hostname: String,
+    pub compression: bool,
 }
 
 impl Default for ServerInfo {
@@ -107,6 +108,7 @@ impl Default for Context {
             username: "default".to_string(),
             password: "".to_string(),
             hostname: get_hostname().unwrap(),
+            compression: false,
         }
     }
 }

@@ -6,6 +6,10 @@ extern crate futures;
 extern crate hostname;
 #[macro_use]
 extern crate log;
+extern crate byteorder;
+extern crate clickhouse_rs_cityhash_sys;
+extern crate lz4;
+#[cfg(test)]
 extern crate rand;
 extern crate tokio;
 
@@ -21,7 +25,7 @@ use block::BlockEx;
 use io::ClickhouseTransport;
 pub use io::IoFuture;
 use types::query::QueryEx;
-pub use types::ClickhouseError;
+pub use types::{ClickhouseError, SqlType};
 use types::{ClickhouseResult, Cmd, Context, Packet, Query};
 
 mod binary;
@@ -37,6 +41,7 @@ pub struct Options {
     database: String,
     username: String,
     password: String,
+    compression: bool,
 }
 
 pub struct Client {
@@ -55,6 +60,7 @@ impl Options {
             database: "default".to_string(),
             username: "default".to_string(),
             password: "".to_string(),
+            compression: false,
         }
     }
 
@@ -78,6 +84,13 @@ impl Options {
             ..self
         }
     }
+
+    pub fn with_compression(self) -> Options {
+        Options {
+            compression: true,
+            ..self
+        }
+    }
 }
 
 impl fmt::Debug for ClientHandle {
@@ -88,15 +101,25 @@ impl fmt::Debug for ClientHandle {
 
 impl Client {
     pub fn connect(options: Options) -> IoFuture<ClientHandle> {
+        let compress = options.compression;
+
+        let context = Context {
+            database: options.database,
+            username: options.username,
+            password: options.password,
+            compression: options.compression,
+            ..Context::default()
+        };
+
         Box::new(
             TcpStream::connect(&options.addr)
-                .and_then(|stream| {
+                .and_then(move |stream| {
                     stream.set_nodelay(true)?;
 
-                    let transport = ClickhouseTransport::new(stream);
+                    let transport = ClickhouseTransport::new(stream, compress);
                     Ok(ClientHandle {
                         inner: transport,
-                        context: Context::default(),
+                        context,
                     })
                 }).and_then(|client| client.hello()),
         )
@@ -226,8 +249,8 @@ impl ClientHandle {
         let context = self.context;
 
         let send_cmd = Cmd::Union(
-            Box::new(Cmd::SendData(block)),
-            Box::new(Cmd::SendData(Block::default())),
+            Box::new(Cmd::SendData(block, context.clone())),
+            Box::new(Cmd::SendData(Block::default(), context.clone())),
         );
 
         Box::new(

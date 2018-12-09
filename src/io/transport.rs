@@ -25,6 +25,7 @@ pub struct ClickhouseTransport {
     cmds: VecDeque<Cmd>,
     // Server time zone
     tz: Option<Tz>,
+    compress: bool,
 }
 
 enum PacketStreamState {
@@ -41,7 +42,7 @@ pub struct PacketStream {
 }
 
 impl ClickhouseTransport {
-    pub fn new(inner: TcpStream) -> ClickhouseTransport {
+    pub fn new(inner: TcpStream, compress: bool) -> ClickhouseTransport {
         ClickhouseTransport {
             inner,
             done: false,
@@ -49,6 +50,7 @@ impl ClickhouseTransport {
             wr: io::Cursor::new(vec![]),
             cmds: VecDeque::new(),
             tz: None,
+            compress,
         }
     }
 }
@@ -147,7 +149,7 @@ impl Stream for ClickhouseTransport {
         let ret = {
             let mut cursor = Cursor::new(&self.rd);
             let res = {
-                let mut parser = Parser::new(&mut cursor, self.tz);
+                let mut parser = Parser::new(&mut cursor, self.tz, self.compress);
                 parser.parse_packet()
             };
             pos = cursor.position() as usize;

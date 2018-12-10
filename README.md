@@ -34,7 +34,7 @@ pub fn main() {
         .add_column("account_name", vec!["foo", "", "", "", "bar"]);
 
     let options = Options::new("127.0.0.1:9000".parse().unwrap())
-        .compression(true);
+        .with_compression();
     let done = Client::connect(options)
         .and_then(move |c| c.ping())
         .and_then(move |c| c.execute(ddl))

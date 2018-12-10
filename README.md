@@ -1,4 +1,4 @@
-# Tokio ClickHouse client
+# Tokio ClickHouse client [![Build Status](https://travis-ci.com/suharev7/clickhouse-rs.svg?branch=master)](https://travis-ci.com/suharev7/clickhouse-rs)
 
 clickhouse-rs is a library for accessing a [Yandex ClickHouse](https://clickhouse.yandex/) 
 database over native interface from the [tokio](https://github.com/tokio-rs/tokio). 

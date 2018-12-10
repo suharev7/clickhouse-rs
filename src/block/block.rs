@@ -212,8 +212,6 @@ impl BlockEx for Block {
     }
 
     fn send_data(&self, encoder: &mut Encoder, compress: bool) {
-        // TODO compress
-
         encoder.uvarint(protocol::CLIENT_DATA);
         encoder.string(""); // temporary table
         for chunk in self.chunks(INSERT_BLOCK_SIZE) {

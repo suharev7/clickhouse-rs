@@ -12,8 +12,8 @@ categories = ["database"]
 
 [dependencies]
 log = "0.3.6"
-futures = "0.1"
-tokio = "0.1.11"
+futures = "0.1.25"
+tokio = "0.1.13"
 hostname = "^0.1"
 
 chrono = "0.4"

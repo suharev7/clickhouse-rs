@@ -1,8 +1,8 @@
 use std::ops;
 
-use binary::Encoder;
-use column::{BoxColumnData, ColumnData};
-use types::{SqlType, Value, ValueRef};
+use crate::binary::Encoder;
+use crate::column::{BoxColumnData, ColumnData};
+use crate::types::{SqlType, Value, ValueRef};
 
 pub struct ChunkColumnData {
     data: BoxColumnData,

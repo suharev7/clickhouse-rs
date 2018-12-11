@@ -4,7 +4,7 @@ use std::fmt;
 use chrono::prelude::*;
 use chrono_tz::Tz;
 
-use types::{FromSqlError, FromSqlResult, SqlType, Value};
+use crate::types::{FromSqlError, FromSqlResult, SqlType, Value};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum ValueRef<'a> {

@@ -3,11 +3,11 @@ use std::io;
 use std::mem;
 use std::sync::Arc;
 
-use binary::{Encoder, ReadEx};
-use column::column_data::ColumnData;
-use column::list::List;
-use column::{BoxColumnData, ColumnFrom};
-use types::{Marshal, SqlType, StatBuffer, Unmarshal, Value, ValueRef};
+use crate::binary::{Encoder, ReadEx};
+use crate::column::column_data::ColumnData;
+use crate::column::list::List;
+use crate::column::{BoxColumnData, ColumnFrom};
+use crate::types::{Marshal, SqlType, StatBuffer, Unmarshal, Value, ValueRef};
 
 pub struct VectorColumnData<T>
 where

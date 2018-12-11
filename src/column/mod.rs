@@ -3,10 +3,10 @@ use std::sync::Arc;
 
 use chrono_tz::Tz;
 
-use binary::{Encoder, ReadEx};
-use column::chunk::ChunkColumnData;
-use types::{SqlType, ValueRef};
-use ClickhouseResult;
+use crate::binary::{Encoder, ReadEx};
+use crate::column::chunk::ChunkColumnData;
+use crate::types::{SqlType, ValueRef};
+use crate::ClickhouseResult;
 
 pub use self::column_data::{ColumnData, ColumnDataExt};
 pub use self::concat::ConcatColumnData;

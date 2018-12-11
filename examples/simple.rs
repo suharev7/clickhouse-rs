@@ -17,8 +17,7 @@ pub fn main() {
         .add_column("amount", vec![2_u32, 4, 6, 8, 10])
         .add_column("account_name", vec!["", "foo", "", "", "bar"]);
 
-    let options = Options::new("127.0.0.1:9000".parse().unwrap())
-        .with_compression();
+    let options = Options::new("127.0.0.1:9000".parse().unwrap()).with_compression();
 
     let done = Client::connect(options)
         .and_then(move |c| c.ping())
@@ -32,7 +31,8 @@ pub fn main() {
                 let name: &str = block.get(row, "account_name")?;
                 println!("Found payment {}: {} {}", id, amount, name);
             })
-        }).map_err(|err| eprintln!("database error: {}", err));
+        })
+        .map_err(|err| eprintln!("database error: {}", err));
 
     tokio::run(done)
 }

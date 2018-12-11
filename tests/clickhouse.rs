@@ -7,8 +7,8 @@ use chrono::prelude::*;
 use chrono_tz::Tz;
 use tokio::prelude::*;
 
-use clickhouse_rs::{Block, Client, Options, IoFuture};
-use Tz::UTC;
+use clickhouse_rs::{Block, Client, IoFuture, Options};
+use chrono_tz::Tz::UTC;
 
 const COMPRESSION: bool = true;
 
@@ -98,7 +98,8 @@ fn test_insert() {
                 UTC.ymd(2016, 10, 22),
                 UTC.ymd(2016, 10, 22),
             ],
-        ).add_column(
+        )
+        .add_column(
             "datetime",
             vec![
                 UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
@@ -151,7 +152,8 @@ fn test_select() {
                 UTC.ymd(2014, 7, 8),
                 UTC.ymd(2014, 7, 9),
             ],
-        ).add_column(
+        )
+        .add_column(
             "datetime",
             vec![
                 Tz::Singapore.ymd(2014, 7, 8).and_hms(14, 0, 0),
@@ -272,11 +274,13 @@ fn test_temporary_table() {
                 "INSERT INTO clickhouse_test_temporary_table (ID) \
                  SELECT number AS ID FROM system.numbers LIMIT 10",
             )
-        }).and_then(|c| c.query_all("SELECT ID AS ID FROM clickhouse_test_temporary_table"))
+        })
+        .and_then(|c| c.query_all("SELECT ID AS ID FROM clickhouse_test_temporary_table"))
         .and_then(|(_, block)| {
             let expected = Block::new().add_column("ID", (0u64..10).collect::<Vec<_>>());
             Ok(assert_eq!(block, expected))
-        }).map_err(|err| panic!("Exception: {}", err));
+        })
+        .map_err(|err| panic!("Exception: {}", err));
 
     tokio::run(done);
 }
@@ -342,16 +346,16 @@ fn test_concurrent_queries() {
 
     let m = 250000_u64;
 
-    let expected = (m*1) * ((m*1) - 1) / 2
-        + (m*2) * ((m*2) - 1) / 2
-        + (m*3) * ((m*3) - 1) / 2
-        + (m*4) * ((m*4) - 1) / 2;
+    let expected = (m * 1) * ((m * 1) - 1) / 2
+        + (m * 2) * ((m * 2) - 1) / 2
+        + (m * 3) * ((m * 3) - 1) / 2
+        + (m * 4) * ((m * 4) - 1) / 2;
 
     let requests = vec![
-        query_sum(m*1),
-        query_sum(m*2),
-        query_sum(m*3),
-        query_sum(m*4),
+        query_sum(m * 1),
+        query_sum(m * 2),
+        query_sum(m * 3),
+        query_sum(m * 4),
     ];
 
     let done = future::join_all(requests)
@@ -359,7 +363,8 @@ fn test_concurrent_queries() {
             let actual: u64 = xs.iter().sum();
             assert_eq!(actual, expected);
             Ok(())
-        }).map_err(|_| eprintln!("database error"));
+        })
+        .map_err(|_| eprintln!("database error"));
 
     tokio::run(done)
 }

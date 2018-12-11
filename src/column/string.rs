@@ -1,11 +1,11 @@
 use std::io;
 use std::sync::Arc;
 
-use binary::Encoder;
-use binary::ReadEx;
-use column::column_data::ColumnData;
-use column::{BoxColumnData, ColumnFrom};
-use types::{SqlType, Value, ValueRef};
+use crate::binary::Encoder;
+use crate::binary::ReadEx;
+use crate::column::column_data::ColumnData;
+use crate::column::{BoxColumnData, ColumnFrom};
+use crate::types::{SqlType, Value, ValueRef};
 
 pub struct StringColumnData {
     data: Vec<String>,

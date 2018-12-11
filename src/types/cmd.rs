@@ -1,8 +1,8 @@
-use binary::{protocol, Encoder};
-use block::BlockEx;
-use client_info;
-use types::{query::QueryEx, Context, Query};
-use Block;
+use crate::binary::{protocol, Encoder};
+use crate::block::BlockEx;
+use crate::client_info;
+use crate::types::{query::QueryEx, Context, Query};
+use crate::Block;
 
 /// Represents clickhouse commands.
 pub enum Cmd {

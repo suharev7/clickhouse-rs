@@ -1,11 +1,11 @@
 use std::io;
 
-use column::column_data::ColumnData;
-use column::date::DateColumnData;
-use column::numeric::VectorColumnData;
-use column::string::StringColumnData;
+use crate::column::column_data::ColumnData;
+use crate::column::date::DateColumnData;
+use crate::column::numeric::VectorColumnData;
+use crate::column::string::StringColumnData;
 
-use binary::ReadEx;
+use crate::binary::ReadEx;
 use chrono_tz::Tz;
 use std::sync::Arc;
 

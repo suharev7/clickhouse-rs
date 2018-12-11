@@ -6,9 +6,11 @@ license = "MIT"
 homepage = "https://github.com/suharev7/clickhouse-rs"
 repository = "https://github.com/suharev7/clickhouse-rs"
 description = "Tokio based asynchronous Yandex ClickHouse client library."
+documentation = "https://docs.rs/clickhouse-rs/0.1.3/"
 readme = "README.md"
 keywords = ["tokio", "database", "clickhouse"]
 categories = ["database"]
+edition = "2018"
 
 [dependencies]
 log = "0.3.6"
@@ -26,4 +28,4 @@ byteorder = "1.2.7"
 
 [dev-dependencies]
 env_logger = "0.3.0"
-rand="0.5"
+rand = "0.5"

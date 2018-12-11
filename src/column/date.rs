@@ -8,12 +8,11 @@ use chrono::prelude::*;
 use chrono::Date;
 use chrono_tz::Tz;
 
-use binary::Encoder;
-use binary::ReadEx;
-use column::column_data::ColumnData;
-use column::list::List;
-use column::{BoxColumnData, ColumnFrom};
-use types::{DateConverter, Marshal, SqlType, StatBuffer, Unmarshal, Value, ValueRef};
+use crate::binary::{Encoder, ReadEx};
+use crate::column::column_data::ColumnData;
+use crate::column::list::List;
+use crate::column::{BoxColumnData, ColumnFrom};
+use crate::types::{DateConverter, Marshal, SqlType, StatBuffer, Unmarshal, Value, ValueRef};
 
 pub struct DateColumnData<T>
 where

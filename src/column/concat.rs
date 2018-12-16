@@ -1,9 +1,9 @@
 use std::iter;
 
-use binary::Encoder;
-use column::column_data::ColumnData;
-use column::BoxColumnData;
-use types::{SqlType, Value, ValueRef};
+use crate::binary::Encoder;
+use crate::column::column_data::ColumnData;
+use crate::column::BoxColumnData;
+use crate::types::{SqlType, Value, ValueRef};
 
 pub struct ConcatColumnData {
     data: Vec<BoxColumnData>,
@@ -21,15 +21,17 @@ impl ConcatColumnData {
     fn check_columns(data: &Vec<BoxColumnData>) {
         match data.first() {
             None => panic!("data should not be empty."),
-            Some(first) => for column in data.iter().skip(1) {
-                if first.sql_type() != column.sql_type() {
-                    panic!(
-                        "all columns should have the same type ({:?} != {:?}).",
-                        first.sql_type(),
-                        column.sql_type()
-                    );
+            Some(first) => {
+                for column in data.iter().skip(1) {
+                    if first.sql_type() != column.sql_type() {
+                        panic!(
+                            "all columns should have the same type ({:?} != {:?}).",
+                            first.sql_type(),
+                            column.sql_type()
+                        );
+                    }
                 }
-            },
+            }
         }
     }
 }
@@ -104,9 +106,9 @@ fn find_chunk(index: &[usize], ix: usize) -> usize {
 mod test {
     use std::sync::Arc;
 
-    use column::column_data::ColumnDataExt;
-    use column::numeric::VectorColumnData;
-    use column::string::StringColumnData;
+    use crate::column::column_data::ColumnDataExt;
+    use crate::column::numeric::VectorColumnData;
+    use crate::column::string::StringColumnData;
 
     use super::*;
 

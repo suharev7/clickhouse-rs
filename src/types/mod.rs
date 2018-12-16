@@ -9,7 +9,7 @@ use chrono_tz::Tz;
 use futures::{Async, Poll};
 use hostname::get_hostname;
 
-use Block;
+use crate::Block;
 
 pub use self::cmd::Cmd;
 pub use self::date_converter::DateConverter;

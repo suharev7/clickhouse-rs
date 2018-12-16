@@ -4,7 +4,7 @@ use std::fmt;
 use chrono::prelude::*;
 use chrono_tz::Tz;
 
-use types::SqlType;
+use crate::types::SqlType;
 
 type AppDateTime = DateTime<Tz>;
 type AppDate = Date<Tz>;

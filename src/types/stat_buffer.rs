@@ -1,4 +1,4 @@
-use types::SqlType;
+use crate::types::SqlType;
 
 pub trait StatBuffer {
     type Buffer: AsMut<[u8]> + AsRef<[u8]> + Copy + Sync;

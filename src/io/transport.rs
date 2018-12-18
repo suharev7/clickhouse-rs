@@ -10,6 +10,7 @@ use tokio::prelude::*;
 use binary::Parser;
 use types::{ClickhouseError, Cmd, Context};
 use {ClientHandle, IoFuture, Packet};
+use pool::Pool;
 
 /// Line transport
 pub struct ClickhouseTransport {
@@ -178,15 +179,16 @@ impl Stream for ClickhouseTransport {
 }
 
 impl PacketStream {
-    pub fn read_block(mut self, context: Context) -> IoFuture<ClientHandle> {
+    pub fn read_block(mut self, context: Context, pool: Option<Pool>) -> IoFuture<ClientHandle> {
         self.read_block = true;
 
         Box::new(
             self.fold(None, move |acc, package| match package {
                 Packet::Eof(inner) => {
                     let client = ClientHandle {
-                        inner,
+                        inner: Some(inner),
                         context: context.clone(),
+                        pool: pool.clone(),
                     };
                     future::ok::<_, std::io::Error>(Some(client))
                 }

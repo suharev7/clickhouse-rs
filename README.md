@@ -27,15 +27,19 @@ pub fn main() {
             amount       UInt32,
             account_name String
         ) Engine=Memory";
-
+    
     let block = Block::new()
         .add_column("customer_id",  vec![1_u32,  3,  5,  7,     9])
         .add_column("amount",       vec![2_u32,  4,  6,  8,    10])
         .add_column("account_name", vec!["foo", "", "", "", "bar"]);
-
+    
     let options = Options::new("127.0.0.1:9000".parse().unwrap())
         .with_compression();
-    let done = Client::connect(options)
+    
+    let pool = Pool::new(options);
+    
+    let done = pool
+        .get_handle()
         .and_then(move |c| c.ping())
         .and_then(move |c| c.execute(ddl))
         .and_then(move |c| c.insert("payment", block))

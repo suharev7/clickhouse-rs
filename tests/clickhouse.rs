@@ -3,14 +3,32 @@ extern crate chrono_tz;
 extern crate clickhouse_rs;
 extern crate tokio;
 
+use std::io;
+
 use chrono::prelude::*;
 use chrono_tz::Tz;
 use tokio::prelude::*;
 
-use clickhouse_rs::{Block, Client, Options, IoFuture};
+use clickhouse_rs::{Block, Pool, Options};
 use Tz::UTC;
 
+pub type IoFuture<T> = Box<Future<Item = T, Error = io::Error> + Send>;
+
 const COMPRESSION: bool = true;
+
+/// Same as `tokio::run`, but will panic if future panics and will return the result
+    /// of future execution.
+fn run<F, T, U>(future: F) -> Result<T, U>
+    where
+        F: Future<Item = T, Error = U> + Send + 'static,
+        T: Send + 'static,
+        U: Send + 'static,
+{
+    let mut runtime = tokio::runtime::Runtime::new().unwrap();
+    let result = runtime.block_on(future);
+    runtime.shutdown_on_idle().wait().unwrap();
+    result
+}
 
 #[test]
 fn test_ping() {
@@ -19,12 +37,13 @@ fn test_ping() {
         options = options.with_compression();
     }
 
-    let done = Client::connect(options)
+    let pool = Pool::new(options);
+    let done = pool.get_handle()
         .and_then(|c| c.ping())
         .and_then(|_| Ok(()))
         .map_err(|err| panic!("Exception: {}", err));
 
-    tokio::run(done)
+    run(done).unwrap()
 }
 
 #[test]
@@ -40,7 +59,8 @@ fn test_create_table() {
         options = options.with_compression();
     }
 
-    let done = Client::connect(options)
+    let pool = Pool::new(options);
+    let done = pool.get_handle()
         .and_then(|c| c.ping())
         .and_then(move |c| c.execute("DROP TABLE IF EXISTS clickhouse_test_create_table"))
         .and_then(move |c| c.execute(ddl))
@@ -53,7 +73,7 @@ fn test_create_table() {
             )
         });
 
-    tokio::run(done)
+    let _ = run(done);
 }
 
 #[test]
@@ -118,7 +138,8 @@ fn test_insert() {
         options = options.with_compression();
     }
 
-    let done = Client::connect(options)
+    let pool = Pool::new(options);
+    let done = pool.get_handle()
         .and_then(|c| c.ping())
         .and_then(move |c| c.execute("DROP TABLE IF EXISTS clickhouse_test_insert"))
         .and_then(move |c| c.execute(ddl))
@@ -127,7 +148,7 @@ fn test_insert() {
         .and_then(move |(_, actual)| Ok(assert_eq!(expected.as_ref(), &actual)))
         .map_err(|err| panic!("Exception: {}", err));
 
-    tokio::run(done)
+    run(done).unwrap()
 }
 
 #[test]
@@ -166,7 +187,8 @@ fn test_select() {
         options = options.with_compression();
     }
 
-    let done = Client::connect(options)
+    let pool = Pool::new(options);
+    let done = pool.get_handle()
         .and_then(|c| c.ping())
         .and_then(|c| c.execute("DROP TABLE IF EXISTS clickhouse_test_select"))
         .and_then(move |c| c.execute(ddl))
@@ -211,7 +233,7 @@ fn test_select() {
         })
         .map_err(|err| panic!("Exception: {}", err));
 
-    tokio::run(done);
+    run(done).unwrap();
 }
 
 #[test]
@@ -221,7 +243,8 @@ fn test_simple_select() {
         options = options.with_compression();
     }
 
-    let done = Client::connect(options)
+    let pool = Pool::new(options);
+    let done = pool.get_handle()
         .and_then(|c| c.ping())
         .and_then(|c| c.query_all("SELECT a FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a) ORDER BY a ASC"))
         .and_then(|(c, actual)| {
@@ -252,7 +275,7 @@ fn test_simple_select() {
         })
         .map_err(|err| panic!("Exception: {}", err));
 
-    tokio::run(done);
+    run(done).unwrap();
 }
 
 #[test]
@@ -264,7 +287,8 @@ fn test_temporary_table() {
         options = options.with_compression();
     }
 
-    let done = Client::connect(options)
+    let pool = Pool::new(options);
+    let done = pool.get_handle()
         .and_then(|c| c.ping())
         .and_then(move |c| c.execute(ddl))
         .and_then(|c| {
@@ -278,7 +302,7 @@ fn test_temporary_table() {
             Ok(assert_eq!(block, expected))
         }).map_err(|err| panic!("Exception: {}", err));
 
-    tokio::run(done);
+    run(done).unwrap();
 }
 
 #[test]
@@ -307,7 +331,8 @@ fn test_with_totals() {
         options = options.with_compression();
     }
 
-    let done = Client::connect(options)
+    let pool = Pool::new(options);
+    let done = pool.get_handle()
         .and_then(|c| c.ping())
         .and_then(|c| c.execute("DROP TABLE IF EXISTS clickhouse_test_with_totals"))
         .and_then(move |c| c.execute(ddl))
@@ -316,7 +341,7 @@ fn test_with_totals() {
         .and_then(move |(_, block)| Ok(assert_eq!(&expected, &block)))
         .map_err(|err| panic!("Exception: {}", err));
 
-    tokio::run(done);
+    run(done).unwrap();
 }
 
 #[test]
@@ -325,8 +350,9 @@ fn test_concurrent_queries() {
         let sql = format!("SELECT number FROM system.numbers LIMIT {}", n);
 
         let options = Options::new("127.0.0.1:9000".parse().unwrap());
+        let pool = Pool::new(options);
         Box::new(
-            Client::connect(options)
+            pool.get_handle()
                 .and_then(move |c| c.ping())
                 .and_then(move |c| c.query_all(sql.as_str()))
                 .and_then(move |(_, block)| {
@@ -361,5 +387,5 @@ fn test_concurrent_queries() {
             Ok(())
         }).map_err(|_| eprintln!("database error"));
 
-    tokio::run(done)
+    run(done).unwrap();
 }

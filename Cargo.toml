@@ -1,6 +1,6 @@
 [package]
 name = "clickhouse-rs"
-version = "0.1.3"
+version = "0.1.4"
 authors = ["Mikhail Sukharev <suharev7@gmail.com>"]
 license = "MIT"
 homepage = "https://github.com/suharev7/clickhouse-rs"
@@ -9,6 +9,7 @@ description = "Tokio based asynchronous Yandex ClickHouse client library."
 readme = "README.md"
 keywords = ["tokio", "database", "clickhouse"]
 categories = ["database"]
+exclude = ["test/*"]
 
 [dependencies]
 log = "0.3.6"

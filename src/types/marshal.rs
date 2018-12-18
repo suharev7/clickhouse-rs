@@ -110,7 +110,7 @@ mod test {
 
     use rand::distributions::{Distribution, Standard};
     use rand::random;
-    use types::{Marshal, StatBuffer, Unmarshal};
+    use crate::types::{Marshal, StatBuffer, Unmarshal};
 
     fn test_some<T>()
     where

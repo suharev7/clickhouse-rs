@@ -1,8 +1,6 @@
 use std::io;
-use types::ClickhouseError;
-use types::StatBuffer;
-use types::Unmarshal;
-use ClickhouseResult;
+use crate::types::{ClickhouseError, StatBuffer, Unmarshal};
+use crate::ClickhouseResult;
 
 pub trait ReadEx {
     fn read_bytes(&mut self, rv: &mut [u8]) -> ClickhouseResult<()>;

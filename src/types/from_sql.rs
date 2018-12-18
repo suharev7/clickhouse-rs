@@ -7,7 +7,7 @@ use chrono::prelude::*;
 use chrono_tz::Tz;
 
 use std::borrow::Cow;
-use types::{SqlType, ValueRef};
+use crate::types::{SqlType, ValueRef};
 
 #[derive(Debug)]
 pub enum FromSqlError {
@@ -116,8 +116,8 @@ from_sql_impl! {
 
 #[cfg(test)]
 mod test {
-    use types::from_sql::FromSql;
-    use types::ValueRef;
+    use crate::types::from_sql::FromSql;
+    use crate::types::ValueRef;
 
     #[test]
     fn test_u8() {

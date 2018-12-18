@@ -2,11 +2,11 @@ use std::io::{self, Read};
 
 use chrono_tz::Tz;
 
-use binary::{protocol, ReadEx};
-use types::{
+use crate::binary::{protocol, ReadEx};
+use crate::types::{
     ClickhouseError, ClickhouseResult, ExceptionRepr, Packet, ProfileInfo, Progress, ServerInfo,
 };
-use Block;
+use crate::Block;
 
 /// The internal clickhouse response parser.
 pub struct Parser<T> {

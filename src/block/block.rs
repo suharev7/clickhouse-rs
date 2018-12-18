@@ -7,12 +7,12 @@ use chrono_tz::Tz;
 use clickhouse_rs_cityhash_sys::{city_hash_128, UInt128};
 use lz4::liblz4::{LZ4_compressBound, LZ4_compress_default, LZ4_decompress_safe};
 
-use binary::{protocol, Encoder, ReadEx};
-use block::chunk_iterator::ChunkIterator;
-use block::BlockInfo;
-use column::{self, Column, ColumnFrom};
-use types::{FromSql, FromSqlError, FromSqlResult};
-use {ClickhouseError, ClickhouseResult};
+use crate::binary::{protocol, Encoder, ReadEx};
+use crate::block::chunk_iterator::ChunkIterator;
+use crate::block::BlockInfo;
+use crate::column::{self, Column, ColumnFrom};
+use crate::types::{FromSql, FromSqlError, FromSqlResult};
+use crate::{ClickhouseError, ClickhouseResult};
 
 const INSERT_BLOCK_SIZE: usize = 1048576;
 
@@ -371,8 +371,8 @@ mod test {
 
     use chrono_tz::Tz;
 
-    use binary::Encoder;
-    use block::{Block, BlockEx};
+    use crate::binary::Encoder;
+    use crate::block::{Block, BlockEx};
 
     use super::decompress;
 

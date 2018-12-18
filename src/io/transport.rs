@@ -7,10 +7,10 @@ use futures::{Async, Poll, Stream};
 use tokio::net::TcpStream;
 use tokio::prelude::*;
 
-use binary::Parser;
-use types::{ClickhouseError, Cmd, Context};
-use {ClientHandle, IoFuture, Packet};
-use pool::Pool;
+use crate::binary::Parser;
+use crate::types::{ClickhouseError, Cmd, Context};
+use crate::{ClientHandle, IoFuture, Packet};
+use crate::pool::Pool;
 
 /// Line transport
 pub struct ClickhouseTransport {
@@ -195,7 +195,8 @@ impl PacketStream {
                 Packet::Block(_) => future::ok::<_, std::io::Error>(acc),
                 Packet::Exception(e) => future::err(ClickhouseError::Internal(e).into()),
                 _ => future::err(ClickhouseError::UnexpectedPacket.into()),
-            }).map(Option::unwrap),
+            })
+            .map(Option::unwrap),
         )
     }
 }

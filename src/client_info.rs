@@ -1,4 +1,4 @@
-use binary::Encoder;
+use crate::binary::Encoder;
 
 pub static CLIENT_NAME: &str = "Rust SQLDriver";
 

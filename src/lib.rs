@@ -20,14 +20,14 @@ use futures::{Future, Stream};
 use tokio::net::TcpStream;
 use tokio::prelude::*;
 
-pub use block::Block;
-use block::BlockEx;
-use io::ClickhouseTransport;
-use io::IoFuture;
-use types::query::QueryEx;
-pub use types::{ClickhouseError, SqlType};
-use types::{ClickhouseResult, Cmd, Context, Packet, Query};
-pub use pool::Pool;
+pub use crate::block::Block;
+use crate::block::BlockEx;
+use crate::io::ClickhouseTransport;
+use crate::io::IoFuture;
+use crate::types::query::QueryEx;
+pub use crate::types::{ClickhouseError, SqlType};
+use crate::types::{ClickhouseResult, Cmd, Context, Packet, Query};
+pub use crate::pool::Pool;
 
 mod binary;
 mod block;
@@ -150,7 +150,8 @@ impl Client {
                         context,
                         pool: None,
                     })
-                }).and_then(|client| client.hello()),
+                })
+                .and_then(|client| client.hello()),
         )
     }
 }
@@ -175,7 +176,8 @@ impl ClientHandle {
                     }
                     Packet::Exception(e) => future::err(ClickhouseError::Internal(e).into()),
                     _ => future::err(ClickhouseError::UnexpectedPacket.into()),
-                }).map(Option::unwrap),
+                })
+                .map(Option::unwrap),
         )
     }
 
@@ -198,7 +200,8 @@ impl ClientHandle {
                     }
                     Packet::Exception(e) => future::err(ClickhouseError::Internal(e).into()),
                     _ => future::err(ClickhouseError::UnexpectedPacket.into()),
-                }).map(Option::unwrap),
+                })
+                .map(Option::unwrap),
         )
     }
 
@@ -236,7 +239,8 @@ impl ClientHandle {
                     Packet::ProfileInfo(_) | Packet::Progress(_) => future::ok((h, bs)),
                     Packet::Exception(e) => future::err(ClickhouseError::Internal(e).into()),
                     _ => future::err(ClickhouseError::UnexpectedPacket.into()),
-                }).map(|(client, blocks)| (client.unwrap(), Block::concat(&blocks[..]))),
+                })
+                .map(|(client, blocks)| (client.unwrap(), Block::concat(&blocks[..]))),
         )
     }
 
@@ -270,7 +274,8 @@ impl ClientHandle {
                         future::err(ClickhouseError::Internal(exception).into())
                     }
                     _ => future::err(ClickhouseError::UnexpectedPacket.into()),
-                }).map(Option::unwrap),
+                })
+                .map(Option::unwrap),
         )
     }
 

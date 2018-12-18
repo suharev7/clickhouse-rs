@@ -1,7 +1,7 @@
 extern crate clickhouse_rs;
 extern crate futures;
 
-use clickhouse_rs::{Block, Client, Options};
+use clickhouse_rs::{Block, Options, Pool};
 use futures::Future;
 
 pub fn main() {
@@ -19,7 +19,10 @@ pub fn main() {
 
     let options = Options::new("127.0.0.1:9000".parse().unwrap()).with_compression();
 
-    let done = Client::connect(options)
+    let pool = Pool::new(options);
+
+    let done = pool
+        .get_handle()
         .and_then(move |c| c.ping())
         .and_then(move |c| c.execute(ddl))
         .and_then(move |c| c.insert("payment", block))

@@ -6,23 +6,22 @@ extern crate tokio;
 use std::io;
 
 use chrono::prelude::*;
-use chrono_tz::Tz;
+use chrono_tz::Tz::{self, UTC};
 use tokio::prelude::*;
 
-use clickhouse_rs::{Block, Pool, Options};
-use chrono_tz::Tz::UTC;
+use clickhouse_rs::{Block, Options, Pool};
 
 pub type IoFuture<T> = Box<Future<Item = T, Error = io::Error> + Send>;
 
 const COMPRESSION: bool = true;
 
 /// Same as `tokio::run`, but will panic if future panics and will return the result
-    /// of future execution.
+/// of future execution.
 fn run<F, T, U>(future: F) -> Result<T, U>
-    where
-        F: Future<Item = T, Error = U> + Send + 'static,
-        T: Send + 'static,
-        U: Send + 'static,
+where
+    F: Future<Item = T, Error = U> + Send + 'static,
+    T: Send + 'static,
+    U: Send + 'static,
 {
     let mut runtime = tokio::runtime::Runtime::new().unwrap();
     let result = runtime.block_on(future);
@@ -38,10 +37,10 @@ fn test_ping() {
     }
 
     let pool = Pool::new(options);
-    let done = pool.get_handle()
+    let done = pool
+        .get_handle()
         .and_then(|c| c.ping())
-        .and_then(|_| Ok(()))
-        .map_err(|err| panic!("Exception: {}", err));
+        .and_then(|_| Ok(()));
 
     run(done).unwrap()
 }
@@ -60,20 +59,19 @@ fn test_create_table() {
     }
 
     let pool = Pool::new(options);
-    let done = pool.get_handle()
+    let done = pool
+        .get_handle()
         .and_then(|c| c.ping())
         .and_then(move |c| c.execute("DROP TABLE IF EXISTS clickhouse_test_create_table"))
         .and_then(move |c| c.execute(ddl))
         .and_then(move |c| c.execute(ddl))
-        .and_then(|_| Ok(()))
-        .map_err(|err: ::std::io::Error| {
-            assert_eq!(
-                "DB::Exception: Table default.clickhouse_test_create_table already exists.",
-                format!("{}", err)
-            )
-        });
+        .and_then(|_| Ok(()));
 
-    let _ = run(done);
+    let err = run(done).unwrap_err();
+    assert_eq!(
+        "DB::Exception: Table default.clickhouse_test_create_table already exists.",
+        format!("{}", err)
+    )
 }
 
 #[test]
@@ -140,14 +138,14 @@ fn test_insert() {
     }
 
     let pool = Pool::new(options);
-    let done = pool.get_handle()
+    let done = pool
+        .get_handle()
         .and_then(|c| c.ping())
         .and_then(move |c| c.execute("DROP TABLE IF EXISTS clickhouse_test_insert"))
         .and_then(move |c| c.execute(ddl))
         .and_then(move |c| c.insert("clickhouse_test_insert", block))
         .and_then(move |c| c.query_all("SELECT * FROM clickhouse_test_insert"))
-        .and_then(move |(_, actual)| Ok(assert_eq!(expected.as_ref(), &actual)))
-        .map_err(|err| panic!("Exception: {}", err));
+        .and_then(move |(_, actual)| Ok(assert_eq!(expected.as_ref(), &actual)));
 
     run(done).unwrap()
 }
@@ -232,8 +230,7 @@ fn test_select() {
             assert_eq!(2, r.get::<i32, _>(0, "id")?);
             assert_eq!(3, r.get::<i32, _>(1, 0)?);
             Ok(())
-        })
-        .map_err(|err| panic!("Exception: {}", err));
+        });
 
     run(done).unwrap();
 }
@@ -274,8 +271,7 @@ fn test_simple_select() {
         .and_then(|(_, r)| {
             assert_eq!(2f64, r.get::<f64, _>(0, 0)?);
             Ok(())
-        })
-        .map_err(|err| panic!("Exception: {}", err));
+        });
 
     run(done).unwrap();
 }
@@ -290,7 +286,8 @@ fn test_temporary_table() {
     }
 
     let pool = Pool::new(options);
-    let done = pool.get_handle()
+    let done = pool
+        .get_handle()
         .and_then(|c| c.ping())
         .and_then(move |c| c.execute(ddl))
         .and_then(|c| {
@@ -303,8 +300,7 @@ fn test_temporary_table() {
         .and_then(|(_, block)| {
             let expected = Block::new().add_column("ID", (0u64..10).collect::<Vec<_>>());
             Ok(assert_eq!(block, expected))
-        })
-        .map_err(|err| panic!("Exception: {}", err));
+        });
 
     run(done).unwrap();
 }
@@ -336,14 +332,14 @@ fn test_with_totals() {
     }
 
     let pool = Pool::new(options);
-    let done = pool.get_handle()
+    let done = pool
+        .get_handle()
         .and_then(|c| c.ping())
         .and_then(|c| c.execute("DROP TABLE IF EXISTS clickhouse_test_with_totals"))
         .and_then(move |c| c.execute(ddl))
         .and_then(move |c| c.insert("clickhouse_test_with_totals", block))
         .and_then(move |c| c.query_all(query))
-        .and_then(move |(_, block)| Ok(assert_eq!(&expected, &block)))
-        .map_err(|err| panic!("Exception: {}", err));
+        .and_then(move |(_, block)| Ok(assert_eq!(&expected, &block)));
 
     run(done).unwrap();
 }
@@ -384,13 +380,11 @@ fn test_concurrent_queries() {
         query_sum(m * 4),
     ];
 
-    let done = future::join_all(requests)
-        .and_then(move |xs| {
-            let actual: u64 = xs.iter().sum();
-            assert_eq!(actual, expected);
-            Ok(())
-        })
-        .map_err(|_| eprintln!("database error"));
+    let done = future::join_all(requests).and_then(move |xs| {
+        let actual: u64 = xs.iter().sum();
+        assert_eq!(actual, expected);
+        Ok(())
+    });
 
     run(done).unwrap();
 }

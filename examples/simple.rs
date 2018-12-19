@@ -1,8 +1,9 @@
 extern crate clickhouse_rs;
 extern crate futures;
 
-use clickhouse_rs::{Block, Options, Pool};
 use futures::Future;
+
+use clickhouse_rs::{Block, Options, Pool};
 
 pub fn main() {
     let ddl = "

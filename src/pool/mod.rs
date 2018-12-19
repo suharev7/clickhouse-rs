@@ -265,7 +265,7 @@ mod test {
                 let actual: u32 = xs.iter().sum();
                 assert_eq!(actual, expected);
                 Ok(())
-            }).map_err(|_| eprintln!("database error"));
+            });
 
         run(done).unwrap();
 
@@ -275,6 +275,5 @@ mod test {
         assert!(spent < Duration::from_millis(2100));
 
         assert_eq!(pool.info().idle_len, pool.min);
-        println!("pool: {:?}", &pool)
     }
 }

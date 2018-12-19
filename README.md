@@ -1,7 +1,17 @@
-# Tokio ClickHouse client [![Build Status](https://travis-ci.com/suharev7/clickhouse-rs.svg?branch=master)](https://travis-ci.com/suharev7/clickhouse-rs)
+# Tokio ClickHouse Client 
 
-clickhouse-rs is a library for accessing a [Yandex ClickHouse](https://clickhouse.yandex/) 
-database over native interface from the [tokio](https://github.com/tokio-rs/tokio). 
+[![Build Status](https://travis-ci.com/suharev7/clickhouse-rs.svg?branch=master)](https://travis-ci.com/suharev7/clickhouse-rs)
+[![Crate info](https://img.shields.io/crates/v/clickhouse-rs.svg)](https://crates.io/crates/clickhouse-rs)
+[![Documentation](https://docs.rs/clickhouse-rs/badge.svg)](https://docs.rs/clickhouse-rs)
+
+Tokio based asynchronous [Yandex ClickHouse](https://clickhouse.yandex/) client library for rust programming language. 
+
+## Installation
+Library hosted on [crates.io](https://crates.io/crates/clickhouse-rs/).
+```toml
+[dependencies]
+clickhouse-rs = "*"
+```
 
 ## Supported data types
 
@@ -17,7 +27,7 @@ database over native interface from the [tokio](https://github.com/tokio-rs/toki
 extern crate clickhouse_rs;
 extern crate futures;
 
-use clickhouse_rs::{Block, Client, Options};
+use clickhouse_rs::{Block, Pool, Options};
 use futures::Future;
 
 pub fn main() {
@@ -43,7 +53,7 @@ pub fn main() {
         .and_then(move |c| c.ping())
         .and_then(move |c| c.execute(ddl))
         .and_then(move |c| c.insert("payment", block))
-        .and_then(move |c| c.query_all("select * from payment"))
+        .and_then(move |c| c.query_all("SELECT * FROM payment"))
         .and_then(move |(_, block)| {
             Ok(for row in 0..block.row_count() {
                 let id: u32     = block.get(row, "customer_id")?;

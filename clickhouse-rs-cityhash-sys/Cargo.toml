@@ -1,6 +1,6 @@
 [package]
 name = "clickhouse-rs-cityhash-sys"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["mikhail <suharev7@gmail.com>"]
 license = "MIT"
 links = "clickhouse-rs"
@@ -8,4 +8,4 @@ build = "build.rs"
 description = "Rust CityHash sys package for clickhouse-rs."
 
 [build-dependencies]
-cc = "1.0.25"
+cc = "1.0.28"

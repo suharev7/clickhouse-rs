@@ -63,7 +63,6 @@ fn test_create_table() {
     let pool = Pool::new(options);
     let done = pool
         .get_handle()
-        .and_then(|c| c.ping())
         .and_then(move |c| c.execute("DROP TABLE IF EXISTS clickhouse_test_create_table"))
         .and_then(move |c| c.execute(ddl))
         .and_then(move |c| c.execute(ddl))
@@ -142,7 +141,6 @@ fn test_insert() {
     let pool = Pool::new(options);
     let done = pool
         .get_handle()
-        .and_then(|c| c.ping())
         .and_then(move |c| c.execute("DROP TABLE IF EXISTS clickhouse_test_insert"))
         .and_then(move |c| c.execute(ddl))
         .and_then(move |c| c.insert("clickhouse_test_insert", block))
@@ -191,7 +189,6 @@ fn test_select() {
 
     let pool = Pool::new(options);
     let done = pool.get_handle()
-        .and_then(|c| c.ping())
         .and_then(|c| c.execute("DROP TABLE IF EXISTS clickhouse_test_select"))
         .and_then(move |c| c.execute(ddl))
         .and_then(move |c| c.insert("clickhouse_test_select", block))
@@ -246,7 +243,6 @@ fn test_simple_select() {
 
     let pool = Pool::new(options);
     let done = pool.get_handle()
-        .and_then(|c| c.ping())
         .and_then(|c| c.query_all("SELECT a FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a) ORDER BY a ASC"))
         .and_then(|(c, actual)| {
             let expected = Block::new()
@@ -290,7 +286,6 @@ fn test_temporary_table() {
     let pool = Pool::new(options);
     let done = pool
         .get_handle()
-        .and_then(|c| c.ping())
         .and_then(move |c| c.execute(ddl))
         .and_then(|c| {
             c.execute(
@@ -336,7 +331,6 @@ fn test_with_totals() {
     let pool = Pool::new(options);
     let done = pool
         .get_handle()
-        .and_then(|c| c.ping())
         .and_then(|c| c.execute("DROP TABLE IF EXISTS clickhouse_test_with_totals"))
         .and_then(move |c| c.execute(ddl))
         .and_then(move |c| c.insert("clickhouse_test_with_totals", block))
@@ -355,7 +349,6 @@ fn test_concurrent_queries() {
         let pool = Pool::new(options);
         Box::new(
             pool.get_handle()
-                .and_then(move |c| c.ping())
                 .and_then(move |c| c.query_all(sql.as_str()))
                 .and_then(move |(_, block)| {
                     let mut total = 0_u64;

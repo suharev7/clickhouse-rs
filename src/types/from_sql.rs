@@ -6,8 +6,8 @@ use std::io;
 use chrono::prelude::*;
 use chrono_tz::Tz;
 
-use std::borrow::Cow;
 use crate::types::{SqlType, ValueRef};
+use std::borrow::Cow;
 
 #[derive(Debug)]
 pub enum FromSqlError {

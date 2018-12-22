@@ -8,9 +8,10 @@ use tokio::net::TcpStream;
 use tokio::prelude::*;
 
 use crate::binary::Parser;
-use crate::types::{ClickhouseError, Cmd, Context};
-use crate::{ClientHandle, IoFuture, Packet};
+use crate::io::IoFuture;
 use crate::pool::Pool;
+use crate::types::{ClickhouseError, Cmd, Context, Packet};
+use crate::ClientHandle;
 
 /// Line transport
 pub struct ClickhouseTransport {

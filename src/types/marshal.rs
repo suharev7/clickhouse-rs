@@ -108,9 +108,9 @@ impl Marshal for bool {
 mod test {
     use std::fmt;
 
+    use crate::types::{Marshal, StatBuffer, Unmarshal};
     use rand::distributions::{Distribution, Standard};
     use rand::random;
-    use crate::types::{Marshal, StatBuffer, Unmarshal};
 
     fn test_some<T>()
     where

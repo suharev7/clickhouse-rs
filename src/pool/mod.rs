@@ -201,6 +201,8 @@ mod test {
 
     use std::time::{Duration, Instant};
 
+    const HOST: &str = "127.0.0.1:9000";
+
     /// Same as `tokio::run`, but will panic if future panics and will return the result
     /// of future execution.
     fn run<F, T, U>(future: F) -> Result<T, U>
@@ -217,7 +219,7 @@ mod test {
 
     #[test]
     fn test_connect() {
-        let options = Options::new("127.0.0.1:9000".parse().unwrap());
+        let options = Options::new(HOST.parse().unwrap());
         let pool = Pool::new(options);
 
         let done = pool
@@ -235,7 +237,7 @@ mod test {
 
     #[test]
     fn test_many_connection() {
-        let options = Options::new("127.0.0.1:9000".parse().unwrap())
+        let options = Options::new(HOST.parse().unwrap())
             .pool_min(5)
             .pool_max(10);
         let pool = Pool::new(options);
@@ -272,7 +274,7 @@ mod test {
         let spent = start.elapsed();
 
         assert!(spent >= Duration::from_millis(2000));
-        assert!(spent < Duration::from_millis(2100));
+        assert!(spent < Duration::from_millis(2500));
 
         assert_eq!(pool.info().idle_len, pool.min);
     }

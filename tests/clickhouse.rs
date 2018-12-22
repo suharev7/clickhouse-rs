@@ -15,6 +15,8 @@ pub type IoFuture<T> = Box<Future<Item = T, Error = io::Error> + Send>;
 
 const COMPRESSION: bool = true;
 
+const HOST: &str = "127.0.0.1:9000";
+
 /// Same as `tokio::run`, but will panic if future panics and will return the result
 /// of future execution.
 fn run<F, T, U>(future: F) -> Result<T, U>
@@ -31,7 +33,7 @@ where
 
 #[test]
 fn test_ping() {
-    let mut options = Options::new("127.0.0.1:9000".parse().unwrap());
+    let mut options = Options::new(HOST.parse().unwrap());
     if COMPRESSION {
         options = options.with_compression();
     }
@@ -53,7 +55,7 @@ fn test_create_table() {
                click_time DateTime\
                ) Engine=Memory";
 
-    let mut options = Options::new("127.0.0.1:9000".parse().unwrap());
+    let mut options = Options::new(HOST.parse().unwrap());
     if COMPRESSION {
         options = options.with_compression();
     }
@@ -132,7 +134,7 @@ fn test_insert() {
 
     let expected = block.clone();
 
-    let mut options = Options::new("127.0.0.1:9000".parse().unwrap());
+    let mut options = Options::new(HOST.parse().unwrap());
     if COMPRESSION {
         options = options.with_compression();
     }
@@ -182,7 +184,7 @@ fn test_select() {
             ],
         );
 
-    let mut options = Options::new("127.0.0.1:9000".parse().unwrap());
+    let mut options = Options::new(HOST.parse().unwrap());
     if COMPRESSION {
         options = options.with_compression();
     }
@@ -237,7 +239,7 @@ fn test_select() {
 
 #[test]
 fn test_simple_select() {
-    let mut options = Options::new("127.0.0.1:9000".parse().unwrap());
+    let mut options = Options::new(HOST.parse().unwrap());
     if COMPRESSION {
         options = options.with_compression();
     }
@@ -280,7 +282,7 @@ fn test_simple_select() {
 fn test_temporary_table() {
     let ddl = "CREATE TEMPORARY TABLE clickhouse_test_temporary_table (ID UInt64);";
 
-    let mut options = Options::new("127.0.0.1:9000".parse().unwrap());
+    let mut options = Options::new(HOST.parse().unwrap());
     if COMPRESSION {
         options = options.with_compression();
     }
@@ -326,7 +328,7 @@ fn test_with_totals() {
         .add_column("country", vec!["EN", "RU", ""])
         .add_column("country", vec![2u64, 4, 6]);
 
-    let mut options = Options::new("127.0.0.1:9000".parse().unwrap());
+    let mut options = Options::new(HOST.parse().unwrap());
     if COMPRESSION {
         options = options.with_compression();
     }
@@ -349,7 +351,7 @@ fn test_concurrent_queries() {
     fn query_sum(n: u64) -> IoFuture<u64> {
         let sql = format!("SELECT number FROM system.numbers LIMIT {}", n);
 
-        let options = Options::new("127.0.0.1:9000".parse().unwrap());
+        let options = Options::new(HOST.parse().unwrap());
         let pool = Pool::new(options);
         Box::new(
             pool.get_handle()

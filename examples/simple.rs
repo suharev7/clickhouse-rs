@@ -1,4 +1,5 @@
 extern crate clickhouse_rs;
+extern crate env_logger;
 extern crate futures;
 
 use futures::Future;
@@ -6,6 +7,8 @@ use futures::Future;
 use clickhouse_rs::{Block, Options, Pool};
 
 pub fn main() {
+    env_logger::init();
+
     let ddl = "
         CREATE TABLE IF NOT EXISTS payment (
             customer_id UInt32,
@@ -24,7 +27,6 @@ pub fn main() {
 
     let done = pool
         .get_handle()
-        .and_then(move |c| c.ping())
         .and_then(move |c| c.execute(ddl))
         .and_then(move |c| c.insert("payment", block))
         .and_then(move |c| c.query_all("SELECT * FROM payment"))

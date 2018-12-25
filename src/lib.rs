@@ -46,7 +46,6 @@
 //!
 //!     let done = pool
 //!         .get_handle()
-//!         .and_then(move |c| c.ping())
 //!         .and_then(move |c| c.execute(ddl))
 //!         .and_then(move |c| c.insert("payment", block))
 //!         .and_then(move |c| c.query_all("SELECT * FROM payment"))
@@ -63,119 +62,59 @@
 //! }
 //! ```
 
+extern crate byteorder;
 extern crate chrono;
 extern crate chrono_tz;
+extern crate clickhouse_rs_cityhash_sys;
 extern crate core;
 #[macro_use]
 extern crate futures;
 extern crate hostname;
+#[cfg(test)]
+#[macro_use]
+extern crate lazy_static;
 #[macro_use]
 extern crate log;
-extern crate byteorder;
-extern crate clickhouse_rs_cityhash_sys;
 extern crate lz4;
 #[cfg(test)]
 extern crate rand;
 extern crate tokio;
 
 use std::fmt;
-use std::net::SocketAddr;
+use std::io::Error;
 
 use futures::{Future, Stream};
 use tokio::net::TcpStream;
 use tokio::prelude::*;
+use tokio_timer::timeout::Error as TimeoutError;
 
 pub use crate::block::Block;
 use crate::block::BlockEx;
-use crate::io::{IoFuture, ClickhouseTransport};
-use crate::types::query::QueryEx;
-pub use crate::types::{ClickhouseError, SqlType};
-use crate::types::{ClickhouseResult, Cmd, Context, Packet, Query};
+use crate::io::{ClickhouseTransport, IoFuture};
 pub use crate::pool::Pool;
+use crate::retry_guard::RetryGuard;
+use crate::types::query::QueryEx;
+pub use crate::types::{ClickhouseError, Options, SqlType};
+use crate::types::{ClickhouseResult, Cmd, Context, Packet, Query};
 
 mod binary;
 mod block;
 mod client_info;
 mod column;
 mod io;
-mod types;
 mod pool;
-
-#[derive(Clone)]
-pub struct Options {
-    addr: SocketAddr,
-    database: String,
-    username: String,
-    password: String,
-    compression: bool,
-    pool_min: usize,
-    pool_max: usize,
-}
+mod retry_guard;
+mod types;
 
 pub struct Client {
     _private: (),
 }
 
+/// Clickhouse client handle.
 pub struct ClientHandle {
     inner: Option<ClickhouseTransport>,
     context: Context,
     pool: Option<Pool>,
-}
-
-impl Options {
-    pub fn new(addr: SocketAddr) -> Options {
-        Options {
-            addr,
-            database: "default".to_string(),
-            username: "default".to_string(),
-            password: "".to_string(),
-            compression: false,
-            pool_min: 5,
-            pool_max: 10,
-        }
-    }
-
-    pub fn database(self, database: &str) -> Options {
-        Options {
-            database: database.to_string(),
-            ..self
-        }
-    }
-
-    pub fn username(self, username: &str) -> Options {
-        Options {
-            username: username.to_string(),
-            ..self
-        }
-    }
-
-    pub fn password(self, password: &str) -> Options {
-        Options {
-            password: password.to_string(),
-            ..self
-        }
-    }
-
-    pub fn with_compression(self) -> Options {
-        Options {
-            compression: true,
-            ..self
-        }
-    }
-
-    pub fn pool_min(self, pool_min: usize) -> Options {
-        Options {
-            pool_min,
-            ..self
-        }
-    }
-
-    pub fn pool_max(self, pool_max: usize) -> Options {
-        Options {
-            pool_max,
-            ..self
-        }
-    }
 }
 
 impl fmt::Debug for ClientHandle {
@@ -187,7 +126,7 @@ impl fmt::Debug for ClientHandle {
 }
 
 impl Client {
-    #[deprecated(since="0.1.4", note="please use Pool to connect")]
+    #[deprecated(since = "0.1.4", note = "please use Pool to connect")]
     pub fn connect(options: Options) -> IoFuture<ClientHandle> {
         Client::open(options)
     }
@@ -196,17 +135,15 @@ impl Client {
         let compress = options.compression;
 
         let context = Context {
-            database: options.database,
-            username: options.username,
-            password: options.password,
-            compression: options.compression,
+            options: options.clone(),
             ..Context::default()
         };
 
         Box::new(
             TcpStream::connect(&options.addr)
                 .and_then(move |stream| {
-                    stream.set_nodelay(true)?;
+                    stream.set_nodelay(options.nodelay)?;
+                    stream.set_keepalive(options.keepalive)?;
 
                     let transport = ClickhouseTransport::new(stream, compress);
                     Ok(ClientHandle {
@@ -221,9 +158,10 @@ impl Client {
 }
 
 impl ClientHandle {
-    pub fn hello(mut self) -> IoFuture<ClientHandle> {
+    fn hello(mut self) -> IoFuture<ClientHandle> {
         let context = self.context.clone();
         let pool = self.pool.clone();
+        info!("[hello] -> {:?}", &context);
         Box::new(
             self.inner
                 .take()
@@ -231,11 +169,16 @@ impl ClientHandle {
                 .call(Cmd::Hello(context.clone()))
                 .fold(None, move |_, packet| match packet {
                     Packet::Hello(inner, server_info) => {
+                        info!("[hello] <- {:?}", &server_info);
                         let context = Context {
                             server_info,
                             ..context.clone()
                         };
-                        let client = ClientHandle { inner: Some(inner), context, pool: pool.clone() };
+                        let client = ClientHandle {
+                            inner: Some(inner),
+                            context,
+                            pool: pool.clone(),
+                        };
                         future::ok::<_, std::io::Error>(Some(client))
                     }
                     Packet::Exception(e) => future::err(ClickhouseError::Internal(e).into()),
@@ -247,7 +190,9 @@ impl ClientHandle {
 
     pub fn ping(mut self) -> IoFuture<ClientHandle> {
         let context = self.context.clone();
+        let timeout = context.options.ping_timeout;
         let pool = self.pool.clone();
+        info!("[ping]");
         Box::new(
             self.inner
                 .take()
@@ -260,17 +205,20 @@ impl ClientHandle {
                             context: context.clone(),
                             pool: pool.clone(),
                         };
+                        info!("[pong]");
                         future::ok::<_, std::io::Error>(Some(client))
                     }
                     Packet::Exception(e) => future::err(ClickhouseError::Internal(e).into()),
                     _ => future::err(ClickhouseError::UnexpectedPacket.into()),
                 })
-                .map(Option::unwrap),
+                .map(Option::unwrap)
+                .timeout(timeout)
+                .map_err(into_io_error),
         )
     }
 
     /// Fetch data from table. It returns a block that contains all rows.
-    pub fn query_all<Q>(mut self, sql: Q) -> IoFuture<(ClientHandle, Block)>
+    pub fn query_all<Q>(self, sql: Q) -> IoFuture<(ClientHandle, Block)>
     where
         Query: From<Q>,
     {
@@ -278,10 +226,10 @@ impl ClientHandle {
         let pool = self.pool.clone();
         let query = Query::from(sql);
         let init = (None, vec![]);
-        info!("[send query] {}", query.get_sql());
 
-        Box::new(
-            self.inner
+        self.wrap_future(move |mut c| {
+            info!("[send query] {}", query.get_sql());
+            c.inner
                 .take()
                 .unwrap()
                 .call(Cmd::SendQuery(query, context.clone()))
@@ -304,21 +252,21 @@ impl ClientHandle {
                     Packet::Exception(e) => future::err(ClickhouseError::Internal(e).into()),
                     _ => future::err(ClickhouseError::UnexpectedPacket.into()),
                 })
-                .map(|(client, blocks)| (client.unwrap(), Block::concat(&blocks[..]))),
-        )
+                .map(|(client, blocks)| (client.unwrap(), Block::concat(&blocks[..])))
+        })
     }
 
     /// Convenience method to prepare and execute a single SQL statement.
-    pub fn execute<Q>(mut self, sql: Q) -> IoFuture<ClientHandle>
+    pub fn execute<Q>(self, sql: Q) -> IoFuture<ClientHandle>
     where
         Query: From<Q>,
     {
         let context = self.context.clone();
         let pool = self.pool.clone();
         let query = Query::from(sql);
-        trace!("[send query] {}", query.get_sql());
-        Box::new(
-            self.inner
+        self.wrap_future(|mut c| {
+            info!("[execute]    {}", query.get_sql());
+            c.inner
                 .take()
                 .unwrap()
                 .call(Cmd::SendQuery(query, context.clone()))
@@ -339,12 +287,12 @@ impl ClientHandle {
                     }
                     _ => future::err(ClickhouseError::UnexpectedPacket.into()),
                 })
-                .map(Option::unwrap),
-        )
+                .map(Option::unwrap)
+        })
     }
 
     /// Convenience method to insert block of data.
-    pub fn insert<Q>(mut self, table: Q, block: Block) -> IoFuture<ClientHandle>
+    pub fn insert<Q>(self, table: Q, block: Block) -> IoFuture<ClientHandle>
     where
         Query: From<Q>,
     {
@@ -367,13 +315,66 @@ impl ClientHandle {
             Box::new(Cmd::SendData(Block::default(), context.clone())),
         );
 
-        Box::new(
-            self.inner
+        self.wrap_future(|mut c| {
+            info!("[insert]     {}", query.get_sql());
+            c.inner
                 .take()
                 .unwrap()
                 .call(Cmd::SendQuery(query, context.clone()))
                 .read_block(context.clone(), pool.clone())
-                .and_then(move |mut c| c.inner.take().unwrap().call(send_cmd).read_block(context, pool)),
+                .and_then(move |mut c| {
+                    c.inner
+                        .take()
+                        .unwrap()
+                        .call(send_cmd)
+                        .read_block(context, pool)
+                })
+        })
+    }
+
+    fn wrap_future<T, R, F>(self, f: F) -> IoFuture<T>
+    where
+        F: FnOnce(ClientHandle) -> R + Send + 'static,
+        R: Future<Item = T, Error = Error> + Send + 'static,
+        T: 'static,
+    {
+        if self.context.options.ping_before_query {
+            Box::new(self.check_connection().and_then(move |c| Box::new(f(c))))
+        } else {
+            Box::new(f(self))
+        }
+    }
+
+    /// Check connection and try to reconnect is necessary.
+    pub fn check_connection(mut self) -> IoFuture<ClientHandle> {
+        let pool = self.pool.take();
+        let saved_pool = pool.clone();
+        let options = self.context.options.clone();
+        let send_retries = options.send_retries;
+        let retry_timeout = options.retry_timeout;
+
+        let reconnect = move || -> IoFuture<ClientHandle> {
+            warn!("[reconnect]");
+            match pool.clone() {
+                None => Client::open(options.clone()),
+                Some(p) => Box::new(p.get_handle()),
+            }
+        };
+
+        Box::new(
+            RetryGuard::new(self, |c| c.ping(), reconnect, send_retries, retry_timeout).and_then(
+                |mut c| {
+                    c.pool = saved_pool;
+                    Ok(c)
+                },
+            ),
         )
+    }
+}
+
+fn into_io_error(error: TimeoutError<Error>) -> Error {
+    match error.into_inner() {
+        None => ClickhouseError::Timeout.into(),
+        Some(inner) => inner,
     }
 }

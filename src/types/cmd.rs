@@ -38,9 +38,9 @@ fn encode_hello(context: &Context) -> Vec<u8> {
     encoder.uvarint(protocol::CLIENT_HELLO);
     client_info::write(&mut encoder);
 
-    encoder.string(&context.database);
-    encoder.string(&context.username);
-    encoder.string(&context.password);
+    encoder.string(&context.options.database);
+    encoder.string(&context.options.username);
+    encoder.string(&context.options.password);
 
     encoder.get_buffer()
 }
@@ -79,20 +79,20 @@ fn encode_query(query: &Query, context: &Context) -> Vec<u8> {
     encoder.string(""); // settings
     encoder.uvarint(protocol::STATE_COMPLETE);
 
-    encoder.uvarint(match context.compression {
+    encoder.uvarint(match context.options.compression {
         true => protocol::COMPRESS_ENABLE,
         false => protocol::COMPRESS_DISABLE,
     });
 
     encoder.string(&query.get_sql());
-    Block::default().send_data(&mut encoder, context.compression);
+    Block::default().send_data(&mut encoder, context.options.compression);
 
     encoder.get_buffer()
 }
 
 fn encode_data(block: &Block, context: &Context) -> Vec<u8> {
     let mut encoder = Encoder::new();
-    block.send_data(&mut encoder, context.compression);
+    block.send_data(&mut encoder, context.options.compression);
     encoder.get_buffer()
 }
 

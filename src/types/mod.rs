@@ -15,6 +15,7 @@ pub use self::cmd::Cmd;
 pub use self::date_converter::DateConverter;
 pub use self::from_sql::{FromSql, FromSqlError, FromSqlResult};
 pub use self::marshal::Marshal;
+pub use self::options::Options;
 pub use self::query::Query;
 pub use self::stat_buffer::StatBuffer;
 pub use self::unmarshal::Unmarshal;
@@ -33,6 +34,8 @@ mod cmd;
 
 mod date_converter;
 pub mod query;
+
+mod options;
 
 #[derive(Copy, Clone, Debug, Default, PartialEq)]
 pub struct Progress {
@@ -80,12 +83,9 @@ impl fmt::Debug for ServerInfo {
 
 #[derive(Debug, Clone)]
 pub struct Context {
-    pub server_info: ServerInfo,
-    pub database: String,
-    pub username: String,
-    pub password: String,
-    pub hostname: String,
-    pub compression: bool,
+    pub(crate) server_info: ServerInfo,
+    pub(crate) hostname: String,
+    pub(crate) options: Options,
 }
 
 impl Default for ServerInfo {
@@ -104,11 +104,8 @@ impl Default for Context {
     fn default() -> Self {
         Context {
             server_info: ServerInfo::default(),
-            database: "default".to_string(),
-            username: "default".to_string(),
-            password: "".to_string(),
             hostname: get_hostname().unwrap(),
-            compression: false,
+            options: Options::default(),
         }
     }
 }
@@ -210,6 +207,7 @@ pub enum ClickhouseError {
     ResponseError(&'static str),
     Internal(ExceptionRepr),
     UnexpectedPacket,
+    Timeout,
 }
 
 impl From<io::Error> for ClickhouseError {
@@ -243,6 +241,7 @@ impl error::Error for ClickhouseError {
             ClickhouseError::ResponseError(message) => &message,
             ClickhouseError::Internal(ref e) => &e.message,
             ClickhouseError::UnexpectedPacket => "Unexpected packet",
+            ClickhouseError::Timeout => "Timeout error",
         }
     }
 
@@ -265,6 +264,7 @@ impl fmt::Display for ClickhouseError {
             ClickhouseError::ResponseError(message) => write!(f, "ResponseError: {}", message),
             ClickhouseError::Internal(e) => write!(f, "{}", e.message),
             ClickhouseError::UnexpectedPacket => write!(f, "Unexpected packet"),
+            ClickhouseError::Timeout => write!(f, "Timeout error"),
         }
     }
 }

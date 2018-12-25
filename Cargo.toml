@@ -1,6 +1,6 @@
 [package]
 name = "clickhouse-rs"
-version = "0.1.5"
+version = "0.1.6"
 authors = ["Mikhail Sukharev <suharev7@gmail.com>"]
 license = "MIT"
 homepage = "https://github.com/suharev7/clickhouse-rs"
@@ -14,9 +14,10 @@ edition = "2018"
 exclude = ["test/*"]
 
 [dependencies]
-log = "0.3.6"
+log = "0.4.6"
 futures = "0.1.25"
 tokio = "0.1.13"
+tokio-timer = "0.2.8"
 hostname = "^0.1"
 
 chrono = "0.4"
@@ -28,5 +29,6 @@ clickhouse-rs-cityhash-sys = { path = "clickhouse-rs-cityhash-sys", version = "0
 byteorder = "1.2.7"
 
 [dev-dependencies]
-env_logger = "0.3.0"
-rand = "0.5"
+env_logger = "0.6.0"
+rand = "0.6.1"
+lazy_static = "1.2.0"

@@ -1,14 +1,14 @@
-use std::{fmt, io};
 use std::sync::{Arc, Mutex, MutexGuard};
+use std::{fmt, io};
 
-use tokio::prelude::*;
 use tokio::prelude::task::{self, Task};
+use tokio::prelude::*;
 
-use crate::Client;
 use crate::pool::futures::GetHandle;
+use crate::Client;
 
-use crate::ClientHandle;
 use crate::io::IoFuture;
+use crate::ClientHandle;
 use crate::Options;
 
 mod futures;
@@ -26,6 +26,7 @@ impl Inner {
     }
 }
 
+/// Asynchronous pool of Clickhouse connections.
 #[derive(Clone)]
 pub struct Pool {
     options: Options,
@@ -180,8 +181,8 @@ impl Drop for ClientHandle {
                 let context = self.context.clone();
                 let client = ClientHandle {
                     inner: Some(inner),
-                    context,
                     pool: Some(pool.clone()),
+                    context,
                 };
                 pool.return_conn(client);
             }
@@ -232,24 +233,22 @@ mod test {
                 Ok(())
             });
 
-        run(done).unwrap()
+        run(done).unwrap();
     }
 
     #[test]
     fn test_many_connection() {
-        let options = Options::new(HOST.parse().unwrap())
-            .pool_min(5)
-            .pool_max(10);
+        let options = Options::new(HOST.parse().unwrap()).pool_min(5).pool_max(10);
         let pool = Pool::new(options);
 
         fn exec_query(pool: Pool) -> IoFuture<u32> {
             Box::new(
-            pool.get_handle()
-                .and_then(|c| c.query_all("SELECT toUInt32(1), sleep(1)"))
-                .and_then(|(_, block)| {
-                    let value: u32 = block.get(0, 0)?;
-                    Ok(value)
-                })
+                pool.get_handle()
+                    .and_then(|c| c.query_all("SELECT toUInt32(1), sleep(1)"))
+                    .and_then(|(_, block)| {
+                        let value: u32 = block.get(0, 0)?;
+                        Ok(value)
+                    }),
             )
         }
 
@@ -262,12 +261,11 @@ mod test {
             requests.push(exec_query(pool.clone()))
         }
 
-        let done = future::join_all(requests)
-            .and_then(move |xs| {
-                let actual: u32 = xs.iter().sum();
-                assert_eq!(actual, expected);
-                Ok(())
-            });
+        let done = future::join_all(requests).and_then(move |xs| {
+            let actual: u32 = xs.iter().sum();
+            assert_eq!(actual, expected);
+            Ok(())
+        });
 
         run(done).unwrap();
 
@@ -276,6 +274,6 @@ mod test {
         assert!(spent >= Duration::from_millis(2000));
         assert!(spent < Duration::from_millis(2500));
 
-        assert_eq!(pool.info().idle_len, pool.min);
+        assert_eq!(pool.info().idle_len, 5);
     }
 }

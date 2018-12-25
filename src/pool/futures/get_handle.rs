@@ -2,8 +2,8 @@ use std::io;
 
 use tokio::prelude::*;
 
-use crate::ClientHandle;
 use crate::pool::Pool;
+use crate::ClientHandle;
 
 pub struct GetHandle {
     pool: Pool,

@@ -24,7 +24,7 @@ chrono = "0.4"
 chrono-tz = "0.5"
 
 lz4 = "1.23.1"
-clickhouse-rs-cityhash-sys = { path = "clickhouse-rs-cityhash-sys", version = "0.1.0" }
+clickhouse-rs-cityhash-sys = { path = "clickhouse-rs-cityhash-sys", version = "0.1.1" }
 
 byteorder = "1.2.7"
 

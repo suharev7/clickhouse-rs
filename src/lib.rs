@@ -50,10 +50,10 @@
 //!         .and_then(move |c| c.insert("payment", block))
 //!         .and_then(move |c| c.query_all("SELECT * FROM payment"))
 //!         .and_then(move |(_, block)| {
-//!             Ok(for row in 0..block.row_count() {
-//!                 let id: u32     = block.get(row, "customer_id")?;
-//!                 let amount: u32 = block.get(row, "amount")?;
-//!                 let name: &str  = block.get(row, "account_name")?;
+//!             Ok(for row in block.rows() {
+//!                 let id: u32     = row.get("customer_id")?;
+//!                 let amount: u32 = row.get("amount")?;
+//!                 let name: &str  = row.get("account_name")?;
 //!                 println!("Found payment {}: {} {}", id, amount, name);
 //!             })
 //!         }).map_err(|err| eprintln!("database error: {}", err));

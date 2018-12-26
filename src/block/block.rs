@@ -5,14 +5,15 @@ use std::io::{self, Cursor};
 use byteorder::{LittleEndian, WriteBytesExt};
 use chrono_tz::Tz;
 use clickhouse_rs_cityhash_sys::{city_hash_128, UInt128};
-use lz4::liblz4::{LZ4_compressBound, LZ4_compress_default, LZ4_decompress_safe};
+use lz4::liblz4::{LZ4_compress_default, LZ4_compressBound, LZ4_decompress_safe};
 
-use crate::binary::{protocol, Encoder, ReadEx};
-use crate::block::chunk_iterator::ChunkIterator;
+use crate::ClickhouseError;
+use crate::binary::{Encoder, protocol, ReadEx};
 use crate::block::BlockInfo;
+use crate::block::chunk_iterator::ChunkIterator;
+use crate::block::row::Rows;
 use crate::column::{self, Column, ColumnFrom};
-use crate::types::{FromSql, FromSqlError, FromSqlResult};
-use crate::{ClickhouseError, ClickhouseResult};
+use crate::types::{FromSql, FromSqlError, FromSqlResult, ClickhouseResult};
 
 const INSERT_BLOCK_SIZE: usize = 1048576;
 
@@ -165,6 +166,13 @@ impl Block {
     /// Returns true if the block contains no elements.
     pub fn is_empty(&self) -> bool {
         self.columns.is_empty()
+    }
+
+    pub fn rows(&self) -> Rows {
+        Rows {
+            row: 0,
+            block: &self,
+        }
     }
 }
 
@@ -518,5 +526,13 @@ mod test {
         let block = Block::default();
         assert_eq!(1, block.chunks(100500).count());
         assert_eq!(Some(block.clone()), block.chunks(100500).next());
+    }
+
+    #[test]
+    fn test_rows() {
+        let expected = vec![1_u8, 2, 3];
+        let block = Block::new().add_column("A", vec![1_u8, 2, 3]);
+        let actual: Vec<u8> = block.rows().map(|row| row.get("A").unwrap()).collect();
+        assert_eq!(expected, actual);
     }
 }

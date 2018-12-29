@@ -1,26 +1,24 @@
-use std::cmp;
-use std::fmt;
-use std::io::{self, Cursor};
+use std::{cmp, fmt, io::Cursor};
 
 use byteorder::{LittleEndian, WriteBytesExt};
 use chrono_tz::Tz;
 use clickhouse_rs_cityhash_sys::{city_hash_128, UInt128};
-use lz4::liblz4::{LZ4_compress_default, LZ4_compressBound, LZ4_decompress_safe};
+use lz4::liblz4::{LZ4_compressBound, LZ4_compress_default, LZ4_decompress_safe};
 
-use crate::ClickhouseError;
-use crate::binary::{Encoder, protocol, ReadEx};
-use crate::block::BlockInfo;
+use crate::binary::{protocol, Encoder, ReadEx};
 use crate::block::chunk_iterator::ChunkIterator;
 use crate::block::row::Rows;
+use crate::block::BlockInfo;
 use crate::column::{self, Column, ColumnFrom};
-use crate::types::{FromSql, FromSqlError, FromSqlResult, ClickhouseResult};
+use crate::errors::{Error, FromSqlError};
+use crate::types::{ClickhouseResult, FromSql};
 
 const INSERT_BLOCK_SIZE: usize = 1048576;
 
 const DBMS_MAX_COMPRESSED_SIZE: u32 = 0x40000000; // 1GB
 
 pub trait ColumnIdx {
-    fn get_index(&self, columns: &Vec<Column>) -> FromSqlResult<usize>;
+    fn get_index(&self, columns: &Vec<Column>) -> ClickhouseResult<usize>;
 }
 
 #[derive(Default)]
@@ -68,19 +66,19 @@ impl AsRef<Block> for Block {
 }
 
 impl ColumnIdx for usize {
-    fn get_index(&self, _: &Vec<Column>) -> FromSqlResult<usize> {
+    fn get_index(&self, _: &Vec<Column>) -> ClickhouseResult<usize> {
         Ok(*self)
     }
 }
 
 impl<'a> ColumnIdx for &'a str {
-    fn get_index(&self, columns: &Vec<Column>) -> FromSqlResult<usize> {
+    fn get_index(&self, columns: &Vec<Column>) -> ClickhouseResult<usize> {
         match columns
             .iter()
             .enumerate()
             .find(|(_, column)| column.name() == *self)
         {
-            None => Err(FromSqlError::OutOfRange),
+            None => Err(Error::FromSql(FromSqlError::OutOfRange)),
             Some((index, _)) => Ok(index),
         }
     }
@@ -142,7 +140,7 @@ impl Block {
     }
 
     /// Get the value of a particular cell of the block.
-    pub fn get<'a, T, I>(&'a self, row: usize, col: I) -> FromSqlResult<T>
+    pub fn get<'a, T, I>(&'a self, row: usize, col: I) -> ClickhouseResult<T>
     where
         T: FromSql<'a>,
         I: ColumnIdx,
@@ -369,8 +367,8 @@ fn decompress<R: ReadEx>(reader: &mut R) -> ClickhouseResult<Vec<u8>> {
     Ok(data)
 }
 
-fn raise_error(message: String) -> ClickhouseError {
-    ClickhouseError::IoError(io::Error::new(io::ErrorKind::Other, message))
+fn raise_error(message: String) -> Error {
+    message.into()
 }
 
 #[cfg(test)]

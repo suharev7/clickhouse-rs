@@ -1,9 +1,8 @@
-use std::io;
-
 use crate::column::column_data::ColumnData;
 use crate::column::date::DateColumnData;
 use crate::column::numeric::VectorColumnData;
 use crate::column::string::StringColumnData;
+use crate::errors::Error;
 
 use crate::binary::ReadEx;
 use chrono_tz::Tz;
@@ -15,7 +14,7 @@ impl ColumnData {
         type_name: &str,
         size: usize,
         tz: Tz,
-    ) -> Result<Arc<ColumnData + Send + Sync>, io::Error> {
+    ) -> Result<Arc<ColumnData + Send + Sync>, Error> {
         Ok(match type_name {
             "UInt8" => Arc::new(VectorColumnData::<u8>::load(reader, size)?),
             "UInt16" => Arc::new(VectorColumnData::<u16>::load(reader, size)?),
@@ -32,7 +31,7 @@ impl ColumnData {
             "DateTime" => Arc::new(DateColumnData::<u32>::load(reader, size, tz)?),
             _ => {
                 let message = format!("Unsupported column type \"{}\".", type_name);
-                return Err(io::Error::new(io::ErrorKind::Other, message));
+                return Err(message.into());
             }
         })
     }

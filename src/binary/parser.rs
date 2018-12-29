@@ -3,9 +3,8 @@ use std::io::{self, Read};
 use chrono_tz::Tz;
 
 use crate::binary::{protocol, ReadEx};
-use crate::types::{
-    ClickhouseError, ClickhouseResult, ExceptionRepr, Packet, ProfileInfo, Progress, ServerInfo,
-};
+use crate::errors::{DriverError, Error, ServerError};
+use crate::types::{ClickhouseResult, Packet, ProfileInfo, Progress, ServerInfo};
 use crate::Block;
 
 /// The internal clickhouse response parser.
@@ -47,13 +46,13 @@ impl<'a, T: Read> Parser<T> {
                 Ok(self.parse_block()?)
             }
             protocol::SERVER_END_OF_STREAM => Ok(Packet::Eof(())),
-            _ => Err(ClickhouseError::UnknownPacket(packet)),
+            _ => Err(Error::Driver(DriverError::UnknownPacket { packet })),
         }
     }
 
     fn parse_block(&mut self) -> ClickhouseResult<Packet<()>> {
         match self.tz {
-            None => Err(ClickhouseError::UnexpectedPacket.into()),
+            None => Err(Error::Driver(DriverError::UnexpectedPacket)),
             Some(tz) => {
                 let _ = self.reader.read_string()?;
                 let block = Block::load(&mut self.reader, tz, self.compress)?;
@@ -110,7 +109,7 @@ impl<'a, T: Read> Parser<T> {
     }
 
     fn parse_exception(&mut self) -> ClickhouseResult<Packet<()>> {
-        let exception = ExceptionRepr {
+        let exception = ServerError {
             code: self.reader.read_scalar()?,
             name: self.reader.read_string()?,
             message: self.reader.read_string()?,

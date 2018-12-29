@@ -1,17 +1,12 @@
-use std::convert;
-use std::fmt;
-use std::io;
-use std::mem;
-use std::sync::Arc;
+use std::{convert, fmt, mem, sync::Arc};
 
 use chrono::prelude::*;
 use chrono::Date;
 use chrono_tz::Tz;
 
 use crate::binary::{Encoder, ReadEx};
-use crate::column::column_data::ColumnData;
-use crate::column::list::List;
-use crate::column::{BoxColumnData, ColumnFrom};
+use crate::column::{column_data::ColumnData, list::List, BoxColumnData, ColumnFrom};
+use crate::errors::Error;
 use crate::types::{DateConverter, Marshal, SqlType, StatBuffer, Unmarshal, Value, ValueRef};
 
 pub struct DateColumnData<T>
@@ -46,7 +41,7 @@ where
         reader: &mut R,
         size: usize,
         tz: Tz,
-    ) -> Result<DateColumnData<T>, io::Error> {
+    ) -> Result<DateColumnData<T>, Error> {
         let mut row = vec![0_u8; size * mem::size_of::<T>()];
         reader.read_bytes(row.as_mut())?;
         let data = List::from(row);

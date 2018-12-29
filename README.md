@@ -22,6 +22,35 @@ clickhouse-rs = "*"
 * String
 * UInt8, UInt16, UInt32, UInt64, Int8, Int16, Int32, Int64
 
+## DNS
+
+```url
+schema://user:password@host[:port]/database?param1=value1&...&paramN=valueN
+```
+
+parameters:
+
+- `compression` - Whether or not use compression (defaults to `none`). Possible choices:
+    * `none`
+    * `lz4`
+
+- `connection_timeout` - Timeout for connection (defaults to `500 ms`)
+- `keepalive` - TCP keep alive timeout in milliseconds.
+- `nodelay` - Whether to enable `TCP_NODELAY` (defaults to `true`).
+ 
+- `pool_max` - Lower bound of opened connections for `Pool` (defaults to `10`).
+- `pool_min` - Upper bound of opened connections for `Pool` (defaults to `20`).
+
+- `ping_before_query` - Ping server every time before execute any query. (defaults to `true`).
+- `send_retries` - Count of retry to send request to server. (defaults to `3`).
+- `retry_timeout` - Amount of time to wait before next retry. (defaults to `5 sec`).
+- `ping_timeout` - Timeout for ping (defaults to `500 ms`).
+
+example:
+```url
+tcp://user:password@host:9000/clicks?compression=lz4&ping_timeout=42ms
+```
+
 ## Example
 
 ```rust
@@ -44,10 +73,7 @@ pub fn main() {
         .add_column("amount",       vec![2_u32,  4,  6,  8,    10])
         .add_column("account_name", vec!["foo", "", "", "", "bar"]);
     
-    let options = Options::new("127.0.0.1:9000".parse().unwrap())
-        .with_compression();
-    
-    let pool = Pool::new(options);
+    let pool = Pool::new(database_url);
     
     let done = pool
         .get_handle()

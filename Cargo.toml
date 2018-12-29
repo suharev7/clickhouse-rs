@@ -27,6 +27,9 @@ lz4 = "1.23.1"
 clickhouse-rs-cityhash-sys = { path = "clickhouse-rs-cityhash-sys", version = "0.1.1" }
 
 byteorder = "1.2.7"
+failure = "0.1"
+failure_derive = "0.1"
+url="^1.7"
 
 [dev-dependencies]
 env_logger = "0.6.0"

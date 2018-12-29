@@ -1,6 +1,7 @@
 use std::io;
 
-use crate::types::{ClickhouseError, ClickhouseResult, StatBuffer, Unmarshal};
+use crate::errors::{DriverError, Error};
+use crate::types::{ClickhouseResult, StatBuffer, Unmarshal};
 
 pub trait ReadEx {
     fn read_bytes(&mut self, rv: &mut [u8]) -> ClickhouseResult<()>;
@@ -59,7 +60,7 @@ where
 
             if b < 0x80 {
                 if i > 9 || i == 9 && b > 1 {
-                    return Err(ClickhouseError::Overflow);
+                    return Err(Error::Driver(DriverError::Overflow));
                 }
                 return Ok(x | ((b as u64) << s));
             }

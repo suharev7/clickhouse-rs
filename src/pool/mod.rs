@@ -1,20 +1,22 @@
-use std::sync::{Arc, Mutex, MutexGuard};
-use std::{fmt, io};
+use std::{
+    fmt,
+    sync::{Arc, Mutex, MutexGuard},
+};
 
-use tokio::prelude::task::{self, Task};
 use tokio::prelude::*;
+use tokio::prelude::task::{self, Task};
 
-use crate::pool::futures::GetHandle;
-use crate::Client;
-
-use crate::io::IoFuture;
-use crate::ClientHandle;
-use crate::Options;
+use crate::{
+    Client,
+    ClientHandle,
+    io::BoxFuture,
+    pool::futures::GetHandle, types::{ClickhouseResult, IntoOptions, OptionsSource},
+};
 
 mod futures;
 
 struct Inner {
-    new: Vec<IoFuture<ClientHandle>>,
+    new: Vec<BoxFuture<ClientHandle>>,
     idle: Vec<ClientHandle>,
     tasks: Vec<Task>,
     ongoing: usize,
@@ -29,7 +31,7 @@ impl Inner {
 /// Asynchronous pool of Clickhouse connections.
 #[derive(Clone)]
 pub struct Pool {
-    options: Options,
+    options: OptionsSource,
     inner: Arc<Mutex<Inner>>,
     min: usize,
     max: usize,
@@ -57,7 +59,10 @@ impl fmt::Debug for Pool {
 }
 
 impl Pool {
-    pub fn new(options: Options) -> Pool {
+    pub fn new<O>(options: O) -> Pool
+    where
+        O: IntoOptions,
+    {
         let inner = Arc::new(Mutex::new(Inner {
             new: Vec::new(),
             idle: Vec::new(),
@@ -66,7 +71,7 @@ impl Pool {
         }));
 
         Pool {
-            options,
+            options: options.into_options_src(),
             inner,
             min: 5,
             max: 10,
@@ -95,7 +100,7 @@ impl Pool {
         fun(self.inner.lock().unwrap())
     }
 
-    fn poll(&mut self) -> io::Result<Async<ClientHandle>> {
+    fn poll(&mut self) -> ClickhouseResult<Async<ClientHandle>> {
         self.handle_futures()?;
 
         match self.take_conn() {
@@ -118,11 +123,12 @@ impl Pool {
         }
     }
 
-    fn new_connection(&self) -> IoFuture<ClientHandle> {
-        Client::open(self.options.clone())
+    fn new_connection(&self) -> BoxFuture<ClientHandle> {
+        let source = self.options.clone();
+        Client::open(source)
     }
 
-    fn handle_futures(&mut self) -> io::Result<()> {
+    fn handle_futures(&mut self) -> ClickhouseResult<()> {
         let len = self.with_inner(|inner| inner.new.len());
 
         for i in 0..len {
@@ -137,7 +143,7 @@ impl Pool {
                 Ok(Async::NotReady) => (),
                 Err(err) => {
                     self.with_inner(|mut inner| inner.new.swap_remove(i));
-                    return Err(err);
+                    return Err(err.into());
                 }
             }
         }
@@ -193,16 +199,16 @@ impl Drop for ClientHandle {
 
 #[cfg(test)]
 mod test {
+    use std::{
+        str::FromStr,
+        time::{Duration, Instant},
+    };
+
     use tokio::prelude::*;
 
-    use crate::Options;
+    use crate::{io::BoxFuture, Options, test_misc::DATABASE_URL};
 
     use super::Pool;
-    use crate::io::IoFuture;
-
-    use std::time::{Duration, Instant};
-
-    const HOST: &str = "127.0.0.1:9000";
 
     /// Same as `tokio::run`, but will panic if future panics and will return the result
     /// of future execution.
@@ -220,7 +226,7 @@ mod test {
 
     #[test]
     fn test_connect() {
-        let options = Options::new(HOST.parse().unwrap());
+        let options = Options::from_str(DATABASE_URL.as_str()).unwrap();
         let pool = Pool::new(options);
 
         let done = pool
@@ -238,10 +244,13 @@ mod test {
 
     #[test]
     fn test_many_connection() {
-        let options = Options::new(HOST.parse().unwrap()).pool_min(5).pool_max(10);
+        let options = Options::from_str(DATABASE_URL.as_str())
+            .unwrap()
+            .pool_min(5)
+            .pool_max(10);
         let pool = Pool::new(options);
 
-        fn exec_query(pool: Pool) -> IoFuture<u32> {
+        fn exec_query(pool: Pool) -> BoxFuture<u32> {
             Box::new(
                 pool.get_handle()
                     .and_then(|c| c.query_all("SELECT toUInt32(1), sleep(1)"))

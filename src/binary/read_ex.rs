@@ -62,10 +62,10 @@ where
                 if i > 9 || i == 9 && b > 1 {
                     return Err(Error::Driver(DriverError::Overflow));
                 }
-                return Ok(x | ((b as u64) << s));
+                return Ok(x | (u64::from(b) << s));
             }
 
-            x |= ((b & 0x7f) as u64) << s;
+            x |= u64::from(b & 0x7f) << s;
             s += 7;
 
             i += 1;

@@ -38,7 +38,7 @@ pub struct ClickhouseTransport {
 enum PacketStreamState {
     Ask,
     Receive,
-    Yield(Option<Packet<ClickhouseTransport>>),
+    Yield(Box<Option<Packet<ClickhouseTransport>>>),
     Done,
 }
 
@@ -101,7 +101,7 @@ impl ClickhouseTransport {
                 }
 
                 trace!("transport flush error; err={:?}", e);
-                return Err(e);
+                Err(e)
             }
         }
     }
@@ -220,7 +220,7 @@ impl Stream for PacketStream {
                 PacketStreamState::Ask => match self.inner {
                     None => PacketStreamState::Done,
                     Some(ref mut inner) => {
-                        let _ = try_ready!(inner.send());
+                        try_ready!(inner.send());
                         PacketStreamState::Receive
                     }
                 },
@@ -234,7 +234,7 @@ impl Stream for PacketStream {
                         None => PacketStreamState::Done,
                         Some(packet) => {
                             let result = packet.bind(&mut self.inner);
-                            PacketStreamState::Yield(Some(result))
+                            PacketStreamState::Yield(Box::new(Some(result)))
                         }
                     }
                 }

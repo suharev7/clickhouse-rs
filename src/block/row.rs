@@ -1,4 +1,4 @@
-use crate::block::block::ColumnIdx;
+use crate::block::ColumnIdx;
 use crate::types::{ClickhouseResult, FromSql};
 use crate::Block;
 

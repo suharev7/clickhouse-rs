@@ -18,7 +18,7 @@ pub trait DateConverter {
 
 impl DateConverter for u16 {
     fn to_date(&self, tz: Tz) -> ValueRef<'static> {
-        let time = tz.timestamp((*self as i64) * 24 * 3600, 0);
+        let time = tz.timestamp(i64::from(*self) * 24 * 3600, 0);
         ValueRef::Date(time.date())
     }
 
@@ -33,7 +33,7 @@ impl DateConverter for u16 {
 
 impl DateConverter for u32 {
     fn to_date(&self, tz: Tz) -> ValueRef<'static> {
-        let time = tz.timestamp(*self as i64, 0);
+        let time = tz.timestamp(i64::from(*self), 0);
         ValueRef::DateTime(time)
     }
 

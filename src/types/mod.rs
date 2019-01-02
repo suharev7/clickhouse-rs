@@ -163,7 +163,7 @@ pub enum SqlType {
 }
 
 impl SqlType {
-    pub fn to_string(&self) -> Cow<'static, str> {
+    pub fn to_string(self) -> Cow<'static, str> {
         match self {
             SqlType::UInt8 => "UInt8".into(),
             SqlType::UInt16 => "UInt16".into(),
@@ -184,7 +184,7 @@ impl SqlType {
 
 impl fmt::Display for SqlType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.to_string())
+        write!(f, "{}", SqlType::to_string(*self))
     }
 }
 

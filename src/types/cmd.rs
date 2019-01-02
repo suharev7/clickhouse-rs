@@ -85,9 +85,10 @@ fn encode_query(query: &Query, context: &Context) -> ClickhouseResult<Vec<u8>> {
 
     let options = context.options.get()?;
 
-    encoder.uvarint(match options.compression {
-        true => protocol::COMPRESS_ENABLE,
-        false => protocol::COMPRESS_DISABLE,
+    encoder.uvarint(if options.compression {
+        protocol::COMPRESS_ENABLE
+    } else {
+        protocol::COMPRESS_DISABLE
     });
 
     let options = context.options.get()?;

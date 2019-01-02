@@ -24,8 +24,7 @@ where
         let begin = index * mem::size_of::<T>();
         let end = begin + mem::size_of::<T>();
         let bits = &self.data[begin..end];
-        let value = T::unmarshal(bits);
-        value.into()
+        T::unmarshal(bits)
     }
 
     pub fn push(&mut self, value: T) {

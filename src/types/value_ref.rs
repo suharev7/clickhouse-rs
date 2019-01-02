@@ -71,7 +71,7 @@ impl<'a> ValueRef<'a> {
         match self {
             ValueRef::String(t) => Ok(t),
             _ => {
-                let from = SqlType::from(self.clone()).to_string();
+                let from = SqlType::from(*self).to_string();
                 Err(Error::FromSql(FromSqlError::InvalidType {
                     src: from,
                     dst: "String",

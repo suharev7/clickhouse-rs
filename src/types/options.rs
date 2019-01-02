@@ -312,7 +312,7 @@ fn from_url(url_str: &str) -> ClickhouseResult<Options> {
     let host = url
         .host_str()
         .map(String::from)
-        .unwrap_or("127.0.0.1".into());
+        .unwrap_or_else(|| "127.0.0.1".into());
 
     let port = url.port().unwrap_or(9000);
     options.addr = format!("{}:{}", host, port).into();
@@ -321,7 +321,7 @@ fn from_url(url_str: &str) -> ClickhouseResult<Options> {
         options.database = database;
     }
 
-    set_params(&mut options, url.query_pairs().into_iter())?;
+    set_params(&mut options, url.query_pairs())?;
 
     Ok(options)
 }
@@ -330,7 +330,7 @@ fn set_params<'a, I>(options: &mut Options, iter: I) -> std::result::Result<(), 
 where
     I: Iterator<Item = (Cow<'a, str>, Cow<'a, str>)>,
 {
-    Ok(for (key, value) in iter {
+    for (key, value) in iter {
         match key.as_ref() {
             "pool_min" => options.pool_min = parse_param(key, value, usize::from_str)?,
             "pool_max" => options.pool_max = parse_param(key, value, usize::from_str)?,
@@ -348,7 +348,9 @@ where
             "compression" => options.compression = parse_param(key, value, parse_compression)?,
             _ => return Err(UrlError::UnknownParameter { param: key.into() }),
         };
-    })
+    }
+
+    Ok(())
 }
 
 fn parse_param<'a, F, T, E>(

@@ -45,7 +45,7 @@ impl<'a> FromSql<'a> for DateTime<Tz> {
         match value {
             ValueRef::DateTime(v) => Ok(v),
             _ => {
-                let from = SqlType::from(value.clone()).to_string();
+                let from = SqlType::from(value).to_string();
                 Err(Error::FromSql(FromSqlError::InvalidType {
                     src: from,
                     dst: "DateTime<Tz>",

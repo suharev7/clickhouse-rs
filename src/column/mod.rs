@@ -54,7 +54,7 @@ impl PartialEq<Column> for Column {
             }
         }
 
-        return true;
+        true
     }
 }
 

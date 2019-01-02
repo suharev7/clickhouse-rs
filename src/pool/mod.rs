@@ -3,14 +3,14 @@ use std::{
     sync::{Arc, Mutex, MutexGuard},
 };
 
-use tokio::prelude::*;
 use tokio::prelude::task::{self, Task};
+use tokio::prelude::*;
 
 use crate::{
-    Client,
-    ClientHandle,
     io::BoxFuture,
-    pool::futures::GetHandle, types::{ClickhouseResult, IntoOptions, OptionsSource},
+    pool::futures::GetHandle,
+    types::{ClickhouseResult, IntoOptions, OptionsSource},
+    Client, ClientHandle,
 };
 
 mod futures;
@@ -107,7 +107,7 @@ impl Pool {
             Some(client) => Ok(Async::Ready(client)),
             None => {
                 let new_conn_created = self.with_inner(|mut inner| {
-                    if inner.new.len() == 0 && inner.conn_count() < self.max {
+                    if inner.new.is_empty() && inner.conn_count() < self.max {
                         inner.new.push(self.new_connection());
                         true
                     } else {
@@ -115,9 +115,10 @@ impl Pool {
                         false
                     }
                 });
-                match new_conn_created {
-                    true => self.poll(),
-                    false => Ok(Async::NotReady),
+                if new_conn_created {
+                    self.poll()
+                } else {
+                    Ok(Async::NotReady)
                 }
             }
         }
@@ -143,7 +144,7 @@ impl Pool {
                 Ok(Async::NotReady) => (),
                 Err(err) => {
                     self.with_inner(|mut inner| inner.new.swap_remove(i));
-                    return Err(err.into());
+                    return Err(err);
                 }
             }
         }
@@ -153,12 +154,13 @@ impl Pool {
 
     fn take_conn(&mut self) -> Option<ClientHandle> {
         self.with_inner(|mut inner| {
-            while let Some(mut client) = inner.idle.pop() {
+            if let Some(mut client) = inner.idle.pop() {
                 client.pool = Some(self.clone());
                 inner.ongoing += 1;
-                return Some(client);
+                Some(client)
+            } else {
+                None
             }
-            None
         })
     }
 
@@ -182,17 +184,14 @@ impl Pool {
 
 impl Drop for ClientHandle {
     fn drop(&mut self) {
-        match (self.pool.take(), self.inner.take()) {
-            (Some(mut pool), Some(inner)) => {
-                let context = self.context.clone();
-                let client = ClientHandle {
-                    inner: Some(inner),
-                    pool: Some(pool.clone()),
-                    context,
-                };
-                pool.return_conn(client);
-            }
-            _ => {}
+        if let (Some(mut pool), Some(inner)) = (self.pool.take(), self.inner.take()) {
+            let context = self.context.clone();
+            let client = ClientHandle {
+                inner: Some(inner),
+                pool: Some(pool.clone()),
+                context,
+            };
+            pool.return_conn(client);
         }
     }
 }
@@ -206,7 +205,7 @@ mod test {
 
     use tokio::prelude::*;
 
-    use crate::{io::BoxFuture, Options, test_misc::DATABASE_URL};
+    use crate::{io::BoxFuture, test_misc::DATABASE_URL, Options};
 
     use super::Pool;
 

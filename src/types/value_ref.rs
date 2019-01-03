@@ -1,11 +1,12 @@
-use std::convert;
-use std::fmt;
+use std::{convert, fmt};
 
 use chrono::prelude::*;
 use chrono_tz::Tz;
 
-use crate::errors::{Error, FromSqlError};
-use crate::types::{ClickhouseResult, SqlType, Value};
+use crate::{
+    errors::{Error, FromSqlError},
+    types::{ClickhouseResult, SqlType, Value},
+};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum ValueRef<'a> {

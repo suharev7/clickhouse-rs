@@ -1,12 +1,13 @@
-use std::fmt;
-use std::marker::PhantomData;
-use std::time::{Duration, Instant};
+use std::{
+    fmt,
+    marker::PhantomData,
+    time::{Duration, Instant},
+};
 
-use crate::errors::Error;
 use tokio::prelude::*;
 use tokio_timer::{Delay, Error as TimerError};
 
-use crate::io::BoxFuture;
+use crate::{errors::Error, io::BoxFuture};
 
 enum RetryState<H> {
     Check(BoxFuture<H>),

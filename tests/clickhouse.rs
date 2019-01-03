@@ -3,12 +3,13 @@ extern crate chrono_tz;
 extern crate clickhouse_rs;
 extern crate tokio;
 
+use std::env;
+
 use chrono::prelude::*;
 use chrono_tz::Tz::{self, UTC};
 use tokio::prelude::*;
-use std::env;
 
-use clickhouse_rs::{errors::Error, Block, Pool};
+use clickhouse_rs::{Pool, errors::Error, types::Block};
 
 pub type IoFuture<T> = Box<Future<Item = T, Error = Error> + Send>;
 
@@ -132,7 +133,7 @@ fn test_insert() {
         .and_then(move |c| c.execute("DROP TABLE IF EXISTS clickhouse_test_insert"))
         .and_then(move |c| c.execute(ddl))
         .and_then(move |c| c.insert("clickhouse_test_insert", block))
-        .and_then(move |c| c.query_all("SELECT * FROM clickhouse_test_insert"))
+        .and_then(move |c| c.query("SELECT * FROM clickhouse_test_insert").all())
         .and_then(move |(_, actual)| Ok(assert_eq!(expected.as_ref(), &actual)));
 
     run(done).unwrap()
@@ -175,38 +176,38 @@ fn test_select() {
         .and_then(|c| c.execute("DROP TABLE IF EXISTS clickhouse_test_select"))
         .and_then(move |c| c.execute(ddl))
         .and_then(move |c| c.insert("clickhouse_test_select", block))
-        .and_then(|c| c.query_all("SELECT COUNT(*) FROM clickhouse_test_select"))
+        .and_then(|c| c.query("SELECT COUNT(*) FROM clickhouse_test_select").all())
         .and_then(|(c, r)| {
             assert_eq!(4, r.get::<u64, _>(0, 0)?);
             Ok(c)
         })
-        .and_then(|c| c.query_all("SELECT COUNT(*) FROM clickhouse_test_select WHERE date = '2014-07-08'"))
+        .and_then(|c| c.query("SELECT COUNT(*) FROM clickhouse_test_select WHERE date = '2014-07-08'").all())
         .and_then(|(c, r)| {
             assert_eq!(3, r.get::<u64, _>(0, 0)?);
             Ok(c)
         })
-        .and_then(|c| c.query_all("SELECT COUNT(*) FROM clickhouse_test_select WHERE datetime = '2014-07-08 14:00:00'"))
+        .and_then(|c| c.query("SELECT COUNT(*) FROM clickhouse_test_select WHERE datetime = '2014-07-08 14:00:00'").all())
         .and_then(|(c, r)| {
             assert_eq!(2, r.get::<u64, _>(0, 0)?);
             Ok(c)
         })
-        .and_then(|c| c.query_all("SELECT COUNT(*) FROM clickhouse_test_select WHERE id IN (1, 2, 3)"))
+        .and_then(|c| c.query("SELECT COUNT(*) FROM clickhouse_test_select WHERE id IN (1, 2, 3)").all())
         .and_then(|(c, r)| {
             assert_eq!(3, r.get::<u64, _>(0, 0)?);
             Ok(c)
         })
-        .and_then(|c| c.query_all("SELECT COUNT(*) FROM clickhouse_test_select WHERE code IN ('US', 'DE', 'RU')"))
+        .and_then(|c| c.query("SELECT COUNT(*) FROM clickhouse_test_select WHERE code IN ('US', 'DE', 'RU')").all())
         .and_then(|(c, r)| {
             assert_eq!(3, r.get::<u64, _>(0, 0)?);
             Ok(c)
         })
-        .and_then(|c| c.query_all("SELECT id FROM clickhouse_test_select ORDER BY id LIMIT 1"))
+        .and_then(|c| c.query("SELECT id FROM clickhouse_test_select ORDER BY id LIMIT 1").all())
         .and_then(|(c, r)| {
             assert_eq!(r.row_count(), 1);
             assert_eq!(1, r.get::<i32, _>(0, "id")?);
             Ok(c)
         })
-        .and_then(|c| c.query_all("SELECT id FROM clickhouse_test_select ORDER BY id LIMIT 1, 2"))
+        .and_then(|c| c.query("SELECT id FROM clickhouse_test_select ORDER BY id LIMIT 1, 2").all())
         .and_then(|(_, r)| {
             assert_eq!(r.row_count(), 2);
             assert_eq!(2, r.get::<i32, _>(0, "id")?);
@@ -221,29 +222,29 @@ fn test_select() {
 fn test_simple_select() {
     let pool = Pool::new(database_url());
     let done = pool.get_handle()
-        .and_then(|c| c.query_all("SELECT a FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a) ORDER BY a ASC"))
+        .and_then(|c| c.query("SELECT a FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a) ORDER BY a ASC").all())
         .and_then(|(c, actual)| {
             let expected = Block::new()
                 .add_column("a", vec![1u8, 2, 3]);
             assert_eq!(expected, actual);
             Ok(c)
         })
-        .and_then(|c| c.query_all("SELECT min(a) FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a)"))
+        .and_then(|c| c.query("SELECT min(a) FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a)").all())
         .and_then(|(c, r)| {
             assert_eq!(1, r.get::<u8, _>(0, 0)?);
             Ok(c)
         })
-        .and_then(|c| c.query_all("SELECT max(a) FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a)"))
+        .and_then(|c| c.query("SELECT max(a) FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a)").all())
         .and_then(|(c, r)| {
             assert_eq!(3, r.get::<u8, _>(0, 0)?);
             Ok(c)
         })
-        .and_then(|c| c.query_all("SELECT sum(a) FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a)"))
+        .and_then(|c| c.query("SELECT sum(a) FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a)").all())
         .and_then(|(c, r)| {
             assert_eq!(6, r.get::<u64, _>(0, 0)?);
             Ok(c)
         })
-        .and_then(|c| c.query_all("SELECT median(a) FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a)"))
+        .and_then(|c| c.query("SELECT median(a) FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a)").all())
         .and_then(|(_, r)| {
             assert_eq!(2f64, r.get::<f64, _>(0, 0)?);
             Ok(())
@@ -266,7 +267,7 @@ fn test_temporary_table() {
                  SELECT number AS ID FROM system.numbers LIMIT 10",
             )
         })
-        .and_then(|c| c.query_all("SELECT ID AS ID FROM clickhouse_test_temporary_table"))
+        .and_then(|c| c.query("SELECT ID AS ID FROM clickhouse_test_temporary_table").all())
         .and_then(|(_, block)| {
             let expected = Block::new().add_column("ID", (0u64..10).collect::<Vec<_>>());
             Ok(assert_eq!(block, expected))
@@ -302,7 +303,7 @@ fn test_with_totals() {
         .and_then(|c| c.execute("DROP TABLE IF EXISTS clickhouse_test_with_totals"))
         .and_then(move |c| c.execute(ddl))
         .and_then(move |c| c.insert("clickhouse_test_with_totals", block))
-        .and_then(move |c| c.query_all(query))
+        .and_then(move |c| c.query(query).all())
         .and_then(move |(_, block)| Ok(assert_eq!(&expected, &block)));
 
     run(done).unwrap();
@@ -316,7 +317,7 @@ fn test_concurrent_queries() {
         let pool = Pool::new(database_url());
         Box::new(
             pool.get_handle()
-                .and_then(move |c| c.query_all(sql.as_str()))
+                .and_then(move |c| c.query(sql.as_str()).all())
                 .and_then(move |(_, block)| {
                     let mut total = 0_u64;
                     for row in 0_usize..block.row_count() {

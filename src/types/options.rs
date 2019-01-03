@@ -1,6 +1,6 @@
 use std::{
     borrow::Cow,
-    io,
+    fmt, io,
     net::{SocketAddr, ToSocketAddrs},
     str::FromStr,
     sync::{Arc, Mutex},
@@ -10,8 +10,10 @@ use std::{
 
 use url::{percent_encoding::percent_decode, Url};
 
-use crate::errors::{Error, UrlError};
-use crate::types::ClickhouseResult;
+use crate::{
+    errors::{Error, UrlError},
+    types::ClickhouseResult,
+};
 
 const DEFAULT_MIN_CONNS: usize = 10;
 
@@ -23,9 +25,19 @@ enum State {
     Url(String),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct OptionsSource {
     state: Arc<Mutex<State>>,
+}
+
+impl fmt::Debug for OptionsSource {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let guard = self.state.lock().unwrap();
+        match *guard {
+            State::Url(ref url) => write!(f, "Url({})", url),
+            State::Raw(ref options) => write!(f, "{:?}", options),
+        }
+    }
 }
 
 impl OptionsSource {
@@ -198,6 +210,7 @@ macro_rules! property {
 }
 
 impl Options {
+    /// Constructs a new Options.
     pub fn new<A>(addr: A) -> Options
     where
         Address: From<A>,
@@ -406,13 +419,13 @@ fn get_database_from_url(url: &Url) -> ClickhouseResult<Option<String>> {
             }
 
             match head {
-                None => Ok(None),
-                Some(database) => Ok(Some(
+                Some(database) if !database.is_empty() => Ok(Some(
                     percent_decode(database.as_ref())
                         .decode_utf8()
                         .map_err(|_| Error::Url(UrlError::Invalid))?
                         .to_string(),
                 )),
+                _ => Ok(None),
             }
         }
     }
@@ -454,6 +467,15 @@ mod test {
     use std::time::Duration;
 
     use super::{from_url, Options, parse_compression, parse_duration};
+
+    #[test]
+    fn test_parse_default() {
+        let url = "tcp://host1";
+        let options = from_url(url).unwrap();
+        assert_eq!(options.database, "default");
+        assert_eq!(options.username, "default");
+        assert_eq!(options.password, "");
+    }
 
     #[test]
     fn test_parse_options() {

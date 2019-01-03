@@ -2,13 +2,14 @@ use std::io::{self, Read};
 
 use chrono_tz::Tz;
 
-use crate::binary::{protocol, ReadEx};
-use crate::errors::{DriverError, Error, ServerError};
-use crate::types::{ClickhouseResult, Packet, ProfileInfo, Progress, ServerInfo};
-use crate::Block;
+use crate::{
+    binary::{protocol, ReadEx},
+    errors::{DriverError, Error, ServerError},
+    types::{ClickhouseResult, Packet, ProfileInfo, Progress, ServerInfo, Block},
+};
 
 /// The internal clickhouse response parser.
-pub struct Parser<T> {
+pub(crate) struct Parser<T> {
     reader: T,
     tz: Option<Tz>,
     compress: bool,
@@ -23,7 +24,7 @@ impl<'a, T: Read> Parser<T> {
     /// than one value can be behind the reader in which case the parser can
     /// be invoked multiple times.  In other words: the stream does not have
     /// to be terminated.
-    pub fn new(reader: T, tz: Option<Tz>, compress: bool) -> Parser<T> {
+    pub(crate) fn new(reader: T, tz: Option<Tz>, compress: bool) -> Parser<T> {
         Parser {
             reader,
             tz,
@@ -34,7 +35,7 @@ impl<'a, T: Read> Parser<T> {
     /// parses a single value out of the stream.  If there are multiple
     /// values you can call this multiple times.  If the reader is not yet
     /// ready this will block.
-    pub fn parse_packet(&mut self) -> ClickhouseResult<Packet<()>> {
+    pub(crate) fn parse_packet(&mut self) -> ClickhouseResult<Packet<()>> {
         let packet = self.reader.read_uvarint()?;
         match packet {
             protocol::SERVER_HELLO => Ok(self.parse_server_info()?),

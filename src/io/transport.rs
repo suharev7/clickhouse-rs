@@ -13,13 +13,13 @@ use crate::{
     binary::Parser,
     errors::{DriverError, Error},
     io::BoxFuture,
-    pool::Pool,
+    pool::PoolBinding,
     types::{Cmd, Context, Packet},
     ClientHandle,
 };
 
 /// Line transport
-pub struct ClickhouseTransport {
+pub(crate) struct ClickhouseTransport {
     // Inner socket
     inner: TcpStream,
     // Set to true when inner.read returns Ok(0);
@@ -42,7 +42,7 @@ enum PacketStreamState {
     Done,
 }
 
-pub struct PacketStream {
+pub(crate) struct PacketStream {
     inner: Option<ClickhouseTransport>,
     state: PacketStreamState,
     read_block: bool,
@@ -188,7 +188,7 @@ impl Stream for ClickhouseTransport {
 }
 
 impl PacketStream {
-    pub fn read_block(mut self, context: Context, pool: Option<Pool>) -> BoxFuture<ClientHandle> {
+    pub fn read_block(mut self, context: Context, pool: PoolBinding) -> BoxFuture<ClientHandle> {
         self.read_block = true;
 
         Box::new(
@@ -264,7 +264,7 @@ impl Stream for PacketStream {
 }
 
 impl ClickhouseTransport {
-    pub fn call(mut self, req: Cmd) -> PacketStream {
+    pub(crate) fn call(mut self, req: Cmd) -> PacketStream {
         self.cmds.push_back(req);
         PacketStream {
             inner: Some(self),

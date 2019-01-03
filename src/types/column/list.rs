@@ -1,6 +1,4 @@
-use std::convert;
-use std::marker::PhantomData;
-use std::mem;
+use std::{convert, marker::PhantomData, mem};
 
 use crate::types::{Marshal, StatBuffer, Unmarshal};
 

@@ -1,7 +1,9 @@
 use std::convert;
 
-use crate::binary::Encoder;
-use crate::types::{SqlType, Value, ValueRef};
+use crate::{
+    binary::Encoder,
+    types::{SqlType, Value, ValueRef}
+};
 
 pub trait ColumnData {
     fn sql_type(&self) -> SqlType;

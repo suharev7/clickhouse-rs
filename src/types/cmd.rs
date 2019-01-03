@@ -1,13 +1,11 @@
 use crate::{
     binary::{protocol, Encoder},
-    block::BlockEx,
     client_info,
-    types::{query::QueryEx, ClickhouseResult, Context, Query},
-    Block,
+    types::{Block, ClickhouseResult, Context, Query},
 };
 
 /// Represents clickhouse commands.
-pub enum Cmd {
+pub(crate) enum Cmd {
     Hello(Context),
     Ping,
     SendQuery(Query, Context),
@@ -18,7 +16,7 @@ pub enum Cmd {
 impl Cmd {
     /// Returns the packed command as a byte vector.
     #[inline]
-    pub fn get_packed_command(&self) -> ClickhouseResult<Vec<u8>> {
+    pub(crate) fn get_packed_command(&self) -> ClickhouseResult<Vec<u8>> {
         encode_command(self)
     }
 }

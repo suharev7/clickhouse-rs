@@ -52,8 +52,8 @@
 //! extern crate clickhouse_rs;
 //! extern crate futures;
 //!
-//! use clickhouse_rs::{Block, Pool};
 //! use futures::Future;
+//! use clickhouse_rs::{Pool, types::Block};
 //! # use std::env;
 //!
 //! pub fn main() {
@@ -73,22 +73,25 @@
 //!     let pool = Pool::new(database_url);
 //!
 //!     let done = pool
-//!         .get_handle()
-//!         .and_then(move |c| c.execute(ddl))
-//!         .and_then(move |c| c.insert("payment", block))
-//!         .and_then(move |c| c.query_all("SELECT * FROM payment"))
-//!         .and_then(move |(_, block)| {
-//!             Ok(for row in block.rows() {
-//!                 let id: u32     = row.get("customer_id")?;
-//!                 let amount: u32 = row.get("amount")?;
-//!                 let name: &str  = row.get("account_name")?;
-//!                 println!("Found payment {}: {} {}", id, amount, name);
-//!             })
-//!         }).map_err(|err| eprintln!("database error: {}", err));
+//!        .get_handle()
+//!        .and_then(move |c| c.execute(ddl))
+//!        .and_then(move |c| c.insert("payment", block))
+//!        .and_then(move |c| c.query("SELECT * FROM payment").fetch_all())
+//!        .and_then(move |(_, block)| {
+//!            Ok(for row in block.rows() {
+//!                let id: u32     = row.get("customer_id")?;
+//!                let amount: u32 = row.get("amount")?;
+//!                let name: &str  = row.get("account_name")?;
+//!                println!("Found payment {}: {} {}", id, amount, name);
+//!            })
+//!        })
+//!        .map_err(|err| eprintln!("database error: {}", err));
 //!
 //!     tokio::run(done)
 //! }
 //! ```
+
+#![recursion_limit = "1024"]
 
 extern crate byteorder;
 extern crate chrono;
@@ -115,30 +118,26 @@ use std::fmt;
 use futures::{Future, Stream};
 use tokio::prelude::*;
 
-pub use crate::{
-    block::Block,
-    pool::Pool,
-    types::{Options, SqlType},
-};
 use crate::{
-    block::BlockEx,
     connecting_stream::ConnectingStream,
     errors::{DriverError, Error},
     io::{BoxFuture, ClickhouseTransport},
+    pool::PoolBinding,
     retry_guard::RetryGuard,
-    types::{Cmd, Context, IntoOptions, OptionsSource, Packet, Query, query::QueryEx},
+    types::{Block, Cmd, Context, IntoOptions, Options, OptionsSource, Packet, Query, QueryResult},
 };
+pub use crate::pool::Pool;
 
 mod binary;
-mod block;
 mod client_info;
-mod column;
 mod connecting_stream;
+/// Error types.
 pub mod errors;
 mod io;
 mod pool;
 mod retry_guard;
-mod types;
+/// Clickhouse types.
+pub mod types;
 
 macro_rules! try_opt {
     ($expr:expr) => {
@@ -157,7 +156,7 @@ pub struct Client {
 pub struct ClientHandle {
     inner: Option<ClickhouseTransport>,
     context: Context,
-    pool: Option<Pool>,
+    pool: PoolBinding,
 }
 
 impl fmt::Debug for ClientHandle {
@@ -194,7 +193,7 @@ impl Client {
                     Ok(ClientHandle {
                         inner: Some(transport),
                         context,
-                        pool: None,
+                        pool: PoolBinding::None,
                     })
                 })
                 .map_err(|error| error.into())
@@ -270,7 +269,20 @@ impl ClientHandle {
         )
     }
 
+    /// Executes Clickhouse `query` on Conn.
+    pub fn query<Q>(self, sql: Q) -> QueryResult
+    where
+        Query: From<Q>,
+    {
+        let query = Query::from(sql);
+        QueryResult {
+            client: self,
+            query,
+        }
+    }
+
     /// Fetch data from table. It returns a block that contains all rows.
+    #[deprecated(since = "0.1.7", note = "please use query(sql).all() instead")]
     pub fn query_all<Q>(self, sql: Q) -> BoxFuture<(ClientHandle, Block)>
     where
         Query: From<Q>,
@@ -387,7 +399,7 @@ impl ClientHandle {
         })
     }
 
-    fn wrap_future<T, R, F>(self, f: F) -> BoxFuture<T>
+    pub(crate) fn wrap_future<T, R, F>(self, f: F) -> BoxFuture<T>
     where
         F: FnOnce(ClientHandle) -> R + Send + 'static,
         R: Future<Item = T, Error = Error> + Send + 'static,
@@ -402,10 +414,10 @@ impl ClientHandle {
         }
     }
 
-    /// Check connection and try to reconnect is necessary.
+    /// Check connection and try to reconnect if necessary.
     pub fn check_connection(mut self) -> BoxFuture<ClientHandle> {
-        let pool = self.pool.take();
-        let saved_pool = pool.clone();
+        let pool: Option<Pool> = self.pool.clone().into();
+        self.pool.detach();
 
         let source = self.context.options.clone();
         let options = try_opt!(source.get());
@@ -423,7 +435,9 @@ impl ClientHandle {
         Box::new(
             RetryGuard::new(self, |c| c.ping(), reconnect, send_retries, retry_timeout).and_then(
                 |mut c| {
-                    c.pool = saved_pool;
+                    if !c.pool.is_attached() && c.pool.is_some() {
+                        c.pool.attach();
+                    }
                     Ok(c)
                 },
             ),
@@ -436,8 +450,7 @@ mod test_misc {
     use std::env;
 
     lazy_static! {
-        pub static ref DATABASE_URL: String = {
-            env::var("DATABASE_URL").unwrap_or("tcp://localhost:9000?compression=lz4".into())
-        };
+        pub static ref DATABASE_URL: String =
+            env::var("DATABASE_URL").unwrap_or("tcp://localhost:9000?compression=lz4".into());
     }
 }

@@ -1,5 +1,5 @@
 pub use self::encoder::Encoder;
-pub use self::parser::Parser;
+pub(crate) use self::parser::Parser;
 pub use self::read_ex::ReadEx;
 pub use self::uvarint::put_uvarint;
 

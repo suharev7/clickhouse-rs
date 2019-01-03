@@ -3,14 +3,18 @@ use std::sync::Arc;
 
 use chrono_tz::Tz;
 
-use crate::binary::{Encoder, ReadEx};
-use crate::column::chunk::ChunkColumnData;
-use crate::types::{ClickhouseResult, SqlType, ValueRef};
+use crate::{
+    binary::{Encoder, ReadEx},
+    types::{ClickhouseResult, SqlType, ValueRef},
+};
 
-pub use self::column_data::{ColumnData, ColumnDataExt};
-pub use self::concat::ConcatColumnData;
-pub use self::numeric::VectorColumnData;
-pub use self::string::StringColumnData;
+use self::chunk::ChunkColumnData;
+pub use self::{
+    column_data::ColumnData,
+    concat::ConcatColumnData,
+    numeric::VectorColumnData,
+    string::StringColumnData,
+};
 
 mod chunk;
 mod column_data;
@@ -23,6 +27,7 @@ mod string;
 
 pub type BoxColumnData = Arc<ColumnData + Send + Sync>;
 
+/// Represents Clickhouse Column
 pub struct Column {
     name: String,
     data: BoxColumnData,
@@ -68,7 +73,7 @@ impl Clone for Column {
 }
 
 impl Column {
-    pub fn read<R: ReadEx>(reader: &mut R, size: usize, tz: Tz) -> ClickhouseResult<Column> {
+    pub(crate) fn read<R: ReadEx>(reader: &mut R, size: usize, tz: Tz) -> ClickhouseResult<Column> {
         let name = reader.read_string()?;
         let type_name = reader.read_string()?;
         let data = ColumnData::load_data(reader, &type_name, size, tz)?;
@@ -84,21 +89,21 @@ impl Column {
         self.data.sql_type()
     }
 
-    pub fn at(&self, index: usize) -> ValueRef {
+    pub(crate) fn at(&self, index: usize) -> ValueRef {
         self.data.at(index)
     }
 
-    pub fn write(&self, encoder: &mut Encoder) {
+    pub(crate) fn write(&self, encoder: &mut Encoder) {
         encoder.string(&self.name);
         encoder.string(self.data.sql_type().to_string().as_ref());
         self.data.save(encoder);
     }
 
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.data.len()
     }
 
-    pub fn concat<'a, I>(items: I) -> Column
+    pub(crate) fn concat<'a, I>(items: I) -> Column
     where
         I: Iterator<Item = &'a Column>,
     {
@@ -117,7 +122,7 @@ impl Column {
         }
     }
 
-    pub fn slice(&self, range: ops::Range<usize>) -> Column {
+    pub(crate) fn slice(&self, range: ops::Range<usize>) -> Column {
         let data = ChunkColumnData::new(self.data.clone(), range);
         Column {
             name: self.name.clone(),

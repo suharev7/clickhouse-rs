@@ -1,13 +1,16 @@
 use std::{convert, fmt, mem, sync::Arc};
 
-use chrono::prelude::*;
 use chrono::Date;
+use chrono::prelude::*;
 use chrono_tz::Tz;
 
-use crate::binary::{Encoder, ReadEx};
-use crate::column::{column_data::ColumnData, list::List, BoxColumnData, ColumnFrom};
-use crate::errors::Error;
-use crate::types::{DateConverter, Marshal, SqlType, StatBuffer, Unmarshal, Value, ValueRef};
+use crate::{
+    binary::{Encoder, ReadEx},
+    errors::Error,
+    types::{DateConverter, Marshal, SqlType, StatBuffer, Unmarshal, Value, ValueRef},
+};
+
+use super::{BoxColumnData, column_data::ColumnData, ColumnFrom, list::List};
 
 pub struct DateColumnData<T>
 where

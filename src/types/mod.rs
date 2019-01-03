@@ -4,19 +4,27 @@ use chrono_tz::Tz;
 use hostname::get_hostname;
 
 use crate::errors::{Error, ServerError};
-use crate::Block;
 
-pub use self::cmd::Cmd;
-pub use self::date_converter::DateConverter;
-pub use self::from_sql::FromSql;
-pub use self::marshal::Marshal;
-pub use self::options::{IntoOptions, Options, OptionsSource};
-pub use self::query::Query;
-pub use self::stat_buffer::StatBuffer;
-pub use self::unmarshal::Unmarshal;
-pub use self::value::Value;
-pub use self::value_ref::ValueRef;
+pub(crate) use self::{
+    cmd::Cmd,
+    date_converter::DateConverter,
+    from_sql::FromSql,
+    marshal::Marshal,
+    options::{IntoOptions, OptionsSource},
+    stat_buffer::StatBuffer,
+    unmarshal::Unmarshal,
+    value::Value,
+    value_ref::ValueRef,
+};
+pub use self::{
+    block::{Block, Row, Rows},
+    column::Column,
+    options::Options,
+    query::Query,
+    query_result::QueryResult,
+};
 
+mod column;
 mod marshal;
 mod stat_buffer;
 mod unmarshal;
@@ -25,22 +33,24 @@ mod from_sql;
 mod value;
 mod value_ref;
 
+mod block;
 mod cmd;
 
 mod date_converter;
-pub mod query;
+mod query;
+mod query_result;
 
 mod options;
 
 #[derive(Copy, Clone, Debug, Default, PartialEq)]
-pub struct Progress {
+pub(crate) struct Progress {
     pub rows: u64,
     pub bytes: u64,
     pub total_rows: u64,
 }
 
 #[derive(Copy, Clone, Default, Debug, PartialEq)]
-pub struct ProfileInfo {
+pub(crate) struct ProfileInfo {
     pub rows: u64,
     pub bytes: u64,
     pub blocks: u64,
@@ -50,7 +60,7 @@ pub struct ProfileInfo {
 }
 
 #[derive(Clone, PartialEq)]
-pub struct ServerInfo {
+pub(crate) struct ServerInfo {
     pub name: String,
     pub revision: u64,
     pub minor_version: u64,
@@ -69,7 +79,7 @@ impl fmt::Debug for ServerInfo {
 }
 
 #[derive(Clone)]
-pub struct Context {
+pub(crate) struct Context {
     pub(crate) server_info: ServerInfo,
     pub(crate) hostname: String,
     pub(crate) options: OptionsSource,
@@ -107,7 +117,7 @@ impl Default for Context {
 }
 
 #[derive(Clone)]
-pub enum Packet<S> {
+pub(crate) enum Packet<S> {
     Hello(S, ServerInfo),
     Pong(S),
     Progress(Progress),
@@ -196,4 +206,4 @@ fn test_display() {
 }
 
 /// Library generic result type.
-pub type ClickhouseResult<T> = Result<T, Error>;
+pub(crate) type ClickhouseResult<T> = Result<T, Error>;

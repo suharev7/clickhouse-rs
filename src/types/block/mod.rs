@@ -5,14 +5,20 @@ use chrono_tz::Tz;
 use clickhouse_rs_cityhash_sys::{city_hash_128, UInt128};
 use lz4::liblz4::{LZ4_compress_default, LZ4_compressBound, LZ4_decompress_safe};
 
-use crate::binary::{Encoder, protocol, ReadEx};
-use crate::block::chunk_iterator::ChunkIterator;
-use crate::column::{self, Column, ColumnFrom};
-use crate::errors::{Error, FromSqlError};
-use crate::types::{ClickhouseResult, FromSql};
+use crate::{
+    binary::{Encoder, protocol, ReadEx},
+    errors::{Error, FromSqlError},
+    types::{ClickhouseResult, FromSql},
+};
 
-pub use self::block_info::BlockInfo;
-pub use self::row::{Row, Rows};
+use super::column::{self, Column, ColumnFrom};
+
+pub use self::{
+    block_info::BlockInfo,
+    row::{Row, Rows},
+};
+use self::chunk_iterator::ChunkIterator;
+pub(crate) use self::row::BlockRef;
 
 mod block_info;
 mod chunk_iterator;
@@ -26,17 +32,11 @@ pub trait ColumnIdx {
     fn get_index(&self, columns: &[Column]) -> ClickhouseResult<usize>;
 }
 
+/// Represents Clickhouse Block
 #[derive(Default)]
 pub struct Block {
     info: BlockInfo,
     columns: Vec<Column>,
-}
-
-pub trait BlockEx {
-    fn write(&self, encoder: &mut Encoder, compress: bool);
-    fn send_data(&self, encoder: &mut Encoder, compress: bool);
-    fn concat(blocks: &[Block]) -> Block;
-    fn chunks(&self, n: usize) -> ChunkIterator;
 }
 
 impl PartialEq<Block> for Block {
@@ -95,7 +95,11 @@ impl Block {
         Block::default()
     }
 
-    pub fn load<R: ReadEx>(reader: &mut R, tz: Tz, compress: bool) -> ClickhouseResult<Block> {
+    pub(crate) fn load<R: ReadEx>(
+        reader: &mut R,
+        tz: Tz,
+        compress: bool,
+    ) -> ClickhouseResult<Block> {
         if compress {
             let tmp = decompress(reader)?;
             let mut cursor = Cursor::new(&tmp);
@@ -130,7 +134,8 @@ impl Block {
         self.columns.len()
     }
 
-    pub fn columns(&self) -> &Vec<Column> {
+    /// This method returns a slice of columns.
+    pub fn columns(&self) -> &[Column] {
         &self.columns
     }
 
@@ -171,16 +176,17 @@ impl Block {
         self.columns.is_empty()
     }
 
+    /// This method returns a iterator of rows.
     pub fn rows(&self) -> Rows {
         Rows {
             row: 0,
-            block: &self,
+            block_ref: BlockRef::Borrowed(&self),
         }
     }
 }
 
-impl BlockEx for Block {
-    fn write(&self, encoder: &mut Encoder, compress: bool) {
+impl Block {
+    pub(crate) fn write(&self, encoder: &mut Encoder, compress: bool) {
         if compress {
             let mut tmp_encoder = Encoder::new();
             self.write(&mut tmp_encoder, false);
@@ -222,7 +228,7 @@ impl BlockEx for Block {
         }
     }
 
-    fn send_data(&self, encoder: &mut Encoder, compress: bool) {
+    pub(crate) fn send_data(&self, encoder: &mut Encoder, compress: bool) {
         encoder.uvarint(protocol::CLIENT_DATA);
         encoder.string(""); // temporary table
         for chunk in self.chunks(INSERT_BLOCK_SIZE) {
@@ -230,7 +236,7 @@ impl BlockEx for Block {
         }
     }
 
-    fn concat(blocks: &[Block]) -> Block {
+    pub(crate) fn concat(blocks: &[Block]) -> Block {
         let first = blocks.first().expect("blocks should not be empty.");
 
         for block in blocks {
@@ -254,7 +260,7 @@ impl BlockEx for Block {
         }
     }
 
-    fn chunks(&self, n: usize) -> ChunkIterator {
+    pub(crate) fn chunks(&self, n: usize) -> ChunkIterator {
         ChunkIterator::new(n, self)
     }
 }
@@ -383,7 +389,7 @@ mod test {
     use chrono_tz::Tz;
 
     use crate::binary::Encoder;
-    use crate::block::{Block, BlockEx};
+    use crate::types::Block;
 
     use super::decompress;
 

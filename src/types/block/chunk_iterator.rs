@@ -1,6 +1,6 @@
 use std::cmp;
 
-use crate::Block;
+use crate::types::Block;
 
 pub struct ChunkIterator<'a> {
     position: usize,

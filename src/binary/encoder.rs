@@ -3,6 +3,7 @@ use crate::types::{DateConverter, Marshal, StatBuffer, Value, ValueRef};
 
 const MAX_VARINT_LEN64: usize = 10;
 
+#[derive(Default)]
 pub struct Encoder {
     buffer: Vec<u8>,
 }

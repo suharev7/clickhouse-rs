@@ -18,7 +18,7 @@ impl ConcatColumnData {
         ConcatColumnData { data, index }
     }
 
-    fn check_columns(data: &Vec<BoxColumnData>) {
+    fn check_columns(data: &[BoxColumnData]) {
         match data.first() {
             None => panic!("data should not be empty."),
             Some(first) => {

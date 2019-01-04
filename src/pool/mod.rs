@@ -1,20 +1,22 @@
-use std::sync::{Arc, Mutex, MutexGuard};
-use std::{fmt, io};
+use std::{
+    fmt,
+    sync::{Arc, Mutex, MutexGuard},
+};
 
 use tokio::prelude::task::{self, Task};
 use tokio::prelude::*;
 
-use crate::pool::futures::GetHandle;
-use crate::Client;
-
-use crate::io::IoFuture;
-use crate::ClientHandle;
-use crate::Options;
+use crate::{
+    io::BoxFuture,
+    pool::futures::GetHandle,
+    types::{ClickhouseResult, IntoOptions, OptionsSource},
+    Client, ClientHandle,
+};
 
 mod futures;
 
 struct Inner {
-    new: Vec<IoFuture<ClientHandle>>,
+    new: Vec<BoxFuture<ClientHandle>>,
     idle: Vec<ClientHandle>,
     tasks: Vec<Task>,
     ongoing: usize,
@@ -29,7 +31,7 @@ impl Inner {
 /// Asynchronous pool of Clickhouse connections.
 #[derive(Clone)]
 pub struct Pool {
-    options: Options,
+    options: OptionsSource,
     inner: Arc<Mutex<Inner>>,
     min: usize,
     max: usize,
@@ -57,7 +59,10 @@ impl fmt::Debug for Pool {
 }
 
 impl Pool {
-    pub fn new(options: Options) -> Pool {
+    pub fn new<O>(options: O) -> Pool
+    where
+        O: IntoOptions,
+    {
         let inner = Arc::new(Mutex::new(Inner {
             new: Vec::new(),
             idle: Vec::new(),
@@ -66,7 +71,7 @@ impl Pool {
         }));
 
         Pool {
-            options,
+            options: options.into_options_src(),
             inner,
             min: 5,
             max: 10,
@@ -95,14 +100,14 @@ impl Pool {
         fun(self.inner.lock().unwrap())
     }
 
-    fn poll(&mut self) -> io::Result<Async<ClientHandle>> {
+    fn poll(&mut self) -> ClickhouseResult<Async<ClientHandle>> {
         self.handle_futures()?;
 
         match self.take_conn() {
             Some(client) => Ok(Async::Ready(client)),
             None => {
                 let new_conn_created = self.with_inner(|mut inner| {
-                    if inner.new.len() == 0 && inner.conn_count() < self.max {
+                    if inner.new.is_empty() && inner.conn_count() < self.max {
                         inner.new.push(self.new_connection());
                         true
                     } else {
@@ -110,19 +115,21 @@ impl Pool {
                         false
                     }
                 });
-                match new_conn_created {
-                    true => self.poll(),
-                    false => Ok(Async::NotReady),
+                if new_conn_created {
+                    self.poll()
+                } else {
+                    Ok(Async::NotReady)
                 }
             }
         }
     }
 
-    fn new_connection(&self) -> IoFuture<ClientHandle> {
-        Client::open(self.options.clone())
+    fn new_connection(&self) -> BoxFuture<ClientHandle> {
+        let source = self.options.clone();
+        Client::open(source)
     }
 
-    fn handle_futures(&mut self) -> io::Result<()> {
+    fn handle_futures(&mut self) -> ClickhouseResult<()> {
         let len = self.with_inner(|inner| inner.new.len());
 
         for i in 0..len {
@@ -147,12 +154,13 @@ impl Pool {
 
     fn take_conn(&mut self) -> Option<ClientHandle> {
         self.with_inner(|mut inner| {
-            while let Some(mut client) = inner.idle.pop() {
+            if let Some(mut client) = inner.idle.pop() {
                 client.pool = Some(self.clone());
                 inner.ongoing += 1;
-                return Some(client);
+                Some(client)
+            } else {
+                None
             }
-            None
         })
     }
 
@@ -176,33 +184,30 @@ impl Pool {
 
 impl Drop for ClientHandle {
     fn drop(&mut self) {
-        match (self.pool.take(), self.inner.take()) {
-            (Some(mut pool), Some(inner)) => {
-                let context = self.context.clone();
-                let client = ClientHandle {
-                    inner: Some(inner),
-                    pool: Some(pool.clone()),
-                    context,
-                };
-                pool.return_conn(client);
-            }
-            _ => {}
+        if let (Some(mut pool), Some(inner)) = (self.pool.take(), self.inner.take()) {
+            let context = self.context.clone();
+            let client = ClientHandle {
+                inner: Some(inner),
+                pool: Some(pool.clone()),
+                context,
+            };
+            pool.return_conn(client);
         }
     }
 }
 
 #[cfg(test)]
 mod test {
+    use std::{
+        str::FromStr,
+        time::{Duration, Instant},
+    };
+
     use tokio::prelude::*;
 
-    use crate::Options;
+    use crate::{io::BoxFuture, test_misc::DATABASE_URL, Options};
 
     use super::Pool;
-    use crate::io::IoFuture;
-
-    use std::time::{Duration, Instant};
-
-    const HOST: &str = "127.0.0.1:9000";
 
     /// Same as `tokio::run`, but will panic if future panics and will return the result
     /// of future execution.
@@ -220,7 +225,7 @@ mod test {
 
     #[test]
     fn test_connect() {
-        let options = Options::new(HOST.parse().unwrap());
+        let options = Options::from_str(DATABASE_URL.as_str()).unwrap();
         let pool = Pool::new(options);
 
         let done = pool
@@ -238,10 +243,13 @@ mod test {
 
     #[test]
     fn test_many_connection() {
-        let options = Options::new(HOST.parse().unwrap()).pool_min(5).pool_max(10);
+        let options = Options::from_str(DATABASE_URL.as_str())
+            .unwrap()
+            .pool_min(5)
+            .pool_max(10);
         let pool = Pool::new(options);
 
-        fn exec_query(pool: Pool) -> IoFuture<u32> {
+        fn exec_query(pool: Pool) -> BoxFuture<u32> {
             Box::new(
                 pool.get_handle()
                     .and_then(|c| c.query_all("SELECT toUInt32(1), sleep(1)"))

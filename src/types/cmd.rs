@@ -1,8 +1,10 @@
-use crate::binary::{protocol, Encoder};
-use crate::block::BlockEx;
-use crate::client_info;
-use crate::types::{query::QueryEx, Context, Query};
-use crate::Block;
+use crate::{
+    binary::{protocol, Encoder},
+    block::BlockEx,
+    client_info,
+    types::{query::QueryEx, ClickhouseResult, Context, Query},
+    Block,
+};
 
 /// Represents clickhouse commands.
 pub enum Cmd {
@@ -16,12 +18,12 @@ pub enum Cmd {
 impl Cmd {
     /// Returns the packed command as a byte vector.
     #[inline]
-    pub fn get_packed_command(&self) -> Vec<u8> {
+    pub fn get_packed_command(&self) -> ClickhouseResult<Vec<u8>> {
         encode_command(self)
     }
 }
 
-fn encode_command(cmd: &Cmd) -> Vec<u8> {
+fn encode_command(cmd: &Cmd) -> ClickhouseResult<Vec<u8>> {
     match cmd {
         Cmd::Hello(context) => encode_hello(context),
         Cmd::Ping => encode_ping(),
@@ -31,29 +33,31 @@ fn encode_command(cmd: &Cmd) -> Vec<u8> {
     }
 }
 
-fn encode_hello(context: &Context) -> Vec<u8> {
+fn encode_hello(context: &Context) -> ClickhouseResult<Vec<u8>> {
     trace!("[hello]        -> {}", client_info::description());
 
     let mut encoder = Encoder::new();
     encoder.uvarint(protocol::CLIENT_HELLO);
     client_info::write(&mut encoder);
 
-    encoder.string(&context.options.database);
-    encoder.string(&context.options.username);
-    encoder.string(&context.options.password);
+    let options = context.options.get()?;
 
-    encoder.get_buffer()
+    encoder.string(&options.database);
+    encoder.string(&options.username);
+    encoder.string(&options.password);
+
+    Ok(encoder.get_buffer())
 }
 
-fn encode_ping() -> Vec<u8> {
+fn encode_ping() -> ClickhouseResult<Vec<u8>> {
     trace!("[ping]         -> ping");
 
     let mut encoder = Encoder::new();
     encoder.uvarint(protocol::CLIENT_PING);
-    encoder.get_buffer()
+    Ok(encoder.get_buffer())
 }
 
-fn encode_query(query: &Query, context: &Context) -> Vec<u8> {
+fn encode_query(query: &Query, context: &Context) -> ClickhouseResult<Vec<u8>> {
     trace!("[send query] {}", query.get_sql());
 
     let mut encoder = Encoder::new();
@@ -79,25 +83,31 @@ fn encode_query(query: &Query, context: &Context) -> Vec<u8> {
     encoder.string(""); // settings
     encoder.uvarint(protocol::STATE_COMPLETE);
 
-    encoder.uvarint(match context.options.compression {
-        true => protocol::COMPRESS_ENABLE,
-        false => protocol::COMPRESS_DISABLE,
+    let options = context.options.get()?;
+
+    encoder.uvarint(if options.compression {
+        protocol::COMPRESS_ENABLE
+    } else {
+        protocol::COMPRESS_DISABLE
     });
 
+    let options = context.options.get()?;
+
     encoder.string(&query.get_sql());
-    Block::default().send_data(&mut encoder, context.options.compression);
+    Block::default().send_data(&mut encoder, options.compression);
 
-    encoder.get_buffer()
+    Ok(encoder.get_buffer())
 }
 
-fn encode_data(block: &Block, context: &Context) -> Vec<u8> {
+fn encode_data(block: &Block, context: &Context) -> ClickhouseResult<Vec<u8>> {
     let mut encoder = Encoder::new();
-    block.send_data(&mut encoder, context.options.compression);
-    encoder.get_buffer()
+    let options = context.options.get()?;
+    block.send_data(&mut encoder, options.compression);
+    Ok(encoder.get_buffer())
 }
 
-fn encode_union(first: &Cmd, second: &Cmd) -> Vec<u8> {
-    let mut result = encode_command(first);
-    result.extend(encode_command(second).iter());
-    result
+fn encode_union(first: &Cmd, second: &Cmd) -> ClickhouseResult<Vec<u8>> {
+    let mut result = encode_command(first)?;
+    result.extend((encode_command(second)?).iter());
+    Ok(result)
 }

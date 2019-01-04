@@ -3,19 +3,18 @@ extern crate chrono_tz;
 extern crate clickhouse_rs;
 extern crate tokio;
 
-use std::io;
-
 use chrono::prelude::*;
 use chrono_tz::Tz::{self, UTC};
 use tokio::prelude::*;
+use std::env;
 
-use clickhouse_rs::{Block, Options, Pool};
+use clickhouse_rs::{errors::Error, Block, Pool};
 
-pub type IoFuture<T> = Box<Future<Item = T, Error = io::Error> + Send>;
+pub type IoFuture<T> = Box<Future<Item = T, Error = Error> + Send>;
 
-const COMPRESSION: bool = true;
-
-const HOST: &str = "127.0.0.1:9000";
+fn database_url() -> String {
+    env::var("DATABASE_URL").unwrap_or("tcp://localhost:9000?compression=lz4".into())
+}
 
 /// Same as `tokio::run`, but will panic if future panics and will return the result
 /// of future execution.
@@ -33,12 +32,7 @@ where
 
 #[test]
 fn test_ping() {
-    let mut options = Options::new(HOST.parse().unwrap());
-    if COMPRESSION {
-        options = options.with_compression();
-    }
-
-    let pool = Pool::new(options);
+    let pool = Pool::new(database_url());
     let done = pool
         .get_handle()
         .and_then(|c| c.ping())
@@ -55,12 +49,7 @@ fn test_create_table() {
                click_time DateTime\
                ) Engine=Memory";
 
-    let mut options = Options::new(HOST.parse().unwrap());
-    if COMPRESSION {
-        options = options.with_compression();
-    }
-
-    let pool = Pool::new(options);
+    let pool = Pool::new(database_url());
     let done = pool
         .get_handle()
         .and_then(move |c| c.execute("DROP TABLE IF EXISTS clickhouse_test_create_table"))
@@ -69,10 +58,14 @@ fn test_create_table() {
         .and_then(|_| Ok(()));
 
     let err = run(done).unwrap_err();
-    assert_eq!(
-        "DB::Exception: Table default.clickhouse_test_create_table already exists.",
-        format!("{}", err)
-    )
+
+    match err {
+        Error::Server(err) => assert_eq!(
+            err.message,
+            "DB::Exception: Table default.clickhouse_test_create_table already exists."
+        ),
+        _ => panic!("{:?}", err),
+    }
 }
 
 #[test]
@@ -133,12 +126,7 @@ fn test_insert() {
 
     let expected = block.clone();
 
-    let mut options = Options::new(HOST.parse().unwrap());
-    if COMPRESSION {
-        options = options.with_compression();
-    }
-
-    let pool = Pool::new(options);
+    let pool = Pool::new(database_url());
     let done = pool
         .get_handle()
         .and_then(move |c| c.execute("DROP TABLE IF EXISTS clickhouse_test_insert"))
@@ -182,12 +170,7 @@ fn test_select() {
             ],
         );
 
-    let mut options = Options::new(HOST.parse().unwrap());
-    if COMPRESSION {
-        options = options.with_compression();
-    }
-
-    let pool = Pool::new(options);
+    let pool = Pool::new(database_url());
     let done = pool.get_handle()
         .and_then(|c| c.execute("DROP TABLE IF EXISTS clickhouse_test_select"))
         .and_then(move |c| c.execute(ddl))
@@ -236,12 +219,7 @@ fn test_select() {
 
 #[test]
 fn test_simple_select() {
-    let mut options = Options::new(HOST.parse().unwrap());
-    if COMPRESSION {
-        options = options.with_compression();
-    }
-
-    let pool = Pool::new(options);
+    let pool = Pool::new(database_url());
     let done = pool.get_handle()
         .and_then(|c| c.query_all("SELECT a FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a) ORDER BY a ASC"))
         .and_then(|(c, actual)| {
@@ -278,12 +256,7 @@ fn test_simple_select() {
 fn test_temporary_table() {
     let ddl = "CREATE TEMPORARY TABLE clickhouse_test_temporary_table (ID UInt64);";
 
-    let mut options = Options::new(HOST.parse().unwrap());
-    if COMPRESSION {
-        options = options.with_compression();
-    }
-
-    let pool = Pool::new(options);
+    let pool = Pool::new(database_url());
     let done = pool
         .get_handle()
         .and_then(move |c| c.execute(ddl))
@@ -323,12 +296,7 @@ fn test_with_totals() {
         .add_column("country", vec!["EN", "RU", ""])
         .add_column("country", vec![2u64, 4, 6]);
 
-    let mut options = Options::new(HOST.parse().unwrap());
-    if COMPRESSION {
-        options = options.with_compression();
-    }
-
-    let pool = Pool::new(options);
+    let pool = Pool::new(database_url());
     let done = pool
         .get_handle()
         .and_then(|c| c.execute("DROP TABLE IF EXISTS clickhouse_test_with_totals"))
@@ -345,8 +313,7 @@ fn test_concurrent_queries() {
     fn query_sum(n: u64) -> IoFuture<u64> {
         let sql = format!("SELECT number FROM system.numbers LIMIT {}", n);
 
-        let options = Options::new(HOST.parse().unwrap());
-        let pool = Pool::new(options);
+        let pool = Pool::new(database_url());
         Box::new(
             pool.get_handle()
                 .and_then(move |c| c.query_all(sql.as_str()))

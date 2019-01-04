@@ -2,11 +2,14 @@ extern crate clickhouse_rs;
 extern crate env_logger;
 extern crate futures;
 
+use std::env;
+
 use futures::Future;
 
-use clickhouse_rs::{Block, Options, Pool};
+use clickhouse_rs::{Block, Pool};
 
 pub fn main() {
+    env::set_var("RUST_LOG", "clickhouse_rs=debug");
     env_logger::init();
 
     let ddl = "
@@ -21,9 +24,10 @@ pub fn main() {
         .add_column("amount", vec![2_u32, 4, 6, 8, 10])
         .add_column("account_name", vec!["", "foo", "", "", "bar"]);
 
-    let options = Options::new("127.0.0.1:9000".parse().unwrap()).with_compression();
-
-    let pool = Pool::new(options);
+    let database_url =
+        env::var("DATABASE_URL")
+            .unwrap_or("tcp://localhost:9000?compression=lz4".into());
+    let pool = Pool::new(database_url);
 
     let done = pool
         .get_handle()

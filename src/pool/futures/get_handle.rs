@@ -1,7 +1,6 @@
-use std::io;
-
 use tokio::prelude::*;
 
+use crate::errors::Error;
 use crate::pool::Pool;
 use crate::ClientHandle;
 
@@ -17,7 +16,7 @@ impl GetHandle {
 
 impl Future for GetHandle {
     type Item = ClientHandle;
-    type Error = io::Error;
+    type Error = Error;
 
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
         self.pool.poll()

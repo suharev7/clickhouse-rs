@@ -1,17 +1,22 @@
-use std::collections::VecDeque;
-use std::io::{self, Cursor};
-use std::mem;
+use std::{
+    collections::VecDeque,
+    io::{self, Cursor},
+    mem,
+};
 
 use chrono_tz::Tz;
 use futures::{Async, Poll, Stream};
 use tokio::net::TcpStream;
 use tokio::prelude::*;
 
-use crate::binary::Parser;
-use crate::io::IoFuture;
-use crate::pool::Pool;
-use crate::types::{ClickhouseError, Cmd, Context, Packet};
-use crate::ClientHandle;
+use crate::{
+    binary::Parser,
+    errors::{DriverError, Error},
+    io::BoxFuture,
+    pool::Pool,
+    types::{Cmd, Context, Packet},
+    ClientHandle,
+};
 
 /// Line transport
 pub struct ClickhouseTransport {
@@ -26,14 +31,14 @@ pub struct ClickhouseTransport {
     // Queued commands
     cmds: VecDeque<Cmd>,
     // Server time zone
-    tz: Option<Tz>,
+    timezone: Option<Tz>,
     compress: bool,
 }
 
 enum PacketStreamState {
     Ask,
     Receive,
-    Yield(Option<Packet<ClickhouseTransport>>),
+    Yield(Box<Option<Packet<ClickhouseTransport>>>),
     Done,
 }
 
@@ -51,7 +56,7 @@ impl ClickhouseTransport {
             rd: vec![],
             wr: io::Cursor::new(vec![]),
             cmds: VecDeque::new(),
-            tz: None,
+            timezone: None,
             compress,
         }
     }
@@ -96,21 +101,24 @@ impl ClickhouseTransport {
                 }
 
                 trace!("transport flush error; err={:?}", e);
-                return Err(e);
+                Err(e)
             }
         }
     }
 }
 
 impl ClickhouseTransport {
-    fn send(&mut self) -> Poll<(), io::Error> {
+    fn send(&mut self) -> Poll<(), Error> {
         loop {
             if self.wr_is_empty() {
                 match self.cmds.pop_front() {
                     None => {
                         return Ok(Async::Ready(()));
                     }
-                    Some(cmd) => self.wr = Cursor::new(cmd.get_packed_command()),
+                    Some(cmd) => {
+                        let bytes = cmd.get_packed_command()?;
+                        self.wr = Cursor::new(bytes)
+                    }
                 }
             }
 
@@ -124,10 +132,10 @@ impl ClickhouseTransport {
 
 impl Stream for ClickhouseTransport {
     type Item = Packet<()>;
-    type Error = io::Error;
+    type Error = Error;
 
     /// Read a message from the `Transport`
-    fn poll(&mut self) -> Poll<Option<Packet<()>>, io::Error> {
+    fn poll(&mut self) -> Poll<Option<Packet<()>>, Error> {
         // First fill the buffer
         while !self.done {
             match self.inner.read_to_end(&mut self.rd) {
@@ -141,7 +149,7 @@ impl Stream for ClickhouseTransport {
                         break;
                     }
 
-                    return Err(e);
+                    return Err(e.into());
                 }
             }
         }
@@ -151,13 +159,13 @@ impl Stream for ClickhouseTransport {
         let ret = {
             let mut cursor = Cursor::new(&self.rd);
             let res = {
-                let mut parser = Parser::new(&mut cursor, self.tz, self.compress);
+                let mut parser = Parser::new(&mut cursor, self.timezone, self.compress);
                 parser.parse_packet()
             };
             pos = cursor.position() as usize;
 
             if let Ok(Packet::Hello(_, ref packet)) = res {
-                self.tz = Some(packet.timezone);
+                self.timezone = Some(packet.timezone);
             }
 
             match res {
@@ -180,7 +188,7 @@ impl Stream for ClickhouseTransport {
 }
 
 impl PacketStream {
-    pub fn read_block(mut self, context: Context, pool: Option<Pool>) -> IoFuture<ClientHandle> {
+    pub fn read_block(mut self, context: Context, pool: Option<Pool>) -> BoxFuture<ClientHandle> {
         self.read_block = true;
 
         Box::new(
@@ -191,11 +199,11 @@ impl PacketStream {
                         context: context.clone(),
                         pool: pool.clone(),
                     };
-                    future::ok::<_, std::io::Error>(Some(client))
+                    future::ok::<_, Error>(Some(client))
                 }
-                Packet::Block(_) => future::ok::<_, std::io::Error>(acc),
-                Packet::Exception(e) => future::err(ClickhouseError::Internal(e).into()),
-                _ => future::err(ClickhouseError::UnexpectedPacket.into()),
+                Packet::Block(_) => future::ok::<_, Error>(acc),
+                Packet::Exception(e) => future::err(Error::Server(e)),
+                _ => future::err(Error::Driver(DriverError::UnexpectedPacket)),
             })
             .map(Option::unwrap),
         )
@@ -204,15 +212,15 @@ impl PacketStream {
 
 impl Stream for PacketStream {
     type Item = Packet<ClickhouseTransport>;
-    type Error = io::Error;
+    type Error = Error;
 
-    fn poll(&mut self) -> Poll<Option<Packet<ClickhouseTransport>>, io::Error> {
+    fn poll(&mut self) -> Poll<Option<Packet<ClickhouseTransport>>, Self::Error> {
         loop {
             self.state = match self.state {
                 PacketStreamState::Ask => match self.inner {
                     None => PacketStreamState::Done,
                     Some(ref mut inner) => {
-                        let _ = try_ready!(inner.send());
+                        try_ready!(inner.send());
                         PacketStreamState::Receive
                     }
                 },
@@ -226,7 +234,7 @@ impl Stream for PacketStream {
                         None => PacketStreamState::Done,
                         Some(packet) => {
                             let result = packet.bind(&mut self.inner);
-                            PacketStreamState::Yield(Some(result))
+                            PacketStreamState::Yield(Box::new(Some(result)))
                         }
                     }
                 }

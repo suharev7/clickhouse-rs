@@ -5,11 +5,11 @@ pub fn put_uvarint(buf: &mut [u8], x: u64) -> usize {
     let mut mx = x;
     while mx >= 0x80 {
         buf[i] = mx as u8 | 0x80;
-        mx = mx >> 7;
+        mx >>= 7;
         i += 1;
     }
     buf[i] = mx as u8;
-    return i + 1;
+    i + 1
 }
 
 mod test {

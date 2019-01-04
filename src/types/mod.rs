@@ -1,21 +1,16 @@
-use std::borrow::Cow;
-use std::error;
-use std::fmt;
-use std::io;
-use std::mem;
-use std::string::FromUtf8Error;
+use std::{borrow::Cow, fmt};
 
 use chrono_tz::Tz;
-use futures::{Async, Poll};
 use hostname::get_hostname;
 
+use crate::errors::{Error, ServerError};
 use crate::Block;
 
 pub use self::cmd::Cmd;
 pub use self::date_converter::DateConverter;
-pub use self::from_sql::{FromSql, FromSqlError, FromSqlResult};
+pub use self::from_sql::FromSql;
 pub use self::marshal::Marshal;
-pub use self::options::Options;
+pub use self::options::{IntoOptions, Options, OptionsSource};
 pub use self::query::Query;
 pub use self::stat_buffer::StatBuffer;
 pub use self::unmarshal::Unmarshal;
@@ -54,14 +49,6 @@ pub struct ProfileInfo {
     pub calculated_rows_before_limit: bool,
 }
 
-#[derive(Clone, Default, Debug, PartialEq)]
-pub struct ExceptionRepr {
-    pub code: u32,
-    pub name: String,
-    pub message: String,
-    pub stack_trace: String,
-}
-
 #[derive(Clone, PartialEq)]
 pub struct ServerInfo {
     pub name: String,
@@ -81,11 +68,11 @@ impl fmt::Debug for ServerInfo {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Context {
     pub(crate) server_info: ServerInfo,
     pub(crate) hostname: String,
-    pub(crate) options: Options,
+    pub(crate) options: OptionsSource,
 }
 
 impl Default for ServerInfo {
@@ -100,12 +87,21 @@ impl Default for ServerInfo {
     }
 }
 
+impl fmt::Debug for Context {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("Context")
+            .field("options", &self.options)
+            .field("hostname", &self.hostname)
+            .finish()
+    }
+}
+
 impl Default for Context {
     fn default() -> Self {
         Context {
             server_info: ServerInfo::default(),
             hostname: get_hostname().unwrap(),
-            options: Options::default(),
+            options: OptionsSource::default(),
         }
     }
 }
@@ -116,7 +112,7 @@ pub enum Packet<S> {
     Pong(S),
     Progress(Progress),
     ProfileInfo(ProfileInfo),
-    Exception(ExceptionRepr),
+    Exception(ServerError),
     Block(Block),
     Eof(S),
 }
@@ -167,7 +163,7 @@ pub enum SqlType {
 }
 
 impl SqlType {
-    pub fn to_string(&self) -> Cow<'static, str> {
+    pub fn to_string(self) -> Cow<'static, str> {
         match self {
             SqlType::UInt8 => "UInt8".into(),
             SqlType::UInt16 => "UInt16".into(),
@@ -188,7 +184,7 @@ impl SqlType {
 
 impl fmt::Display for SqlType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.to_string())
+        write!(f, "{}", SqlType::to_string(*self))
     }
 }
 
@@ -199,99 +195,5 @@ fn test_display() {
     assert_eq!(expected, actual);
 }
 
-pub enum ClickhouseError {
-    Overflow,
-    UnknownPacket(u64),
-    IoError(io::Error),
-    Utf8Error(FromUtf8Error),
-    ResponseError(&'static str),
-    Internal(ExceptionRepr),
-    UnexpectedPacket,
-    Timeout,
-}
-
-impl From<io::Error> for ClickhouseError {
-    fn from(error: io::Error) -> ClickhouseError {
-        ClickhouseError::IoError(error)
-    }
-}
-
-impl From<FromUtf8Error> for ClickhouseError {
-    fn from(error: FromUtf8Error) -> ClickhouseError {
-        ClickhouseError::Utf8Error(error)
-    }
-}
-
-impl From<ClickhouseError> for io::Error {
-    fn from(error: ClickhouseError) -> io::Error {
-        match error {
-            ClickhouseError::IoError(err) => err,
-            _ => io::Error::new(io::ErrorKind::Other, error),
-        }
-    }
-}
-
-impl error::Error for ClickhouseError {
-    fn description(&self) -> &str {
-        match self {
-            ClickhouseError::Overflow => "Varint overflows a 64-bit integer",
-            ClickhouseError::UnknownPacket(_) => "Unknown packet",
-            ClickhouseError::IoError(err) => err.description(),
-            ClickhouseError::Utf8Error(err) => err.description(),
-            ClickhouseError::ResponseError(message) => &message,
-            ClickhouseError::Internal(ref e) => &e.message,
-            ClickhouseError::UnexpectedPacket => "Unexpected packet",
-            ClickhouseError::Timeout => "Timeout error",
-        }
-    }
-
-    fn cause(&self) -> Option<&error::Error> {
-        match self {
-            ClickhouseError::IoError(ref err) => Some(err as &error::Error),
-            ClickhouseError::Utf8Error(ref err) => Some(err as &error::Error),
-            _ => None,
-        }
-    }
-}
-
-impl fmt::Display for ClickhouseError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        match self {
-            ClickhouseError::Overflow => write!(f, "Varint overflows a 64-bit integer"),
-            ClickhouseError::UnknownPacket(packet) => write!(f, "Unknown packet: {}", packet),
-            ClickhouseError::IoError(error) => write!(f, "IoError: {}", error),
-            ClickhouseError::Utf8Error(error) => write!(f, "Utf8Error: {}", error),
-            ClickhouseError::ResponseError(message) => write!(f, "ResponseError: {}", message),
-            ClickhouseError::Internal(e) => write!(f, "{}", e.message),
-            ClickhouseError::UnexpectedPacket => write!(f, "Unexpected packet"),
-            ClickhouseError::Timeout => write!(f, "Timeout error"),
-        }
-    }
-}
-
-impl fmt::Debug for ClickhouseError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        fmt::Display::fmt(self, f)
-    }
-}
-
-impl<S> Into<Poll<Option<Packet<S>>, io::Error>> for ClickhouseError {
-    fn into(self) -> Poll<Option<Packet<S>>, io::Error> {
-        let mut this = self;
-
-        if let ClickhouseError::IoError(ref mut e) = &mut this {
-            if e.kind() == io::ErrorKind::WouldBlock {
-                return Ok(Async::NotReady);
-            }
-
-            let me = mem::replace(e, io::Error::from(io::ErrorKind::Other));
-            return Err(me);
-        }
-
-        warn!("ERROR: {:?}", this);
-        Err(io::Error::new(io::ErrorKind::Other, this))
-    }
-}
-
 /// Library generic result type.
-pub type ClickhouseResult<T> = Result<T, ClickhouseError>;
+pub type ClickhouseResult<T> = Result<T, Error>;

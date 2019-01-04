@@ -4,7 +4,8 @@ use std::fmt;
 use chrono::prelude::*;
 use chrono_tz::Tz;
 
-use crate::types::{FromSqlError, FromSqlResult, SqlType, Value};
+use crate::errors::{Error, FromSqlError};
+use crate::types::{ClickhouseResult, SqlType, Value};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum ValueRef<'a> {
@@ -66,12 +67,15 @@ impl<'a> convert::From<ValueRef<'a>> for SqlType {
 }
 
 impl<'a> ValueRef<'a> {
-    pub fn as_str(&self) -> FromSqlResult<&'a str> {
+    pub fn as_str(&self) -> ClickhouseResult<&'a str> {
         match self {
             ValueRef::String(t) => Ok(t),
             _ => {
-                let from = SqlType::from(self.clone()).to_string();
-                Err(FromSqlError::InvalidType(from, "String"))
+                let from = SqlType::from(*self).to_string();
+                Err(Error::FromSql(FromSqlError::InvalidType {
+                    src: from,
+                    dst: "String",
+                }))
             }
         }
     }

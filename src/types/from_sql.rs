@@ -1,57 +1,10 @@
-use std::convert;
-use std::error::Error;
-use std::fmt;
-use std::io;
-
 use chrono::prelude::*;
 use chrono_tz::Tz;
 
+use crate::errors::{Error, FromSqlError};
 use crate::types::{SqlType, ValueRef};
-use std::borrow::Cow;
 
-#[derive(Debug)]
-pub enum FromSqlError {
-    InvalidType(Cow<'static, str>, &'static str),
-    OutOfRange,
-    Other(Box<Error + Send + Sync>),
-}
-
-impl fmt::Display for FromSqlError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            FromSqlError::InvalidType(src, dst) => {
-                write!(f, "SqlType::{} cannot be cast to {}.", src, dst)
-            }
-            FromSqlError::OutOfRange => write!(f, "Out of range"),
-            FromSqlError::Other(ref err) => err.fmt(f),
-        }
-    }
-}
-
-impl Error for FromSqlError {
-    fn description(&self) -> &str {
-        match *self {
-            FromSqlError::InvalidType(_, _) => "invalid type",
-            FromSqlError::OutOfRange => "out of type",
-            FromSqlError::Other(ref err) => err.description(),
-        }
-    }
-
-    fn cause(&self) -> Option<&Error> {
-        match *self {
-            FromSqlError::Other(ref err) => err.cause(),
-            _ => None,
-        }
-    }
-}
-
-impl convert::From<FromSqlError> for io::Error {
-    fn from(cause: FromSqlError) -> Self {
-        io::Error::new(io::ErrorKind::Other, cause)
-    }
-}
-
-pub type FromSqlResult<T> = Result<T, FromSqlError>;
+pub type FromSqlResult<T> = Result<T, Error>;
 
 pub trait FromSql<'a>: Sized {
     fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self>;
@@ -66,7 +19,7 @@ macro_rules! from_sql_impl {
                         ValueRef::$k(v) => Ok(v),
                         _ => {
                             let from = SqlType::from(value.clone()).to_string();
-                            Err(FromSqlError::InvalidType(from, stringify!($t)))
+                            Err(Error::FromSql(FromSqlError::InvalidType { src: from, dst: stringify!($t) }))
                         }
                     }
                 }
@@ -92,8 +45,11 @@ impl<'a> FromSql<'a> for DateTime<Tz> {
         match value {
             ValueRef::DateTime(v) => Ok(v),
             _ => {
-                let from = SqlType::from(value.clone()).to_string();
-                Err(FromSqlError::InvalidType(from, "DateTime<Tz>"))
+                let from = SqlType::from(value).to_string();
+                Err(Error::FromSql(FromSqlError::InvalidType {
+                    src: from,
+                    dst: "DateTime<Tz>",
+                }))
             }
         }
     }
@@ -132,7 +88,7 @@ mod test {
         match u32::from_sql(v) {
             Ok(_) => panic!("should fail"),
             Err(e) => assert_eq!(
-                "SqlType::UInt16 cannot be cast to u32.".to_string(),
+                "From SQL error: `SqlType::UInt16 cannot be cast to u32.`".to_string(),
                 format!("{}", e)
             ),
         }

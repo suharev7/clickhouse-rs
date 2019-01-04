@@ -1,5 +1,5 @@
-use std::io::Error;
+use crate::errors::Error;
 
 use futures::Future;
 
-pub type IoFuture<T> = Box<dyn Future<Item = T, Error = Error> + Send>;
+pub type BoxFuture<T> = Box<dyn Future<Item = T, Error = Error> + Send>;

@@ -1,10 +1,8 @@
-use std::io;
 use std::sync::Arc;
 
-use crate::binary::Encoder;
-use crate::binary::ReadEx;
-use crate::column::column_data::ColumnData;
-use crate::column::{BoxColumnData, ColumnFrom};
+use crate::binary::{Encoder, ReadEx};
+use crate::column::{column_data::ColumnData, BoxColumnData, ColumnFrom};
+use crate::errors::Error;
 use crate::types::{SqlType, Value, ValueRef};
 
 pub struct StringColumnData {
@@ -18,7 +16,7 @@ impl StringColumnData {
         }
     }
 
-    pub fn load<T: ReadEx>(reader: &mut T, size: usize) -> Result<StringColumnData, io::Error> {
+    pub fn load<T: ReadEx>(reader: &mut T, size: usize) -> Result<StringColumnData, Error> {
         let mut data = StringColumnData::with_capacity(size);
 
         for _ in 0..size {

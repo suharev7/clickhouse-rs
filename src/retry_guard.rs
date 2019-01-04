@@ -1,24 +1,24 @@
 use std::fmt;
-use std::io::{Error, ErrorKind};
 use std::marker::PhantomData;
 use std::time::{Duration, Instant};
 
+use crate::errors::Error;
 use tokio::prelude::*;
 use tokio_timer::{Delay, Error as TimerError};
 
-use crate::io::IoFuture;
+use crate::io::BoxFuture;
 
 enum RetryState<H> {
-    Checking(IoFuture<H>),
-    Reconnecting(IoFuture<H>),
-    Sleeping(Delay),
+    Check(BoxFuture<H>),
+    Reconnect(BoxFuture<H>),
+    Sleep(Delay),
 }
 
 #[derive(Debug)]
 enum RetryPoll<H: fmt::Debug> {
-    Checking(Poll<H, Error>),
-    Reconnecting(Poll<H, Error>),
-    Sleeping(Poll<(), TimerError>),
+    Check(Poll<H, Error>),
+    Reconnect(Poll<H, Error>),
+    Sleep(Poll<(), TimerError>),
 }
 
 pub(crate) struct RetryGuard<H, C, R> {
@@ -33,8 +33,8 @@ pub(crate) struct RetryGuard<H, C, R> {
 
 impl<H, C, R> RetryGuard<H, C, R>
 where
-    C: Fn(H) -> IoFuture<H>,
-    R: Fn() -> IoFuture<H>,
+    C: Fn(H) -> BoxFuture<H>,
+    R: Fn() -> BoxFuture<H>,
 {
     pub(crate) fn new(
         handle: H,
@@ -44,7 +44,7 @@ where
         duration: Duration,
     ) -> RetryGuard<H, C, R> {
         RetryGuard {
-            state: RetryState::Checking(check(handle)),
+            state: RetryState::Check(check(handle)),
             check,
             reconnect,
             attempt: 0,
@@ -58,17 +58,17 @@ where
 impl<T: fmt::Debug> RetryState<T> {
     fn poll(&mut self) -> RetryPoll<T> {
         match self {
-            RetryState::Checking(ref mut inner) => RetryPoll::Checking(inner.poll()),
-            RetryState::Reconnecting(ref mut inner) => RetryPoll::Reconnecting(inner.poll()),
-            RetryState::Sleeping(delay) => RetryPoll::Sleeping(delay.poll()),
+            RetryState::Check(ref mut inner) => RetryPoll::Check(inner.poll()),
+            RetryState::Reconnect(ref mut inner) => RetryPoll::Reconnect(inner.poll()),
+            RetryState::Sleep(delay) => RetryPoll::Sleep(delay.poll()),
         }
     }
 }
 
 impl<H, C, R> Future for RetryGuard<H, C, R>
 where
-    C: Fn(H) -> IoFuture<H>,
-    R: Fn() -> IoFuture<H>,
+    C: Fn(H) -> BoxFuture<H>,
+    R: Fn() -> BoxFuture<H>,
     H: fmt::Debug,
 {
     type Item = H;
@@ -76,71 +76,71 @@ where
 
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
         match self.state.poll() {
-            RetryPoll::Checking(Err(err)) => {
+            RetryPoll::Check(Err(err)) => {
                 if self.attempt >= self.max_attempt {
                     return Err(err);
                 }
                 let future = (self.reconnect)();
-                self.state = RetryState::Reconnecting(future);
+                self.state = RetryState::Reconnect(future);
                 self.attempt += 1;
                 self.poll()
             }
-            RetryPoll::Checking(result) => result,
-            RetryPoll::Reconnecting(Err(err)) => {
+            RetryPoll::Check(result) => result,
+            RetryPoll::Reconnect(Err(err)) => {
                 if self.attempt >= self.max_attempt {
                     return Err(err);
                 }
                 let deadline = Instant::now() + self.duration;
                 let future = Delay::new(deadline);
-                self.state = RetryState::Sleeping(future);
+                self.state = RetryState::Sleep(future);
                 self.attempt += 1;
                 self.poll()
             }
-            RetryPoll::Reconnecting(Ok(Async::NotReady)) => Ok(Async::NotReady),
-            RetryPoll::Reconnecting(Ok(Async::Ready(handle))) => {
+            RetryPoll::Reconnect(Ok(Async::NotReady)) => Ok(Async::NotReady),
+            RetryPoll::Reconnect(Ok(Async::Ready(handle))) => {
                 let future = (self.check)(handle);
-                self.state = RetryState::Checking(future);
+                self.state = RetryState::Check(future);
                 self.poll()
             }
-            RetryPoll::Sleeping(Ok(Async::Ready(_))) => {
+            RetryPoll::Sleep(Ok(Async::Ready(_))) => {
                 let future = (self.reconnect)();
-                self.state = RetryState::Reconnecting(future);
+                self.state = RetryState::Reconnect(future);
                 self.poll()
             }
-            RetryPoll::Sleeping(Ok(Async::NotReady)) => Ok(Async::NotReady),
-            RetryPoll::Sleeping(Err(err)) => Err(Error::new(ErrorKind::Other, err)),
+            RetryPoll::Sleep(Ok(Async::NotReady)) => Ok(Async::NotReady),
+            RetryPoll::Sleep(Err(err)) => Err(err.into()),
         }
     }
 }
 
 #[cfg(test)]
 mod test {
-    use std::io::{Error, ErrorKind};
     use std::sync::Mutex;
     use std::time::{Duration, Instant};
 
     use tokio::prelude::*;
 
-    use crate::io::IoFuture;
+    use crate::errors::Error;
+    use crate::io::BoxFuture;
 
     use super::RetryGuard;
 
     lazy_static! {
-        static ref MUTEX: Mutex<u8> = Mutex::new(42);
+        static ref MUTEX: Mutex<()> = Mutex::new(());
     }
 
     static mut RECONNECT_ATTEMPT: usize = 0;
 
-    fn check(h: u8) -> IoFuture<u8> {
+    fn check(h: u8) -> BoxFuture<u8> {
         if h == 1 {
-            let err = Error::new(ErrorKind::Other, "[check] it's fine");
+            let err: Error = "[check] it's fine".into();
             Box::new(future::err(err))
         } else {
             Box::new(future::ok(42))
         }
     }
 
-    fn reconnect() -> IoFuture<u8> {
+    fn reconnect() -> BoxFuture<u8> {
         let attempt = unsafe {
             RECONNECT_ATTEMPT += 1;
             RECONNECT_ATTEMPT
@@ -148,14 +148,14 @@ mod test {
         if attempt > 2 {
             Box::new(future::ok(2))
         } else {
-            let err = Error::new(ErrorKind::Other, "[reconnect] it's fine");
+            let err: Error = "[reconnect] it's fine".into();
             Box::new(future::err(err))
         }
     }
 
-    fn bad_reconnect() -> IoFuture<u8> {
+    fn bad_reconnect() -> BoxFuture<u8> {
         unsafe { RECONNECT_ATTEMPT += 1 }
-        let err = Error::new(ErrorKind::Other, "[bar_reconnect] it's fine");
+        let err: Error = "[bar_reconnect] it's fine".into();
         Box::new(future::err(err))
     }
 

@@ -1,6 +1,6 @@
+use crate::block::ColumnIdx;
+use crate::types::{ClickhouseResult, FromSql};
 use crate::Block;
-use crate::block::block::ColumnIdx;
-use crate::types::{FromSql, FromSqlResult};
 
 pub struct Row<'a> {
     row: usize,
@@ -9,12 +9,17 @@ pub struct Row<'a> {
 
 impl<'a> Row<'a> {
     /// Get the value of a particular cell of the row.
-    pub fn get<T, I>(&self, col: I) -> FromSqlResult<T>
+    pub fn get<T, I>(&self, col: I) -> ClickhouseResult<T>
     where
         T: FromSql<'a>,
         I: ColumnIdx,
     {
         self.block.get(self.row, col)
+    }
+
+    /// Return the number of columns in the current row.
+    pub fn len(&self) -> usize {
+        self.block.column_count()
     }
 }
 

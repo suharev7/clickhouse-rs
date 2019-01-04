@@ -1,9 +1,12 @@
 use std::sync::Arc;
 
-use crate::binary::{Encoder, ReadEx};
-use crate::column::{column_data::ColumnData, BoxColumnData, ColumnFrom};
-use crate::errors::Error;
-use crate::types::{SqlType, Value, ValueRef};
+use crate::{
+    binary::{Encoder, ReadEx},
+    errors::Error,
+    types::{SqlType, Value, ValueRef},
+};
+
+use super::{BoxColumnData, column_data::ColumnData, ColumnFrom};
 
 pub struct StringColumnData {
     data: Vec<String>,

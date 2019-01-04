@@ -1,12 +1,18 @@
-use crate::column::column_data::ColumnData;
-use crate::column::date::DateColumnData;
-use crate::column::numeric::VectorColumnData;
-use crate::column::string::StringColumnData;
-use crate::errors::Error;
-
-use crate::binary::ReadEx;
-use chrono_tz::Tz;
 use std::sync::Arc;
+
+use chrono_tz::Tz;
+
+use crate::{
+    binary::ReadEx,
+    errors::Error,
+};
+
+use super::{
+    column_data::ColumnData,
+    date::DateColumnData,
+    numeric::VectorColumnData,
+    string::StringColumnData,
+};
 
 impl ColumnData {
     pub fn load_data<T: ReadEx>(

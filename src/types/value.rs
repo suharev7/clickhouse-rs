@@ -9,6 +9,7 @@ use crate::types::SqlType;
 type AppDateTime = DateTime<Tz>;
 type AppDate = Date<Tz>;
 
+/// Client side representation of a value of Clickhouse column.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
     UInt8(u8),

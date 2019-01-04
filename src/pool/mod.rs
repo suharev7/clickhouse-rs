@@ -1,16 +1,16 @@
 use std::{
-    fmt,
+    fmt, mem,
     sync::{Arc, Mutex, MutexGuard},
 };
 
-use tokio::prelude::task::{self, Task};
 use tokio::prelude::*;
+use tokio::prelude::task::{self, Task};
 
 use crate::{
+    Client,
+    ClientHandle,
     io::BoxFuture,
-    pool::futures::GetHandle,
-    types::{ClickhouseResult, IntoOptions, OptionsSource},
-    Client, ClientHandle,
+    pool::futures::GetHandle, types::{ClickhouseResult, IntoOptions, OptionsSource},
 };
 
 mod futures;
@@ -28,6 +28,68 @@ impl Inner {
     }
 }
 
+#[derive(Clone)]
+pub(crate) enum PoolBinding {
+    None,
+    Attached(Pool),
+    Detached(Pool),
+}
+
+impl From<PoolBinding> for Option<Pool> {
+    fn from(binding: PoolBinding) -> Self {
+        match binding {
+            PoolBinding::None => None,
+            PoolBinding::Attached(pool) | PoolBinding::Detached(pool) => Some(pool),
+        }
+    }
+}
+
+impl PoolBinding {
+    pub(crate) fn take(&mut self) -> PoolBinding {
+        mem::replace(self, PoolBinding::None)
+    }
+
+    fn return_conn(self, client: ClientHandle) {
+        if let Some(mut pool) = self.into() {
+            Pool::return_conn(&mut pool, client);
+        }
+    }
+
+    pub(crate) fn release_conn(self) {
+        if let Some(mut pool) = self.into() {
+            Pool::release_conn(&mut pool);
+        }
+    }
+
+    pub(crate) fn is_attached(&self) -> bool {
+        match self {
+            PoolBinding::Attached(_) => true,
+            _ => false,
+        }
+    }
+
+    pub(crate) fn is_some(&self) -> bool {
+        match self {
+            PoolBinding::None => false,
+            _ => true,
+        }
+    }
+
+    pub(crate) fn attach(&mut self) {
+        match self.take() {
+            PoolBinding::Detached(pool) => *self = PoolBinding::Attached(pool),
+            _ => unreachable!(),
+        }
+    }
+
+    pub(crate) fn detach(&mut self) {
+        match self.take() {
+            PoolBinding::Attached(pool) => *self = PoolBinding::Detached(pool),
+            _ => unreachable!(),
+        }
+    }
+}
+
 /// Asynchronous pool of Clickhouse connections.
 #[derive(Clone)]
 pub struct Pool {
@@ -37,6 +99,7 @@ pub struct Pool {
     max: usize,
 }
 
+#[derive(Debug)]
 struct PoolInfo {
     new_len: usize,
     idle_len: usize,
@@ -59,6 +122,7 @@ impl fmt::Debug for Pool {
 }
 
 impl Pool {
+    /// Constructs a new Pool.
     pub fn new<O>(options: O) -> Pool
     where
         O: IntoOptions,
@@ -155,7 +219,7 @@ impl Pool {
     fn take_conn(&mut self) -> Option<ClientHandle> {
         self.with_inner(|mut inner| {
             if let Some(mut client) = inner.idle.pop() {
-                client.pool = Some(self.clone());
+                client.pool = PoolBinding::Attached(self.clone());
                 inner.ongoing += 1;
                 Some(client)
             } else {
@@ -169,11 +233,21 @@ impl Pool {
 
         self.with_inner(|mut inner| {
             inner.ongoing -= 1;
-            if inner.idle.len() < min {
+            if inner.idle.len() < min && client.pool.is_attached() {
                 inner.idle.push(client);
             } else {
-                client.pool = None;
+                client.pool = PoolBinding::None;
             }
+
+            while let Some(task) = inner.tasks.pop() {
+                task.notify()
+            }
+        })
+    }
+
+    fn release_conn(&mut self) {
+        self.with_inner(|mut inner| {
+            inner.ongoing -= 1;
 
             while let Some(task) = inner.tasks.pop() {
                 task.notify()
@@ -184,11 +258,15 @@ impl Pool {
 
 impl Drop for ClientHandle {
     fn drop(&mut self) {
-        if let (Some(mut pool), Some(inner)) = (self.pool.take(), self.inner.take()) {
+        if let (pool, Some(inner)) = (self.pool.take(), self.inner.take()) {
+            if !pool.is_some() {
+                return;
+            }
+
             let context = self.context.clone();
             let client = ClientHandle {
                 inner: Some(inner),
-                pool: Some(pool.clone()),
+                pool: pool.clone(),
                 context,
             };
             pool.return_conn(client);
@@ -205,12 +283,12 @@ mod test {
 
     use tokio::prelude::*;
 
-    use crate::{io::BoxFuture, test_misc::DATABASE_URL, Options};
+    use crate::{io::BoxFuture, test_misc::DATABASE_URL, types::Options};
 
     use super::Pool;
 
     /// Same as `tokio::run`, but will panic if future panics and will return the result
-    /// of future execution.
+        /// of future execution.
     fn run<F, T, U>(future: F) -> Result<T, U>
     where
         F: Future<Item = T, Error = U> + Send + 'static,
@@ -242,6 +320,19 @@ mod test {
     }
 
     #[test]
+    fn test_detach() {
+        let pool = Pool::new(DATABASE_URL.as_str());
+
+        let done = pool.get_handle().and_then(|c| c.ping()).and_then(|mut c| {
+            c.pool.detach();
+            Ok(())
+        });
+
+        run(done).unwrap();
+        assert_eq!(pool.info().idle_len, 0);
+    }
+
+    #[test]
     fn test_many_connection() {
         let options = Options::from_str(DATABASE_URL.as_str())
             .unwrap()
@@ -252,7 +343,7 @@ mod test {
         fn exec_query(pool: Pool) -> BoxFuture<u32> {
             Box::new(
                 pool.get_handle()
-                    .and_then(|c| c.query_all("SELECT toUInt32(1), sleep(1)"))
+                    .and_then(|c| c.query("SELECT toUInt32(1), sleep(1)").fetch_all())
                     .and_then(|(_, block)| {
                         let value: u32 = block.get(0, 0)?;
                         Ok(value)
@@ -283,5 +374,23 @@ mod test {
         assert!(spent < Duration::from_millis(2500));
 
         assert_eq!(pool.info().idle_len, 5);
+    }
+
+    #[test]
+    fn test_error_in_fold() {
+        let pool = Pool::new(DATABASE_URL.as_str());
+
+        let done = pool.get_handle().and_then(|c| {
+            c.query("SELECT 1").fold((), |_, _| {
+                future::err("[test_error_in_fold] It's fine.".into())
+            })
+        });
+
+        run(done).unwrap_err();
+
+        let info = pool.info();
+        assert_eq!(info.ongoing, 0);
+        assert_eq!(info.tasks_len, 0);
+        assert_eq!(info.idle_len, 0);
     }
 }

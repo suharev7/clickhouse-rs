@@ -1,9 +1,8 @@
 use std::iter;
 
-use crate::binary::Encoder;
-use crate::column::column_data::ColumnData;
-use crate::column::BoxColumnData;
-use crate::types::{SqlType, Value, ValueRef};
+use crate::{binary::Encoder, types::{SqlType, Value, ValueRef}};
+
+use super::{BoxColumnData, column_data::ColumnData};
 
 pub struct ConcatColumnData {
     data: Vec<BoxColumnData>,
@@ -106,9 +105,11 @@ fn find_chunk(index: &[usize], ix: usize) -> usize {
 mod test {
     use std::sync::Arc;
 
-    use crate::column::column_data::ColumnDataExt;
-    use crate::column::numeric::VectorColumnData;
-    use crate::column::string::StringColumnData;
+    use crate::types::column::{
+        column_data::ColumnDataExt,
+        numeric::VectorColumnData,
+        string::StringColumnData,
+    };
 
     use super::*;
 

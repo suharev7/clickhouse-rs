@@ -1,9 +1,12 @@
 use std::{convert, mem, sync::Arc};
 
-use crate::binary::{Encoder, ReadEx};
-use crate::column::{column_data::ColumnData, list::List, BoxColumnData, ColumnFrom};
-use crate::errors::Error;
-use crate::types::{Marshal, SqlType, StatBuffer, Unmarshal, Value, ValueRef};
+use crate::{
+    binary::{Encoder, ReadEx},
+    errors::Error,
+    types::{Marshal, SqlType, StatBuffer, Unmarshal, Value, ValueRef},
+};
+
+use super::{BoxColumnData, column_data::ColumnData, ColumnFrom, list::List};
 
 pub struct VectorColumnData<T>
 where

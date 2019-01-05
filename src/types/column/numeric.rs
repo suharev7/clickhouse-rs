@@ -36,7 +36,7 @@ where
         + Default
         + 'static,
 {
-    fn column_from(source: Vec<T>) -> BoxColumnData {
+    fn column_from(source: Self) -> BoxColumnData {
         let mut data = List::with_capacity(source.len());
         for s in source {
             data.push(s);
@@ -68,7 +68,7 @@ where
         let mut row = vec![0_u8; size * mem::size_of::<T>()];
         reader.read_bytes(row.as_mut())?;
         let data = List::from(row);
-        Ok(VectorColumnData { data })
+        Ok(Self { data })
     }
 }
 

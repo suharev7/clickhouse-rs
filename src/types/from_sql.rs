@@ -35,7 +35,7 @@ impl<'a> FromSql<'a> for &'a str {
 }
 
 impl<'a> FromSql<'a> for String {
-    fn from_sql(value: ValueRef<'a>) -> FromSqlResult<String> {
+    fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
         value.as_str().map(str::to_string)
     }
 }

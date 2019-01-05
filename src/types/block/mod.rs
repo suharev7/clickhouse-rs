@@ -40,7 +40,7 @@ pub struct Block {
 }
 
 impl PartialEq<Block> for Block {
-    fn eq(&self, other: &Block) -> bool {
+    fn eq(&self, other: &Self) -> bool {
         if self.columns.len() != other.columns.len() {
             return false;
         }
@@ -57,7 +57,7 @@ impl PartialEq<Block> for Block {
 
 impl Clone for Block {
     fn clone(&self) -> Self {
-        Block {
+        Self {
             info: self.info,
             columns: self.columns.iter().map(|c| (*c).clone()).collect(),
         }
@@ -65,7 +65,7 @@ impl Clone for Block {
 }
 
 impl AsRef<Block> for Block {
-    fn as_ref(&self) -> &Block {
+    fn as_ref(&self) -> &Self {
         self
     }
 }
@@ -91,21 +91,21 @@ impl<'a> ColumnIdx for &'a str {
 
 impl Block {
     /// Constructs a new, empty Block.
-    pub fn new() -> Block {
-        Block::default()
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub(crate) fn load<R: ReadEx>(
         reader: &mut R,
         tz: Tz,
         compress: bool,
-    ) -> ClickhouseResult<Block> {
+    ) -> ClickhouseResult<Self> {
         if compress {
             let tmp = decompress(reader)?;
             let mut cursor = Cursor::new(&tmp);
-            Block::load(&mut cursor, tz, false)
+            Self::load(&mut cursor, tz, false)
         } else {
-            let mut block = Block::default();
+            let mut block = Self::default();
 
             block.info = BlockInfo::read(reader)?;
 
@@ -153,14 +153,14 @@ impl Block {
     pub fn get<'a, T, I>(&'a self, row: usize, col: I) -> ClickhouseResult<T>
     where
         T: FromSql<'a>,
-        I: ColumnIdx,
+        I: ColumnIdx + Copy,
     {
         let column_index = col.get_index(self.columns())?;
         T::from_sql(self.columns[column_index].at(row))
     }
 
     /// Add new column into this block
-    pub fn add_column<S>(mut self, name: &str, values: S) -> Block
+    pub fn add_column<S>(mut self, name: &str, values: S) -> Self
     where
         S: ColumnFrom,
     {
@@ -203,7 +203,7 @@ impl Block {
                     buf.len() as i32,
                 );
             }
-            buf.resize(9 + size as usize, 0u8);
+            buf.resize(9 + size as usize, 0_u8);
 
             let buf_len = buf.len() as u32;
             {
@@ -236,7 +236,7 @@ impl Block {
         }
     }
 
-    pub(crate) fn concat(blocks: &[Block]) -> Block {
+    pub(crate) fn concat(blocks: &[Self]) -> Self {
         let first = blocks.first().expect("blocks should not be empty.");
 
         for block in blocks {
@@ -254,7 +254,7 @@ impl Block {
             columns.push(Column::concat(chunks));
         }
 
-        Block {
+        Self {
             info: first.info,
             columns,
         }
@@ -278,27 +278,27 @@ impl fmt::Debug for Block {
             .map(|(a, b)| cmp::max(a, b))
             .collect();
 
-        print_line(f, &titles_len, "\n┌", '┬', "┐\n")?;
+        print_line(f, &titles_len, "\n\u{250c}", '┬', "\u{2510}\n")?;
 
         for (i, title) in titles.iter().enumerate() {
-            write!(f, "│{:>width$} ", title, width = titles_len[i] + 1)?;
+            write!(f, "\u{2502}{:>width$} ", title, width = titles_len[i] + 1)?;
         }
-        write!(f, "│")?;
+        write!(f, "\u{2502}")?;
 
         if self.row_count() > 0 {
-            print_line(f, &titles_len, "\n├", '┼', "┤\n")?;
+            print_line(f, &titles_len, "\n\u{251c}", '┼', "\u{2524}\n")?;
         }
 
         for j in 0..self.row_count() {
             for (i, col) in cells.iter().enumerate() {
-                write!(f, "│{:>width$} ", col[j], width = titles_len[i] + 1)?;
+                write!(f, "\u{2502}{:>width$} ", col[j], width = titles_len[i] + 1)?;
             }
 
             let new_line = (j + 1) != self.row_count();
-            write!(f, "│{}", if new_line { "\n" } else { "" })?;
+            write!(f, "\u{2502}{}", if new_line { "\n" } else { "" })?;
         }
 
-        print_line(f, &titles_len, "\n└", '┴', "┘")
+        print_line(f, &titles_len, "\n\u{2514}", '┴', "\u{2518}")
     }
 }
 
@@ -319,7 +319,7 @@ fn print_line(
             write!(f, "{}", center)?;
         }
 
-        write!(f, "{:─>width$}", "", width = len + 2)?;
+        write!(f, "{:\u{2500}>width$}", "", width = len + 2)?;
     }
     write!(f, "{}", right)
 }
@@ -347,7 +347,7 @@ fn decompress<R: ReadEx>(reader: &mut R) -> ClickhouseResult<Vec<u8>> {
         return Err(raise_error("compressed data too big".to_string()));
     }
 
-    let mut tmp = vec![0u8; compressed as usize];
+    let mut tmp = vec![0_u8; compressed as usize];
     {
         let mut cursor = Cursor::new(&mut tmp);
         cursor.write_u8(0x82)?;
@@ -360,7 +360,7 @@ fn decompress<R: ReadEx>(reader: &mut R) -> ClickhouseResult<Vec<u8>> {
         return Err(raise_error("data was corrupted".to_string()));
     }
 
-    let data = vec![0u8; original as usize];
+    let data = vec![0_u8; original as usize];
     let status;
     unsafe {
         status = LZ4_decompress_safe(
@@ -459,7 +459,7 @@ mod test {
         let mut cursor = Cursor::new(&source[..]);
         match Block::load(&mut cursor, Tz::Zulu, false) {
             Ok(block) => assert!(block.is_empty()),
-            Err(_) => panic!("test_read_empty_block"),
+            Err(_) => unreachable!(),
         }
     }
 
@@ -483,7 +483,7 @@ mod test {
         let block_a = make_block();
         let block_b = make_block();
 
-        let actual = Block::concat(&vec![block_a, block_b]);
+        let actual = Block::concat(&[block_a, block_b]);
         assert_eq!(actual.row_count(), 4);
         assert_eq!(actual.column_count(), 1);
 
@@ -533,8 +533,8 @@ mod test {
     #[test]
     fn test_chunks_of_empty_block() {
         let block = Block::default();
-        assert_eq!(1, block.chunks(100500).count());
-        assert_eq!(Some(block.clone()), block.chunks(100500).next());
+        assert_eq!(1, block.chunks(100_500).count());
+        assert_eq!(Some(block.clone()), block.chunks(100_500).next());
     }
 
     #[test]

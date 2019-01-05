@@ -44,7 +44,7 @@ where
         max_attempt: usize,
         duration: Duration,
     ) -> RetryGuard<H, C, R> {
-        RetryGuard {
+        Self {
             state: RetryState::Check(check(handle)),
             check,
             reconnect,
@@ -97,7 +97,9 @@ where
                 self.attempt += 1;
                 self.poll()
             }
-            RetryPoll::Reconnect(Ok(Async::NotReady)) => Ok(Async::NotReady),
+            RetryPoll::Reconnect(Ok(Async::NotReady)) | RetryPoll::Sleep(Ok(Async::NotReady)) => {
+                Ok(Async::NotReady)
+            }
             RetryPoll::Reconnect(Ok(Async::Ready(handle))) => {
                 let future = (self.check)(handle);
                 self.state = RetryState::Check(future);
@@ -108,7 +110,6 @@ where
                 self.state = RetryState::Reconnect(future);
                 self.poll()
             }
-            RetryPoll::Sleep(Ok(Async::NotReady)) => Ok(Async::NotReady),
             RetryPoll::Sleep(Err(err)) => Err(err.into()),
         }
     }

@@ -13,7 +13,7 @@ pub struct BlockInfo {
 
 impl Default for BlockInfo {
     fn default() -> Self {
-        BlockInfo {
+        Self {
             num1: 0,
             is_overflows: false,
             num2: 0,
@@ -24,8 +24,8 @@ impl Default for BlockInfo {
 }
 
 impl BlockInfo {
-    pub fn read<R: ReadEx>(reader: &mut R) -> ClickhouseResult<BlockInfo> {
-        let block_info = BlockInfo {
+    pub fn read<R: ReadEx>(reader: &mut R) -> ClickhouseResult<Self> {
+        let block_info = Self {
             num1: reader.read_uvarint()?,
             is_overflows: reader.read_scalar()?,
             num2: reader.read_uvarint()?,

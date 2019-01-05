@@ -146,7 +146,7 @@ impl From<ParseError> for Error {
 }
 
 impl From<TimeoutError<Error>> for Error {
-    fn from(err: TimeoutError<Error>) -> Error {
+    fn from(err: TimeoutError<Self>) -> Self {
         match err.into_inner() {
             None => Error::Driver(DriverError::Timeout),
             Some(inner) => inner,

@@ -100,13 +100,13 @@ value_from! {
 }
 
 impl<'a> convert::From<&'a str> for Value {
-    fn from(v: &'a str) -> Value {
+    fn from(v: &'a str) -> Self {
         Value::String(v.to_string())
     }
 }
 
 impl convert::From<Value> for String {
-    fn from(v: Value) -> String {
+    fn from(v: Value) -> Self {
         match v {
             Value::String(x) => x,
             _ => {
@@ -122,13 +122,11 @@ macro_rules! from_value {
         $(
             impl convert::From<Value> for $t {
                 fn from(v: Value) -> $t {
-                    match v {
-                        Value::$k(x) => x,
-                        _ => {
-                            let from = SqlType::from(v);
-                            panic!("Can't convert Value::{} into {}", from, stringify!($t))
-                        },
+                    if let Value::$k(x) = v {
+                        return x;
                     }
+                    let from = SqlType::from(v);
+                    panic!("Can't convert Value::{} into {}", from, stringify!($t))
                 }
             }
         )*
@@ -159,16 +157,16 @@ mod test {
 
     use super::*;
 
-    fn test_into_t<'a, T>(v: Value, x: T)
+    fn test_into_t<T>(v: Value, x: &T)
     where
         Value: convert::Into<T>,
         T: PartialEq + fmt::Debug,
     {
         let a: T = v.into();
-        assert_eq!(a, x);
+        assert_eq!(a, *x);
     }
 
-    fn test_from_rnd<'a, T>()
+    fn test_from_rnd<T>()
     where
         Value: convert::Into<T>,
         Value: convert::From<T>,
@@ -177,17 +175,17 @@ mod test {
     {
         for _ in 0..100 {
             let value = random::<T>();
-            test_into_t::<T>(Value::from(value.clone()), value);
+            test_into_t::<T>(Value::from(value.clone()), &value);
         }
     }
 
-    fn test_from_t<'a, T>(value: T)
+    fn test_from_t<T>(value: &T)
     where
         Value: convert::Into<T>,
         Value: convert::From<T>,
         T: PartialEq + fmt::Debug + Clone,
     {
-        test_into_t::<T>(Value::from(value.clone()), value);
+        test_into_t::<T>(Value::from(value.clone()), &value);
     }
 
     macro_rules! test_type {
@@ -218,12 +216,12 @@ mod test {
 
     #[test]
     fn test_string() {
-        test_from_t("284222f9-aba2-4b05-bcf5-e4e727fe34d1".to_string());
+        test_from_t(&"284222f9-aba2-4b05-bcf5-e4e727fe34d1".to_string());
     }
 
     #[test]
     fn test_time() {
-        test_from_t(Tz::Africa__Addis_Ababa.ymd(2016, 10, 22).and_hms(12, 0, 0));
+        test_from_t(&Tz::Africa__Addis_Ababa.ymd(2016, 10, 22).and_hms(12, 0, 0));
     }
 
     #[test]

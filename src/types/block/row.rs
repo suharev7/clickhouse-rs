@@ -13,7 +13,7 @@ impl<'a> Row<'a> {
     pub fn get<T, I>(&'a self, col: I) -> ClickhouseResult<T>
     where
         T: FromSql<'a>,
-        I: ColumnIdx,
+        I: ColumnIdx + Copy,
     {
         self.block_ref.get(self.row, col)
     }
@@ -29,12 +29,12 @@ impl<'a> Row<'a> {
     }
 
     /// Get the name of a particular cell of the row.
-    pub fn name<I: ColumnIdx>(&self, col: I) -> ClickhouseResult<&str> {
+    pub fn name<I: ColumnIdx + Copy>(&self, col: I) -> ClickhouseResult<&str> {
         Ok(self.block_ref.get_column(col)?.name())
     }
 
     /// Get the type of a particular cell of the row.
-    pub fn sql_type<I: ColumnIdx>(&self, col: I) -> ClickhouseResult<SqlType> {
+    pub fn sql_type<I: ColumnIdx + Copy>(&self, col: I) -> ClickhouseResult<SqlType> {
         Ok(self.block_ref.get_column(col)?.sql_type())
     }
 }
@@ -63,7 +63,7 @@ impl<'a> BlockRef<'a> {
     fn get<'s, T, I>(&'s self, row: usize, col: I) -> ClickhouseResult<T>
     where
         T: FromSql<'s>,
-        I: ColumnIdx,
+        I: ColumnIdx + Copy,
     {
         match self {
             BlockRef::Borrowed(block) => block.get(row, col),
@@ -71,7 +71,7 @@ impl<'a> BlockRef<'a> {
         }
     }
 
-    fn get_column<I: ColumnIdx>(&self, col: I) -> ClickhouseResult<&Column> {
+    fn get_column<I: ColumnIdx + Copy>(&self, col: I) -> ClickhouseResult<&Column> {
         match self {
             BlockRef::Borrowed(block) => {
                 let column_index = col.get_index(block.columns())?;

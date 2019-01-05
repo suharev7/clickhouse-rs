@@ -81,12 +81,13 @@ pub fn main() {
        .and_then(move |c| c.insert("payment", block))
        .and_then(move |c| c.query("SELECT * FROM payment").fetch_all())
        .and_then(move |(_, block)| {
-           Ok(for row in block.rows() {
+           for row in block.rows() {
                let id: u32     = row.get("customer_id")?;
                let amount: u32 = row.get("amount")?;
                let name: &str  = row.get("account_name")?;
                println!("Found payment {}: {} {}", id, amount, name);
-           })
+           }
+           Ok(())
        })
        .map_err(|err| eprintln!("database error: {}", err));
     tokio::run(done)

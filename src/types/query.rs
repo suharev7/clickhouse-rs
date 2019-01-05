@@ -5,15 +5,15 @@ pub struct Query {
 }
 
 impl Query {
-    pub fn new(sql: &str) -> Query {
-        Query {
+    pub fn new(sql: &str) -> Self {
+        Self {
             sql: sql.to_string(),
             id: "".to_string(),
         }
     }
 
-    pub fn id(self, id: &str) -> Query {
-        Query {
+    pub fn id(self, id: &str) -> Self {
+        Self {
             id: id.to_string(),
             ..self
         }
@@ -27,11 +27,11 @@ impl Query {
         &self.id
     }
 
-    pub(crate) fn map_sql<F>(self, f: F) -> Query
+    pub(crate) fn map_sql<F>(self, f: F) -> Self
     where
         F: Fn(&str) -> String,
     {
-        Query {
+        Self {
             sql: f(&self.sql),
             ..self
         }
@@ -39,7 +39,7 @@ impl Query {
 }
 
 impl<'a> From<&'a str> for Query {
-    fn from(source: &str) -> Query {
-        Query::new(source)
+    fn from(source: &str) -> Self {
+        Self::new(source)
     }
 }

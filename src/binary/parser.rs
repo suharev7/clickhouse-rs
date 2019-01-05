@@ -25,7 +25,7 @@ impl<'a, T: Read> Parser<T> {
     /// be invoked multiple times.  In other words: the stream does not have
     /// to be terminated.
     pub(crate) fn new(reader: T, tz: Option<Tz>, compress: bool) -> Parser<T> {
-        Parser {
+        Self {
             reader,
             tz,
             compress,

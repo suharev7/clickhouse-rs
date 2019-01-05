@@ -13,8 +13,8 @@ pub struct ChunkColumnData {
 }
 
 impl ChunkColumnData {
-    pub fn new(data: BoxColumnData, range: ops::Range<usize>) -> ChunkColumnData {
-        ChunkColumnData { data, range }
+    pub fn new(data: BoxColumnData, range: ops::Range<usize>) -> Self {
+        Self { data, range }
     }
 }
 

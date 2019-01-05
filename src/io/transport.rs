@@ -49,7 +49,7 @@ pub(crate) struct PacketStream {
 }
 
 impl ClickhouseTransport {
-    pub fn new(inner: TcpStream, compress: bool) -> ClickhouseTransport {
+    pub fn new(inner: TcpStream, compress: bool) -> Self {
         ClickhouseTransport {
             inner,
             done: false,

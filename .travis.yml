@@ -14,3 +14,11 @@ before_install:
   - docker --version
   - docker-compose --version
   - docker-compose up -d
+  - rustup component add clippy || cargo install --git https://github.com/rust-lang/rust-clippy/ --force clippy
+script:
+  - cargo clippy
+  # if you want the build job to fail when encountering warnings, use
+  - cargo clippy -- -D warnings
+  # in order to also check tests and none-default crate features, use
+  - cargo clippy --all-targets --all-features -- -D warnings
+  - cargo test

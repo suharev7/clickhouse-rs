@@ -9,8 +9,8 @@ pub struct GetHandle {
 }
 
 impl GetHandle {
-    pub fn new(pool: &Pool) -> GetHandle {
-        GetHandle { pool: pool.clone() }
+    pub fn new(pool: &Pool) -> Self {
+        Self { pool: pool.clone() }
     }
 }
 

@@ -10,11 +10,12 @@ use chrono_tz::Tz::{self, UTC};
 use tokio::prelude::*;
 
 use clickhouse_rs::{Pool, errors::Error, types::Block};
+use std::f64::EPSILON;
 
 pub type IoFuture<T> = Box<Future<Item = T, Error = Error> + Send>;
 
 fn database_url() -> String {
-    env::var("DATABASE_URL").unwrap_or("tcp://localhost:9000?compression=lz4".into())
+    env::var("DATABASE_URL").unwrap_or_else(|_| "tcp://localhost:9000?compression=lz4".into())
 }
 
 /// Same as `tokio::run`, but will panic if future panics and will return the result
@@ -134,7 +135,10 @@ fn test_insert() {
         .and_then(move |c| c.execute(ddl))
         .and_then(move |c| c.insert("clickhouse_test_insert", block))
         .and_then(move |c| c.query("SELECT * FROM clickhouse_test_insert").fetch_all())
-        .and_then(move |(_, actual)| Ok(assert_eq!(expected.as_ref(), &actual)));
+        .and_then(move |(_, actual)| {
+            assert_eq!(expected.as_ref(), &actual);
+            Ok(())
+        });
 
     run(done).unwrap()
 }
@@ -246,7 +250,7 @@ fn test_simple_select() {
         })
         .and_then(|c| c.query("SELECT median(a) FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a)").fetch_all())
         .and_then(|(_, r)| {
-            assert_eq!(2f64, r.get::<f64, _>(0, 0)?);
+            assert!((2f64 - r.get::<f64, _>(0, 0)?).abs() < EPSILON);
             Ok(())
         });
 
@@ -270,7 +274,8 @@ fn test_temporary_table() {
         .and_then(|c| c.query("SELECT ID AS ID FROM clickhouse_test_temporary_table").fetch_all())
         .and_then(|(_, block)| {
             let expected = Block::new().add_column("ID", (0u64..10).collect::<Vec<_>>());
-            Ok(assert_eq!(block, expected))
+            assert_eq!(block, expected);
+            Ok(())
         });
 
     run(done).unwrap();
@@ -304,7 +309,10 @@ fn test_with_totals() {
         .and_then(move |c| c.execute(ddl))
         .and_then(move |c| c.insert("clickhouse_test_with_totals", block))
         .and_then(move |c| c.query(query).fetch_all())
-        .and_then(move |(_, block)| Ok(assert_eq!(&expected, &block)));
+        .and_then(move |(_, block)| {
+            assert_eq!(&expected, &block);
+            Ok(())
+        });
 
     run(done).unwrap();
 }
@@ -329,15 +337,15 @@ fn test_concurrent_queries() {
         )
     }
 
-    let m = 250000_u64;
+    let m = 250_000_u64;
 
-    let expected = (m * 1) * ((m * 1) - 1) / 2
+    let expected = m * (m - 1) / 2
         + (m * 2) * ((m * 2) - 1) / 2
         + (m * 3) * ((m * 3) - 1) / 2
         + (m * 4) * ((m * 4) - 1) / 2;
 
     let requests = vec![
-        query_sum(m * 1),
+        query_sum(m),
         query_sum(m * 2),
         query_sum(m * 3),
         query_sum(m * 4),

@@ -78,12 +78,13 @@
 //!        .and_then(move |c| c.insert("payment", block))
 //!        .and_then(move |c| c.query("SELECT * FROM payment").fetch_all())
 //!        .and_then(move |(_, block)| {
-//!            Ok(for row in block.rows() {
+//!            for row in block.rows() {
 //!                let id: u32     = row.get("customer_id")?;
 //!                let amount: u32 = row.get("amount")?;
 //!                let name: &str  = row.get("account_name")?;
 //!                println!("Found payment {}: {} {}", id, amount, name);
-//!            })
+//!            }
+//!            Ok(())
 //!        })
 //!        .map_err(|err| eprintln!("database error: {}", err));
 //!
@@ -170,10 +171,10 @@ impl fmt::Debug for ClientHandle {
 impl Client {
     #[deprecated(since = "0.1.4", note = "please use Pool to connect")]
     pub fn connect(options: Options) -> BoxFuture<ClientHandle> {
-        Client::open(options.into_options_src())
+        Self::open(&options.into_options_src())
     }
 
-    pub(crate) fn open(source: OptionsSource) -> BoxFuture<ClientHandle> {
+    pub(crate) fn open(source: &OptionsSource) -> BoxFuture<ClientHandle> {
         let options = try_opt!(source.get()).as_ref().to_owned();
         let compress = options.compression;
         let timeout = options.connection_timeout;
@@ -205,7 +206,7 @@ impl Client {
 }
 
 impl ClientHandle {
-    fn hello(mut self) -> BoxFuture<ClientHandle> {
+    fn hello(mut self) -> BoxFuture<Self> {
         let context = self.context.clone();
         let pool = self.pool.clone();
         info!("[hello] -> {:?}", &context);
@@ -221,7 +222,7 @@ impl ClientHandle {
                             server_info,
                             ..context.clone()
                         };
-                        let client = ClientHandle {
+                        let client = Self {
                             inner: Some(inner),
                             context,
                             pool: pool.clone(),
@@ -235,7 +236,7 @@ impl ClientHandle {
         )
     }
 
-    pub fn ping(mut self) -> BoxFuture<ClientHandle> {
+    pub fn ping(mut self) -> BoxFuture<Self> {
         let context = self.context.clone();
 
         let options = try_opt!(context.options.get());
@@ -250,7 +251,7 @@ impl ClientHandle {
                 .call(Cmd::Ping)
                 .fold(None, move |_, packet| match packet {
                     Packet::Pong(inner) => {
-                        let client = ClientHandle {
+                        let client = Self {
                             inner: Some(inner),
                             context: context.clone(),
                             pool: pool.clone(),
@@ -283,7 +284,7 @@ impl ClientHandle {
 
     /// Fetch data from table. It returns a block that contains all rows.
     #[deprecated(since = "0.1.7", note = "please use query(sql).all() instead")]
-    pub fn query_all<Q>(self, sql: Q) -> BoxFuture<(ClientHandle, Block)>
+    pub fn query_all<Q>(self, sql: Q) -> BoxFuture<(Self, Block)>
     where
         Query: From<Q>,
     {
@@ -306,7 +307,7 @@ impl ClientHandle {
                         future::ok::<_, Error>((h, bs))
                     }
                     Packet::Eof(inner) => {
-                        let client = ClientHandle {
+                        let client = Self {
                             inner: Some(inner),
                             context: context.clone(),
                             pool: pool.clone(),
@@ -324,7 +325,7 @@ impl ClientHandle {
     }
 
     /// Convenience method to prepare and execute a single SQL statement.
-    pub fn execute<Q>(self, sql: Q) -> BoxFuture<ClientHandle>
+    pub fn execute<Q>(self, sql: Q) -> BoxFuture<Self>
     where
         Query: From<Q>,
     {
@@ -339,7 +340,7 @@ impl ClientHandle {
                 .call(Cmd::SendQuery(query, context.clone()))
                 .fold(None, move |acc, packet| match packet {
                     Packet::Eof(inner) => {
-                        let client = ClientHandle {
+                        let client = Self {
                             inner: Some(inner),
                             context: context.clone(),
                             pool: pool.clone(),
@@ -359,7 +360,7 @@ impl ClientHandle {
     }
 
     /// Convenience method to insert block of data.
-    pub fn insert<Q>(self, table: Q, block: Block) -> BoxFuture<ClientHandle>
+    pub fn insert<Q>(self, table: Q, block: Block) -> BoxFuture<Self>
     where
         Query: From<Q>,
     {
@@ -401,7 +402,7 @@ impl ClientHandle {
 
     pub(crate) fn wrap_future<T, R, F>(self, f: F) -> BoxFuture<T>
     where
-        F: FnOnce(ClientHandle) -> R + Send + 'static,
+        F: FnOnce(Self) -> R + Send + 'static,
         R: Future<Item = T, Error = Error> + Send + 'static,
         T: Send + 'static,
     {
@@ -415,7 +416,7 @@ impl ClientHandle {
     }
 
     /// Check connection and try to reconnect if necessary.
-    pub fn check_connection(mut self) -> BoxFuture<ClientHandle> {
+    pub fn check_connection(mut self) -> BoxFuture<Self> {
         let pool: Option<Pool> = self.pool.clone().into();
         self.pool.detach();
 
@@ -424,10 +425,10 @@ impl ClientHandle {
         let send_retries = options.send_retries;
         let retry_timeout = options.retry_timeout;
 
-        let reconnect = move || -> BoxFuture<ClientHandle> {
+        let reconnect = move || -> BoxFuture<Self> {
             warn!("[reconnect]");
             match pool.clone() {
-                None => Client::open(source.clone()),
+                None => Client::open(&source),
                 Some(p) => Box::new(p.get_handle()),
             }
         };
@@ -451,6 +452,6 @@ mod test_misc {
 
     lazy_static! {
         pub static ref DATABASE_URL: String =
-            env::var("DATABASE_URL").unwrap_or("tcp://localhost:9000?compression=lz4".into());
+            env::var("DATABASE_URL").unwrap_or_else(|_| "tcp://localhost:9000?compression=lz4".into());
     }
 }

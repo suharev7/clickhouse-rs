@@ -38,13 +38,13 @@ pub trait ColumnFrom {
 }
 
 impl ColumnFrom for Column {
-    fn column_from(source: Column) -> BoxColumnData {
+    fn column_from(source: Self) -> BoxColumnData {
         source.data
     }
 }
 
 impl PartialEq<Column> for Column {
-    fn eq(&self, other: &Column) -> bool {
+    fn eq(&self, other: &Self) -> bool {
         if self.len() != other.len() {
             return false;
         }
@@ -65,7 +65,7 @@ impl PartialEq<Column> for Column {
 
 impl Clone for Column {
     fn clone(&self) -> Self {
-        Column {
+        Self {
             name: self.name.clone(),
             data: self.data.clone(),
         }
@@ -77,7 +77,7 @@ impl Column {
         let name = reader.read_string()?;
         let type_name = reader.read_string()?;
         let data = ColumnData::load_data(reader, &type_name, size, tz)?;
-        let column = Column { name, data };
+        let column = Self { name, data };
         Ok(column)
     }
 
@@ -103,18 +103,18 @@ impl Column {
         self.data.len()
     }
 
-    pub(crate) fn concat<'a, I>(items: I) -> Column
+    pub(crate) fn concat<'a, I>(items: I) -> Self
     where
-        I: Iterator<Item = &'a Column>,
+        I: Iterator<Item = &'a Self>,
     {
-        let items_vec: Vec<&Column> = items.collect();
+        let items_vec: Vec<&Self> = items.collect();
         let chunks: Vec<_> = items_vec.iter().map(|column| column.data.clone()).collect();
         match items_vec.first() {
             None => unreachable!(),
             Some(ref first_column) => {
                 let name: String = first_column.name().to_string();
                 let data = ConcatColumnData::concat(chunks);
-                Column {
+                Self {
                     name,
                     data: Arc::new(data),
                 }
@@ -122,9 +122,9 @@ impl Column {
         }
     }
 
-    pub(crate) fn slice(&self, range: ops::Range<usize>) -> Column {
+    pub(crate) fn slice(&self, range: ops::Range<usize>) -> Self {
         let data = ChunkColumnData::new(self.data.clone(), range);
-        Column {
+        Self {
             name: self.name.clone(),
             data: Arc::new(data),
         }

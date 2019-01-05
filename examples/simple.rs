@@ -24,7 +24,7 @@ pub fn main() {
         .add_column("account_name", vec!["foo", "", "", "", "bar"]);
 
     let database_url =
-        env::var("DATABASE_URL").unwrap_or("tcp://localhost:9000?compression=lz4".into());
+        env::var("DATABASE_URL").unwrap_or_else(|_| "tcp://localhost:9000?compression=lz4".into());
     let pool = Pool::new(database_url);
 
     let done = pool
@@ -33,12 +33,13 @@ pub fn main() {
         .and_then(move |c| c.insert("payment", block))
         .and_then(move |c| c.query("SELECT * FROM payment").fetch_all())
         .and_then(move |(_, block)| {
-            Ok(for row in block.rows() {
+            for row in block.rows() {
                 let id: u32 = row.get("customer_id")?;
                 let amount: u32 = row.get("amount")?;
                 let name: &str = row.get("account_name")?;
                 println!("Found payment {}: {} {}", id, amount, name);
-            })
+            }
+            Ok(())
         })
         .map_err(|err| eprintln!("database error: {}", err));
 

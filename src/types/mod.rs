@@ -87,7 +87,7 @@ pub(crate) struct Context {
 
 impl Default for ServerInfo {
     fn default() -> Self {
-        ServerInfo {
+        Self {
             name: String::new(),
             revision: 0,
             minor_version: 0,
@@ -108,7 +108,7 @@ impl fmt::Debug for Context {
 
 impl Default for Context {
     fn default() -> Self {
-        Context {
+        Self {
             server_info: ServerInfo::default(),
             hostname: get_hostname().unwrap(),
             options: OptionsSource::default(),
@@ -194,7 +194,7 @@ impl SqlType {
 
 impl fmt::Display for SqlType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", SqlType::to_string(*self))
+        write!(f, "{}", Self::to_string(*self))
     }
 }
 

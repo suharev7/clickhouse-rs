@@ -22,7 +22,7 @@ impl DateConverter for u16 {
         ValueRef::Date(time.date())
     }
 
-    fn get_stamp(source: Value) -> u16 {
+    fn get_stamp(source: Value) -> Self {
         Self::get_days(Date::<Tz>::from(source))
     }
 
@@ -37,7 +37,7 @@ impl DateConverter for u32 {
         ValueRef::DateTime(time)
     }
 
-    fn get_stamp(source: Value) -> u32 {
+    fn get_stamp(source: Value) -> Self {
         DateTime::<Tz>::from(source).timestamp() as Self
     }
 

@@ -40,7 +40,7 @@ where
     }
 
     pub fn with_capacity(capacity: usize) -> List<T> {
-        List {
+        Self {
             data: Vec::with_capacity(capacity),
             phantom: PhantomData,
         }
@@ -52,7 +52,7 @@ where
     T: StatBuffer + Unmarshal<T> + Marshal + Copy + Sync + 'static,
 {
     fn from(data: Vec<u8>) -> List<T> {
-        List {
+        Self {
             data,
             phantom: PhantomData,
         }
@@ -73,12 +73,13 @@ mod test {
     use rand::random;
 
     use super::*;
+    use std::f64::EPSILON;
 
     #[test]
     fn test_push_and_len() {
-        let mut list = List::with_capacity(100500);
+        let mut list = List::with_capacity(100_500);
 
-        for i in 0..100500 {
+        for i in 0..100_500 {
             assert_eq!(list.len(), i as usize);
             list.push(i);
         }
@@ -92,8 +93,8 @@ mod test {
         for _ in 0..100 {
             assert_eq!(list.len(), vs.len());
 
-            for i in 0..vs.len() {
-                assert_eq!(list.at(i), vs[i]);
+            for (i, v) in vs.iter().enumerate() {
+                assert!((list.at(i) - *v).abs() < EPSILON);
             }
 
             let k = random();

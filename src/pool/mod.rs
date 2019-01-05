@@ -45,7 +45,7 @@ impl From<PoolBinding> for Option<Pool> {
 }
 
 impl PoolBinding {
-    pub(crate) fn take(&mut self) -> PoolBinding {
+    pub(crate) fn take(&mut self) -> Self {
         mem::replace(self, PoolBinding::None)
     }
 
@@ -123,7 +123,7 @@ impl fmt::Debug for Pool {
 
 impl Pool {
     /// Constructs a new Pool.
-    pub fn new<O>(options: O) -> Pool
+    pub fn new<O>(options: O) -> Self
     where
         O: IntoOptions,
     {
@@ -134,7 +134,7 @@ impl Pool {
             ongoing: 0,
         }));
 
-        Pool {
+        Self {
             options: options.into_options_src(),
             inner,
             min: 5,
@@ -189,8 +189,7 @@ impl Pool {
     }
 
     fn new_connection(&self) -> BoxFuture<ClientHandle> {
-        let source = self.options.clone();
-        Client::open(source)
+        Client::open(&self.options)
     }
 
     fn handle_futures(&mut self) -> ClickhouseResult<()> {
@@ -264,7 +263,7 @@ impl Drop for ClientHandle {
             }
 
             let context = self.context.clone();
-            let client = ClientHandle {
+            let client = Self {
                 inner: Some(inner),
                 pool: pool.clone(),
                 context,
@@ -340,7 +339,7 @@ mod test {
             .pool_max(10);
         let pool = Pool::new(options);
 
-        fn exec_query(pool: Pool) -> BoxFuture<u32> {
+        fn exec_query(pool: &Pool) -> BoxFuture<u32> {
             Box::new(
                 pool.get_handle()
                     .and_then(|c| c.query("SELECT toUInt32(1), sleep(1)").fetch_all())
@@ -357,7 +356,7 @@ mod test {
 
         let mut requests = Vec::new();
         for _ in 0..expected as usize {
-            requests.push(exec_query(pool.clone()))
+            requests.push(exec_query(&pool))
         }
 
         let done = future::join_all(requests).and_then(move |xs| {

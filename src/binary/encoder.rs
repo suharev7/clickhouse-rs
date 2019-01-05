@@ -9,7 +9,7 @@ pub struct Encoder {
 }
 
 impl Encoder {
-    pub fn new() -> Encoder {
+    pub fn new() -> Self {
         Encoder { buffer: Vec::new() }
     }
 

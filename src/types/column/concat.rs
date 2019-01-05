@@ -10,11 +10,11 @@ pub struct ConcatColumnData {
 }
 
 impl ConcatColumnData {
-    pub fn concat(data: Vec<BoxColumnData>) -> ConcatColumnData {
-        ConcatColumnData::check_columns(&data);
+    pub fn concat(data: Vec<BoxColumnData>) -> Self {
+        Self::check_columns(&data);
 
         let index = build_index(data.iter().map(|x| x.len()));
-        ConcatColumnData { data, index }
+        Self { data, index }
     }
 
     fn check_columns(data: &[BoxColumnData]) {
@@ -116,7 +116,7 @@ mod test {
     #[test]
     fn test_build_index() {
         let sizes = vec![2_usize, 3, 4];
-        let index = build_index(sizes.iter().map(|x| *x));
+        let index = build_index(sizes.iter().cloned());
         assert_eq!(index, vec![0, 2, 5, 9])
     }
 
@@ -132,7 +132,7 @@ mod test {
         assert_eq!(find_chunk(&index, 6), 2);
 
         assert_eq!(find_chunk(&index, 7), 2);
-        assert_eq!(find_chunk(&vec![0], 7), 0);
+        assert_eq!(find_chunk(&[0], 7), 0);
     }
 
     #[test]

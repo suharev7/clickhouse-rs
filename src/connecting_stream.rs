@@ -30,7 +30,7 @@ pub(crate) struct ConnectingStream {
 }
 
 impl ConnectingStream {
-    pub(crate) fn new<S>(addr: S) -> ConnectingStream
+    pub(crate) fn new<S>(addr: S) -> Self
     where
         S: ToSocketAddrs,
     {
@@ -45,16 +45,16 @@ impl ConnectingStream {
                         io::ErrorKind::InvalidInput,
                         "Could not resolve to any address.",
                     );
-                    ConnectingStream {
+                    Self {
                         state: State::Fail(future::err(err)),
                     }
                 } else {
-                    ConnectingStream {
+                    Self {
                         state: State::Wait(future::select_ok(streams)),
                     }
                 }
             }
-            Err(err) => ConnectingStream {
+            Err(err) => Self {
                 state: State::Fail(future::err(err)),
             },
         }

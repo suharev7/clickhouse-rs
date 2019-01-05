@@ -13,14 +13,14 @@ pub struct StringColumnData {
 }
 
 impl StringColumnData {
-    pub fn with_capacity(capacity: usize) -> StringColumnData {
-        StringColumnData {
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
             data: Vec::with_capacity(capacity),
         }
     }
 
-    pub fn load<T: ReadEx>(reader: &mut T, size: usize) -> Result<StringColumnData, Error> {
-        let mut data = StringColumnData::with_capacity(size);
+    pub fn load<T: ReadEx>(reader: &mut T, size: usize) -> Result<Self, Error> {
+        let mut data = Self::with_capacity(size);
 
         for _ in 0..size {
             data.push(Value::from(reader.read_string()?));
@@ -31,13 +31,13 @@ impl StringColumnData {
 }
 
 impl ColumnFrom for Vec<String> {
-    fn column_from(data: Vec<String>) -> BoxColumnData {
+    fn column_from(data: Self) -> BoxColumnData {
         Arc::new(StringColumnData { data })
     }
 }
 
 impl<'a> ColumnFrom for Vec<&'a str> {
-    fn column_from(source: Vec<&'a str>) -> BoxColumnData {
+    fn column_from(source: Self) -> BoxColumnData {
         let data = source.iter().map(|s| s.to_string()).collect();
         Arc::new(StringColumnData { data })
     }

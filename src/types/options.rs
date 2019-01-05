@@ -60,7 +60,7 @@ impl OptionsSource {
 
 impl Default for OptionsSource {
     fn default() -> Self {
-        OptionsSource {
+        Self {
             state: Arc::new(Mutex::new(State::Raw(Options::default()))),
         }
     }
@@ -101,19 +101,19 @@ pub enum Address {
 }
 
 impl From<SocketAddr> for Address {
-    fn from(addr: SocketAddr) -> Address {
+    fn from(addr: SocketAddr) -> Self {
         Address::SocketAddr(addr)
     }
 }
 
 impl From<String> for Address {
-    fn from(url: String) -> Address {
+    fn from(url: String) -> Self {
         Address::Url(url)
     }
 }
 
 impl From<&str> for Address {
-    fn from(url: &str) -> Address {
+    fn from(url: &str) -> Self {
         Address::Url(url.to_string())
     }
 }
@@ -169,8 +169,8 @@ pub struct Options {
 }
 
 impl Default for Options {
-    fn default() -> Options {
-        Options {
+    fn default() -> Self {
+        Self {
             addr: Address::SocketAddr("127.0.0.1:9000".parse().unwrap()),
             database: "default".to_string(),
             username: "default".to_string(),
@@ -191,8 +191,8 @@ impl Default for Options {
 
 macro_rules! property {
     ( $k:ident: $t:ty ) => {
-        pub fn $k(self, $k: $t) -> Options {
-            Options {
+        pub fn $k(self, $k: $t) -> Self {
+            Self {
                 $k: $k.into(),
                 ..self
             }
@@ -200,8 +200,8 @@ macro_rules! property {
     };
     ( $(#[$attr:meta])* => $k:ident: $t:ty ) => {
         $(#[$attr])*
-        pub fn $k(self, $k: $t) -> Options {
-            Options {
+        pub fn $k(self, $k: $t) -> Self {
+            Self {
                 $k: $k.into(),
                 ..self
             }
@@ -211,13 +211,13 @@ macro_rules! property {
 
 impl Options {
     /// Constructs a new Options.
-    pub fn new<A>(addr: A) -> Options
+    pub fn new<A>(addr: A) -> Self
     where
         Address: From<A>,
     {
-        Options {
+        Self {
             addr: From::from(addr),
-            ..Options::default()
+            ..Self::default()
         }
     }
 
@@ -237,8 +237,8 @@ impl Options {
     }
 
     /// Enable compression (defaults to `false`).
-    pub fn with_compression(self) -> Options {
-        Options {
+    pub fn with_compression(self) -> Self {
+        Self {
             compression: true,
             ..self
         }
@@ -293,7 +293,7 @@ impl Options {
 impl FromStr for Options {
     type Err = Error;
 
-    fn from_str(url: &str) -> Result<Options, Error> {
+    fn from_str(url: &str) -> Result<Self, Error> {
         from_url(url)
     }
 }
@@ -324,8 +324,7 @@ fn from_url(url_str: &str) -> ClickhouseResult<Options> {
 
     let host = url
         .host_str()
-        .map(String::from)
-        .unwrap_or_else(|| "127.0.0.1".into());
+        .map_or_else(|| "127.0.0.1".into(), String::from);
 
     let port = url.port().unwrap_or(9000);
     options.addr = format!("{}:{}", host, port).into();

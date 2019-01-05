@@ -18,7 +18,7 @@ mod test {
         let expected = [148u8, 145, 6, 0, 0, 0, 0, 0, 0, 0];
         let mut buffer = [0u8; 10];
 
-        let actual = super::put_uvarint(&mut buffer[..], 100500);
+        let actual = super::put_uvarint(&mut buffer[..], 100_500);
 
         assert_eq!(actual, 3);
         assert_eq!(buffer, expected);

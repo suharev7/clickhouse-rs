@@ -7,7 +7,7 @@ pub trait StatBuffer {
 }
 
 impl StatBuffer for u8 {
-    type Buffer = [u8; 1];
+    type Buffer = [Self; 1];
 
     fn buffer() -> Self::Buffer {
         [0; 1]

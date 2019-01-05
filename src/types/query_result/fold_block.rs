@@ -34,7 +34,7 @@ where
 {
     pub(super) fn new(block: Block, init: T, f: Arc<F>) -> FoldBlock<T, F, Fut> {
         let block = Arc::new(block);
-        FoldBlock {
+        Self {
             state: State::Ready(init),
             rows: rows(block),
             f,

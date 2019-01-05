@@ -53,7 +53,7 @@ where
 }
 
 impl ColumnFrom for Vec<DateTime<Tz>> {
-    fn column_from(source: Vec<DateTime<Tz>>) -> BoxColumnData {
+    fn column_from(source: Self) -> BoxColumnData {
         let mut data = List::<u32>::with_capacity(source.len());
         for s in source {
             data.push(s.timestamp() as u32);
@@ -65,7 +65,7 @@ impl ColumnFrom for Vec<DateTime<Tz>> {
 }
 
 impl ColumnFrom for Vec<Date<Tz>> {
-    fn column_from(source: Vec<Date<Tz>>) -> BoxColumnData {
+    fn column_from(source: Self) -> BoxColumnData {
         let mut data = List::<u16>::with_capacity(source.len());
         for s in source {
             data.push(u16::get_days(s));

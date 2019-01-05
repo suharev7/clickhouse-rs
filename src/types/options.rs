@@ -44,6 +44,7 @@ impl OptionsSource {
     pub(crate) fn get(&self) -> ClickhouseResult<Cow<Options>> {
         let mut state = self.state.lock().unwrap();
         loop {
+            let new_state;
             match &*state {
                 State::Raw(ref options) => {
                     let ptr = options as *const Options;
@@ -51,9 +52,10 @@ impl OptionsSource {
                 }
                 State::Url(url) => {
                     let options = from_url(&url)?;
-                    *state = State::Raw(options);
+                    new_state = State::Raw(options);
                 }
             }
+            *state = new_state;
         }
     }
 }

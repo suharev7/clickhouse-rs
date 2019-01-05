@@ -112,6 +112,7 @@ extern crate lz4;
 #[cfg(test)]
 extern crate rand;
 extern crate tokio;
+extern crate tokio_timer;
 extern crate url;
 
 use std::fmt;
@@ -239,9 +240,8 @@ impl ClientHandle {
     pub fn ping(mut self) -> BoxFuture<Self> {
         let context = self.context.clone();
 
-        let options = try_opt!(context.options.get());
+        let timeout = try_opt!(self.context.options.get()).ping_timeout;
 
-        let timeout = options.ping_timeout;
         let pool = self.pool.clone();
         info!("[ping]");
         Box::new(
@@ -406,9 +406,9 @@ impl ClientHandle {
         R: Future<Item = T, Error = Error> + Send + 'static,
         T: Send + 'static,
     {
-        let options = try_opt!(self.context.options.get());
+        let ping_before_query = try_opt!(self.context.options.get()).ping_before_query;
 
-        if options.ping_before_query {
+        if ping_before_query {
             Box::new(self.check_connection().and_then(move |c| Box::new(f(c))))
         } else {
             Box::new(f(self))
@@ -421,9 +421,11 @@ impl ClientHandle {
         self.pool.detach();
 
         let source = self.context.options.clone();
-        let options = try_opt!(source.get());
-        let send_retries = options.send_retries;
-        let retry_timeout = options.retry_timeout;
+
+        let (send_retries, retry_timeout) = {
+            let options = try_opt!(source.get());
+            (options.send_retries, options.retry_timeout)
+        };
 
         let reconnect = move || -> BoxFuture<Self> {
             warn!("[reconnect]");

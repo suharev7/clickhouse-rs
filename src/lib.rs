@@ -56,7 +56,7 @@
 //! use clickhouse_rs::{Pool, types::Block};
 //! # use std::env;
 //!
-//! pub fn main() {
+//! fn main() {
 //!     let ddl = "
 //!         CREATE TABLE IF NOT EXISTS payment (
 //!             customer_id  UInt32,
@@ -283,45 +283,12 @@ impl ClientHandle {
     }
 
     /// Fetch data from table. It returns a block that contains all rows.
-    #[deprecated(since = "0.1.7", note = "please use query(sql).all() instead")]
+    #[deprecated(since = "0.1.7", note = "please use query(sql).fetch_all() instead")]
     pub fn query_all<Q>(self, sql: Q) -> BoxFuture<(Self, Block)>
     where
         Query: From<Q>,
     {
-        let context = self.context.clone();
-        let pool = self.pool.clone();
-        let query = Query::from(sql);
-        let init = (None, vec![]);
-
-        self.wrap_future(move |mut c| {
-            info!("[send query] {}", query.get_sql());
-            c.inner
-                .take()
-                .unwrap()
-                .call(Cmd::SendQuery(query, context.clone()))
-                .fold(init, move |(h, mut bs), packet| match packet {
-                    Packet::Block(b) => {
-                        if !b.is_empty() {
-                            bs.push(b);
-                        }
-                        future::ok::<_, Error>((h, bs))
-                    }
-                    Packet::Eof(inner) => {
-                        let client = Self {
-                            inner: Some(inner),
-                            context: context.clone(),
-                            pool: pool.clone(),
-                        };
-                        future::ok((Some(client), bs))
-                    }
-                    Packet::ProfileInfo(_) | Packet::Progress(_) => future::ok((h, bs)),
-                    Packet::Exception(exception) => {
-                        future::err::<_, Error>(Error::Server(exception))
-                    }
-                    _ => future::err::<_, Error>(Error::Driver(DriverError::UnexpectedPacket)),
-                })
-                .map(|(client, blocks)| (client.unwrap(), Block::concat(&blocks[..])))
-        })
+        self.query(sql).fetch_all()
     }
 
     /// Convenience method to prepare and execute a single SQL statement.

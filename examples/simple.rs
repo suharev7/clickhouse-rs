@@ -7,7 +7,7 @@ use futures::Future;
 
 use clickhouse_rs::{types::Block, Pool};
 
-pub fn main() {
+fn main() {
     env::set_var("RUST_LOG", "clickhouse_rs=debug");
     env_logger::init();
 

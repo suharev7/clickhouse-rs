@@ -287,7 +287,7 @@ mod test {
     use super::Pool;
 
     /// Same as `tokio::run`, but will panic if future panics and will return the result
-        /// of future execution.
+    /// of future execution.
     fn run<F, T, U>(future: F) -> Result<T, U>
     where
         F: Future<Item = T, Error = U> + Send + 'static,

@@ -22,3 +22,8 @@ pub fn description() -> String {
         CLICK_HOUSE_REVISION
     )
 }
+
+#[test]
+fn test_description() {
+    assert_eq!(description(), "Rust SQLDriver 1.1.54213")
+}

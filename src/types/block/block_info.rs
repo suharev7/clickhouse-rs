@@ -1,5 +1,7 @@
-use crate::binary::{Encoder, ReadEx};
-use crate::types::ClickhouseResult;
+use crate::{
+    binary::{Encoder, ReadEx},
+    types::ClickhouseResult,
+};
 
 #[allow(dead_code)]
 #[derive(Copy, Clone)]

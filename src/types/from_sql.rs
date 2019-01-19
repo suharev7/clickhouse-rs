@@ -1,8 +1,10 @@
 use chrono::prelude::*;
 use chrono_tz::Tz;
 
-use crate::errors::{Error, FromSqlError};
-use crate::types::{SqlType, ValueRef};
+use crate::{
+    errors::{Error, FromSqlError},
+    types::{SqlType, ValueRef},
+};
 
 pub type FromSqlResult<T> = Result<T, Error>;
 
@@ -72,8 +74,7 @@ from_sql_impl! {
 
 #[cfg(test)]
 mod test {
-    use crate::types::from_sql::FromSql;
-    use crate::types::ValueRef;
+    use crate::types::{ValueRef, from_sql::FromSql};
 
     #[test]
     fn test_u8() {

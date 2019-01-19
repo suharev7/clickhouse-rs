@@ -9,8 +9,10 @@ use crate::{
     ClientHandle,
 };
 
-use self::fold_block::FoldBlock;
-use self::either::Either;
+use self::{
+    fold_block::FoldBlock,
+    either::Either,
+};
 
 mod fold_block;
 mod either;

@@ -1,5 +1,7 @@
-use crate::binary;
-use crate::types::{DateConverter, Marshal, StatBuffer, Value, ValueRef};
+use crate::{
+    binary,
+    types::{DateConverter, Marshal, StatBuffer, Value, ValueRef},
+};
 
 const MAX_VARINT_LEN64: usize = 10;
 
@@ -19,8 +21,8 @@ impl Encoder {
         self.write_bytes(&scratch[..ln]);
     }
 
-    pub fn string(&mut self, text: &str) {
-        let str = text.as_bytes();
+    pub fn string(&mut self, text: impl AsRef<str>) {
+        let str = text.as_ref().as_bytes();
         self.uvarint(str.len() as u64);
         self.write_bytes(str);
     }

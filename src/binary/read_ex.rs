@@ -1,7 +1,9 @@
 use std::io;
 
-use crate::errors::{DriverError, Error};
-use crate::types::{ClickhouseResult, StatBuffer, Unmarshal};
+use crate::{
+    errors::{DriverError, Error},
+    types::{ClickhouseResult, StatBuffer, Unmarshal},
+};
 
 pub trait ReadEx {
     fn read_bytes(&mut self, rv: &mut [u8]) -> ClickhouseResult<()>;

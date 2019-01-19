@@ -134,11 +134,26 @@ impl Pool {
             ongoing: 0,
         }));
 
+        let options_src = options.into_options_src();
+
+        let mut min = 5;
+        let mut max = 10;
+
+        match options_src.get() {
+            Ok(opt) => {
+                min = opt.pool_min;
+                max = opt.pool_max;
+            }
+            Err(err) => {
+                error!("{}", err)
+            }
+        }
+
         Self {
-            options: options.into_options_src(),
+            options: options_src,
             inner,
-            min: 5,
-            max: 10,
+            min,
+            max,
         }
     }
 
@@ -194,14 +209,14 @@ impl Pool {
 
     fn handle_futures(&mut self) -> ClickhouseResult<()> {
         self.with_inner(|mut inner| {
-            let len = inner.new.len();
-
-            for i in 0..len {
+            let mut i = 0;
+            while i < inner.new.len() {
                 let result = inner.new[i].poll();
                 match result {
                     Ok(Async::Ready(client)) => {
                         inner.new.swap_remove(i);
-                        inner.idle.push(client)
+                        inner.idle.push(client);
+                        continue;
                     }
                     Ok(Async::NotReady) => (),
                     Err(err) => {
@@ -209,6 +224,7 @@ impl Pool {
                         return Err(err);
                     }
                 }
+                i += 1;
             }
 
             Ok(())
@@ -277,17 +293,19 @@ impl Drop for ClientHandle {
 mod test {
     use std::{
         str::FromStr,
+        sync::{Arc, atomic::{AtomicBool, Ordering}},
+        thread::spawn,
         time::{Duration, Instant},
     };
 
     use tokio::prelude::*;
 
-    use crate::{io::BoxFuture, test_misc::DATABASE_URL, types::Options};
+    use crate::{errors::Error, io::BoxFuture, test_misc::DATABASE_URL, types::Options};
 
     use super::Pool;
 
     /// Same as `tokio::run`, but will panic if future panics and will return the result
-        /// of future execution.
+    /// of future execution.
     fn run<F, T, U>(future: F) -> Result<T, U>
     where
         F: Future<Item = T, Error = U> + Send + 'static,
@@ -335,8 +353,8 @@ mod test {
     fn test_many_connection() {
         let options = Options::from_str(DATABASE_URL.as_str())
             .unwrap()
-            .pool_min(5)
-            .pool_max(10);
+            .pool_min(6)
+            .pool_max(12);
         let pool = Pool::new(options);
 
         fn exec_query(pool: &Pool) -> BoxFuture<u32> {
@@ -350,7 +368,7 @@ mod test {
             )
         }
 
-        let expected = 20_u32;
+        let expected = 22_u32;
 
         let start = Instant::now();
 
@@ -372,7 +390,7 @@ mod test {
         assert!(spent >= Duration::from_millis(2000));
         assert!(spent < Duration::from_millis(2500));
 
-        assert_eq!(pool.info().idle_len, 5);
+        assert_eq!(pool.info().idle_len, 6);
     }
 
     #[test]
@@ -391,5 +409,59 @@ mod test {
         assert_eq!(info.ongoing, 0);
         assert_eq!(info.tasks_len, 0);
         assert_eq!(info.idle_len, 0);
+    }
+
+    #[test]
+    fn test_race_condition() {
+        use tokio::runtime::current_thread;
+        use futures::future::lazy;
+
+        let options = Options::from_str(DATABASE_URL.as_str())
+            .unwrap()
+            .pool_min(80)
+            .pool_max(99);
+        let pool = Pool::new(options);
+
+        let done = future::lazy(move || {
+            let mut threads = Vec::new();
+            let barer = Arc::new(AtomicBool::new(true));
+
+            for _ in 0..100 {
+                let local_barer = barer.clone();
+                let mut local_pool = pool.clone();
+
+                let thread = spawn(|| {
+                    current_thread::block_on_all(lazy(|| {
+                        current_thread::spawn(lazy(move || {
+                            while local_barer.load(Ordering::SeqCst) {
+                            }
+
+                            match local_pool.poll() {
+                                Ok(_) => Ok(()),
+                                Err(_) => Err(()),
+                            }
+                        }));
+
+                        Ok::<_, Error>(())
+                    }))
+                });
+                threads.push(thread);
+            }
+
+            barer.store(false, Ordering::SeqCst);
+            Ok(threads)
+        }).and_then(|threads| {
+
+            for thread in threads {
+                match thread.join() {
+                    Ok(_) => {},
+                    Err(_) => return Err(())
+                }
+            }
+
+            Ok(())
+        });
+
+        run(done).unwrap();
     }
 }

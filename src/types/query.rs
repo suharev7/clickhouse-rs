@@ -5,16 +5,16 @@ pub struct Query {
 }
 
 impl Query {
-    pub fn new(sql: &str) -> Self {
+    pub fn new(sql: impl AsRef<str>) -> Self {
         Self {
-            sql: sql.to_string(),
+            sql: sql.as_ref().to_string(),
             id: "".to_string(),
         }
     }
 
-    pub fn id(self, id: &str) -> Self {
+    pub fn id(self, id: impl AsRef<str>) -> Self {
         Self {
-            id: id.to_string(),
+            id: id.as_ref().to_string(),
             ..self
         }
     }
@@ -38,8 +38,11 @@ impl Query {
     }
 }
 
-impl<'a> From<&'a str> for Query {
-    fn from(source: &str) -> Self {
+impl<T> From<T> for Query
+where
+    T: AsRef<str>
+{
+    fn from(source: T) -> Self {
         Self::new(source)
     }
 }

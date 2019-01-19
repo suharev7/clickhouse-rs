@@ -9,10 +9,10 @@ use chrono::prelude::*;
 use chrono_tz::Tz::{self, UTC};
 use tokio::prelude::*;
 
-use clickhouse_rs::{Pool, errors::Error, types::Block};
+use clickhouse_rs::{errors::Error, types::Block, Pool};
 use std::f64::EPSILON;
 
-pub type IoFuture<T> = Box<Future<Item = T, Error = Error> + Send>;
+pub type BoxFuture<T> = Box<Future<Item = T, Error = Error> + Send>;
 
 fn database_url() -> String {
     env::var("DATABASE_URL").unwrap_or_else(|_| "tcp://localhost:9000?compression=lz4".into())
@@ -35,12 +35,17 @@ where
 #[test]
 fn test_ping() {
     let pool = Pool::new(database_url());
-    let done = pool
-        .get_handle()
-        .and_then(|c| c.ping())
-        .and_then(|_| Ok(()));
+    let done = pool.get_handle().and_then(|c| c.ping()).map(|_| ());
 
     run(done).unwrap()
+}
+
+#[test]
+fn fn_connection_by_wrong_address() {
+    let pool = Pool::new("tcp://badaddr:9000");
+    let done = pool.get_handle().and_then(|c| c.ping()).map(|_| ());
+
+    run(done).unwrap_err();
 }
 
 #[test]
@@ -57,7 +62,7 @@ fn test_create_table() {
         .and_then(move |c| c.execute("DROP TABLE IF EXISTS clickhouse_test_create_table"))
         .and_then(move |c| c.execute(ddl))
         .and_then(move |c| c.execute(ddl))
-        .and_then(|_| Ok(()));
+        .map(|_| ());
 
     let err = run(done).unwrap_err();
 
@@ -135,10 +140,7 @@ fn test_insert() {
         .and_then(move |c| c.execute(ddl))
         .and_then(move |c| c.insert("clickhouse_test_insert", block))
         .and_then(move |c| c.query("SELECT * FROM clickhouse_test_insert").fetch_all())
-        .and_then(move |(_, actual)| {
-            assert_eq!(expected.as_ref(), &actual);
-            Ok(())
-        });
+        .map(move |(_, actual)| assert_eq!(expected.as_ref(), &actual));
 
     run(done).unwrap()
 }
@@ -229,7 +231,7 @@ fn test_simple_select() {
         .and_then(|c| c.query("SELECT a FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a) ORDER BY a ASC").fetch_all())
         .and_then(|(c, actual)| {
             let expected = Block::new()
-                .add_column("a", vec![1u8, 2, 3]);
+                .add_column("a", vec![1_u8, 2, 3]);
             assert_eq!(expected, actual);
             Ok(c)
         })
@@ -250,7 +252,7 @@ fn test_simple_select() {
         })
         .and_then(|c| c.query("SELECT median(a) FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a)").fetch_all())
         .and_then(|(_, r)| {
-            assert!((2f64 - r.get::<f64, _>(0, 0)?).abs() < EPSILON);
+            assert!((2_f64 - r.get::<f64, _>(0, 0)?).abs() < EPSILON);
             Ok(())
         });
 
@@ -271,11 +273,13 @@ fn test_temporary_table() {
                  SELECT number AS ID FROM system.numbers LIMIT 10",
             )
         })
-        .and_then(|c| c.query("SELECT ID AS ID FROM clickhouse_test_temporary_table").fetch_all())
-        .and_then(|(_, block)| {
-            let expected = Block::new().add_column("ID", (0u64..10).collect::<Vec<_>>());
-            assert_eq!(block, expected);
-            Ok(())
+        .and_then(|c| {
+            c.query("SELECT ID AS ID FROM clickhouse_test_temporary_table")
+                .fetch_all()
+        })
+        .map(|(_, block)| {
+            let expected = Block::new().add_column("ID", (0_u64..10).collect::<Vec<_>>());
+            assert_eq!(block, expected)
         });
 
     run(done).unwrap();
@@ -309,31 +313,25 @@ fn test_with_totals() {
         .and_then(move |c| c.execute(ddl))
         .and_then(move |c| c.insert("clickhouse_test_with_totals", block))
         .and_then(move |c| c.query(query).fetch_all())
-        .and_then(move |(_, block)| {
-            assert_eq!(&expected, &block);
-            Ok(())
-        });
+        .map(move |(_, block)| assert_eq!(&expected, &block));
 
     run(done).unwrap();
 }
 
 #[test]
 fn test_concurrent_queries() {
-    fn query_sum(n: u64) -> IoFuture<u64> {
+    fn query_sum(n: u64) -> BoxFuture<u64> {
         let sql = format!("SELECT number FROM system.numbers LIMIT {}", n);
 
         let pool = Pool::new(database_url());
         Box::new(
             pool.get_handle()
-                .and_then(move |c| c.query(sql.as_str()).fetch_all())
-                .and_then(move |(_, block)| {
-                    let mut total = 0_u64;
-                    for row in 0_usize..block.row_count() {
-                        let x: u64 = block.get(row, "number")?;
-                        total += x;
-                    }
-                    Ok(total)
-                }),
+                .and_then(move |c| {
+                    c.query(sql.as_str()).fold(0_u64, |acc, row| {
+                        Ok(acc + row.get::<u64, _>("number")?)
+                    })
+                })
+                .map(|(_, value)| value),
         )
     }
 
@@ -358,4 +356,22 @@ fn test_concurrent_queries() {
     });
 
     run(done).unwrap();
+}
+
+#[test]
+fn test_big_block() {
+    let sql = "SELECT
+        number, number, number, number, number, number, number, number, number, number
+        FROM system.numbers LIMIT 20000";
+
+    let pool = Pool::new(database_url());
+    let done = pool
+        .get_handle()
+        .and_then(move |c| c.query(sql).fetch_all())
+        .and_then(move |(_, block)| {
+            Ok(block.row_count())
+        });
+
+    let actual = run(done).unwrap();
+    assert_eq!(actual, 20000)
 }

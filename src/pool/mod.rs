@@ -277,17 +277,19 @@ impl Drop for ClientHandle {
 mod test {
     use std::{
         str::FromStr,
+        sync::{Arc, atomic::{AtomicBool, Ordering}},
+        thread::spawn,
         time::{Duration, Instant},
     };
 
     use tokio::prelude::*;
 
-    use crate::{io::BoxFuture, test_misc::DATABASE_URL, types::Options};
+    use crate::{errors::Error, io::BoxFuture, test_misc::DATABASE_URL, types::Options};
 
     use super::Pool;
 
     /// Same as `tokio::run`, but will panic if future panics and will return the result
-        /// of future execution.
+    /// of future execution.
     fn run<F, T, U>(future: F) -> Result<T, U>
     where
         F: Future<Item = T, Error = U> + Send + 'static,
@@ -391,5 +393,59 @@ mod test {
         assert_eq!(info.ongoing, 0);
         assert_eq!(info.tasks_len, 0);
         assert_eq!(info.idle_len, 0);
+    }
+
+    #[test]
+    fn test_race_condition() {
+        use tokio::runtime::current_thread;
+        use futures::future::lazy;
+
+        let options = Options::from_str(DATABASE_URL.as_str())
+            .unwrap()
+            .pool_min(80)
+            .pool_max(99);
+        let pool = Pool::new(options);
+
+        let done = future::lazy(move || {
+            let mut threads = Vec::new();
+            let barer = Arc::new(AtomicBool::new(true));
+
+            for _ in 0..100 {
+                let local_barer = barer.clone();
+                let mut local_pool = pool.clone();
+
+                let thread = spawn(|| {
+                    current_thread::block_on_all(lazy(|| {
+                        current_thread::spawn(lazy(move || {
+                            while local_barer.load(Ordering::SeqCst) {
+                            }
+
+                            match local_pool.poll() {
+                                Ok(_) => Ok(()),
+                                Err(_) => Err(()),
+                            }
+                        }));
+
+                        Ok::<_, Error>(())
+                    }))
+                });
+                threads.push(thread);
+            }
+
+            barer.store(false, Ordering::SeqCst);
+            Ok(threads)
+        }).and_then(|threads| {
+
+            for thread in threads {
+                match thread.join() {
+                    Ok(_) => {},
+                    Err(_) => return Err(())
+                }
+            }
+
+            Ok(())
+        });
+
+        run(done).unwrap();
     }
 }

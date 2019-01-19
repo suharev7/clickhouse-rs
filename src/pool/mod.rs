@@ -193,26 +193,26 @@ impl Pool {
     }
 
     fn handle_futures(&mut self) -> ClickhouseResult<()> {
-        let len = self.with_inner(|inner| inner.new.len());
+        self.with_inner(|mut inner| {
+            let len = inner.new.len();
 
-        for i in 0..len {
-            let result = self.with_inner(|mut inner| inner.new[i].poll());
-            match result {
-                Ok(Async::Ready(client)) => {
-                    self.with_inner(|mut inner| {
+            for i in 0..len {
+                let result = inner.new[i].poll();
+                match result {
+                    Ok(Async::Ready(client)) => {
                         inner.new.swap_remove(i);
                         inner.idle.push(client)
-                    });
-                }
-                Ok(Async::NotReady) => (),
-                Err(err) => {
-                    self.with_inner(|mut inner| inner.new.swap_remove(i));
-                    return Err(err);
+                    }
+                    Ok(Async::NotReady) => (),
+                    Err(err) => {
+                        inner.new.swap_remove(i);
+                        return Err(err);
+                    }
                 }
             }
-        }
 
-        Ok(())
+            Ok(())
+        })
     }
 
     fn take_conn(&mut self) -> Option<ClientHandle> {

@@ -1,6 +1,7 @@
 use std::{
     io,
     io::Read,
+    mem,
     os::raw::{c_char, c_int},
 };
 
@@ -35,7 +36,10 @@ where
     }
 
     fn fill(&mut self) -> ClickhouseResult<()> {
-        let tmp = decompress_buffer(&mut self.reader)?;
+        let cursor = mem::replace(&mut self.cursor, io::Cursor::new(Vec::new()));
+        let buffer = cursor.into_inner();
+
+        let tmp = decompress_buffer(&mut self.reader, buffer)?;
         self.cursor = io::Cursor::new(tmp);
         Ok(())
     }
@@ -54,7 +58,7 @@ where
     }
 }
 
-fn decompress_buffer<R>(reader: &mut R) -> ClickhouseResult<Vec<u8>>
+fn decompress_buffer<R>(reader: &mut R, mut buffer: Vec<u8>) -> ClickhouseResult<Vec<u8>>
 where
     R: ReadEx,
 {
@@ -76,23 +80,23 @@ where
         return Err(raise_error("compressed data too big".to_string()));
     }
 
-    let mut tmp = vec![0_u8; compressed as usize];
+    buffer.resize(compressed as usize, 0_u8);
     {
-        let mut cursor = io::Cursor::new(&mut tmp);
+        let mut cursor = io::Cursor::new(&mut buffer);
         cursor.write_u8(0x82)?;
         cursor.write_u32::<LittleEndian>(compressed)?;
         cursor.write_u32::<LittleEndian>(original)?;
     }
-    reader.read_bytes(&mut tmp[9..])?;
+    reader.read_bytes(&mut buffer[9..])?;
 
-    if h != city_hash_128(&tmp) {
+    if h != city_hash_128(&buffer) {
         return Err(raise_error("data was corrupted".to_string()));
     }
 
     let data = vec![0_u8; original as usize];
     let status = unsafe {
         LZ4_decompress_safe(
-            (tmp.as_mut_ptr() as *const c_char).add(9),
+            (buffer.as_mut_ptr() as *const c_char).add(9),
             data.as_ptr() as *mut i8,
             (compressed - 9) as c_int,
             original as c_int,
@@ -128,7 +132,7 @@ mod test {
         ];
 
         let mut cursor = io::Cursor::new(&source[..]);
-        let actual = decompress_buffer(&mut cursor).unwrap();
+        let actual = decompress_buffer(&mut cursor, Vec::new()).unwrap();
 
         assert_eq!(actual, expected);
     }

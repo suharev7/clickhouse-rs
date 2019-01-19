@@ -134,11 +134,26 @@ impl Pool {
             ongoing: 0,
         }));
 
+        let options_src = options.into_options_src();
+
+        let mut min = 5;
+        let mut max = 10;
+
+        match options_src.get() {
+            Ok(opt) => {
+                min = opt.pool_min;
+                max = opt.pool_max;
+            }
+            Err(err) => {
+                error!("{}", err)
+            }
+        }
+
         Self {
-            options: options.into_options_src(),
+            options: options_src,
             inner,
-            min: 5,
-            max: 10,
+            min,
+            max,
         }
     }
 
@@ -194,14 +209,14 @@ impl Pool {
 
     fn handle_futures(&mut self) -> ClickhouseResult<()> {
         self.with_inner(|mut inner| {
-            let len = inner.new.len();
-
-            for i in 0..len {
+            let mut i = 0;
+            while i < inner.new.len() {
                 let result = inner.new[i].poll();
                 match result {
                     Ok(Async::Ready(client)) => {
                         inner.new.swap_remove(i);
-                        inner.idle.push(client)
+                        inner.idle.push(client);
+                        continue;
                     }
                     Ok(Async::NotReady) => (),
                     Err(err) => {
@@ -209,6 +224,7 @@ impl Pool {
                         return Err(err);
                     }
                 }
+                i += 1;
             }
 
             Ok(())
@@ -335,8 +351,8 @@ mod test {
     fn test_many_connection() {
         let options = Options::from_str(DATABASE_URL.as_str())
             .unwrap()
-            .pool_min(5)
-            .pool_max(10);
+            .pool_min(6)
+            .pool_max(12);
         let pool = Pool::new(options);
 
         fn exec_query(pool: &Pool) -> BoxFuture<u32> {
@@ -350,7 +366,7 @@ mod test {
             )
         }
 
-        let expected = 20_u32;
+        let expected = 22_u32;
 
         let start = Instant::now();
 
@@ -372,7 +388,7 @@ mod test {
         assert!(spent >= Duration::from_millis(2000));
         assert!(spent < Duration::from_millis(2500));
 
-        assert_eq!(pool.info().idle_len, 5);
+        assert_eq!(pool.info().idle_len, 6);
     }
 
     #[test]

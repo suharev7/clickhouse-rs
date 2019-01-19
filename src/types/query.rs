@@ -46,9 +46,3 @@ where
         Self::new(source)
     }
 }
-
-impl<'a> From<String> for Query {
-    fn from(source: String) -> Self {
-        Self::new(source.as_ref())
-    }
-}

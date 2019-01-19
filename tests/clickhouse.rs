@@ -41,6 +41,14 @@ fn test_ping() {
 }
 
 #[test]
+fn fn_connection_by_wrong_address() {
+    let pool = Pool::new("tcp://badaddr:9000");
+    let done = pool.get_handle().and_then(|c| c.ping()).map(|_| ());
+
+    run(done).unwrap_err();
+}
+
+#[test]
 fn test_create_table() {
     let ddl = "\
                CREATE TABLE clickhouse_test_create_table (\
@@ -348,4 +356,22 @@ fn test_concurrent_queries() {
     });
 
     run(done).unwrap();
+}
+
+#[test]
+fn test_big_block() {
+    let sql = "SELECT
+        number, number, number, number, number, number, number, number, number, number
+        FROM system.numbers LIMIT 20000";
+
+    let pool = Pool::new(database_url());
+    let done = pool
+        .get_handle()
+        .and_then(move |c| c.query(sql).fetch_all())
+        .and_then(move |(_, block)| {
+            Ok(block.row_count())
+        });
+
+    let actual = run(done).unwrap();
+    assert_eq!(actual, 20000)
 }

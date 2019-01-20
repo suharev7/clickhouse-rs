@@ -1,4 +1,4 @@
-use std::{convert, mem, sync::Arc};
+use std::{convert, sync::Arc};
 
 use crate::{
     binary::{Encoder, ReadEx},
@@ -64,10 +64,10 @@ where
         }
     }
 
-    pub fn load<R: ReadEx>(reader: &mut R, size: usize) -> Result<VectorColumnData<T>, Error> {
-        let mut row = vec![0_u8; size * mem::size_of::<T>()];
-        reader.read_bytes(row.as_mut())?;
-        let data = List::from(row);
+    pub(crate) fn load<R: ReadEx>(reader: &mut R, size: usize) -> Result<VectorColumnData<T>, Error> {
+        let mut data = List::with_capacity(size);
+        data.resize(size, T::default());
+        reader.read_bytes(data.as_mut())?;
         Ok(Self { data })
     }
 }

@@ -24,7 +24,7 @@ pub use self::{
     query_result::QueryResult,
 };
 
-mod column;
+pub(crate) mod column;
 mod marshal;
 mod stat_buffer;
 mod unmarshal;

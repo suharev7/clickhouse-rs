@@ -25,6 +25,29 @@ pub struct QueryResult {
 
 impl QueryResult {
     /// Method that applies a function to each row, producing a single, final value.
+    ///
+    /// example:
+    /// ```rust
+    /// # extern crate clickhouse_rs;
+    /// # extern crate futures;
+    /// # use futures::Future;
+    /// # use clickhouse_rs::{Pool, types::Block};
+    /// # use std::env;
+    /// # let database_url = env::var("DATABASE_URL").unwrap_or("tcp://localhost:9000?compression=lz4".into());
+    /// # let pool = Pool::new(database_url);
+    /// # let done =
+    /// pool.get_handle()
+    ///     .and_then(|c| {
+    ///         c.query("SELECT * FROM system.numbers LIMIT 10")
+    ///             .fold(0, |acc, row| {
+    ///                 let number: u64 = row.get("number")?;
+    ///                 Ok(acc + number)
+    ///             })
+    ///     })
+    /// #   .map(|_| ())
+    /// #   .map_err(|err| eprintln!("database error: {}", err));
+    /// # tokio::run(done)
+    /// ```
     pub fn fold<F, T, Fut>(self, init: T, f: F) -> BoxFuture<(ClientHandle, T)>
     where
         F: Fn(T, Row) -> Fut + Send + Sync + 'static,

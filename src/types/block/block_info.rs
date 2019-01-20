@@ -26,7 +26,7 @@ impl Default for BlockInfo {
 }
 
 impl BlockInfo {
-    pub fn read<R: ReadEx>(reader: &mut R) -> ClickhouseResult<Self> {
+    pub(crate) fn read<R: ReadEx>(reader: &mut R) -> ClickhouseResult<Self> {
         let block_info = Self {
             num1: reader.read_uvarint()?,
             is_overflows: reader.read_scalar()?,

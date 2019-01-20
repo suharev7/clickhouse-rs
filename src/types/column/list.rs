@@ -1,4 +1,4 @@
-use std::{convert, marker::PhantomData, mem};
+use std::{mem, slice};
 
 use crate::types::{Marshal, StatBuffer, Unmarshal};
 
@@ -6,8 +6,7 @@ pub struct List<T>
 where
     T: StatBuffer + Unmarshal<T> + Marshal + Copy + Sync + 'static,
 {
-    data: Vec<u8>,
-    phantom: PhantomData<T>,
+    data: Vec<T>,
 }
 
 impl<T> List<T>
@@ -15,47 +14,30 @@ where
     T: StatBuffer + Unmarshal<T> + Marshal + Copy + Sync + 'static,
 {
     pub fn len(&self) -> usize {
-        self.data.len() / mem::size_of::<T>()
+        self.data.len()
     }
 
     pub fn at(&self, index: usize) -> T {
-        let begin = index * mem::size_of::<T>();
-        let end = begin + mem::size_of::<T>();
-        let bits = &self.data[begin..end];
-        T::unmarshal(bits)
+        self.data[index]
     }
 
     pub fn push(&mut self, value: T) {
-        let mut buffer = T::buffer();
-        value.marshal(buffer.as_mut());
-        self.data.extend_from_slice(buffer.as_ref());
+        self.data.push(value);
     }
 
     #[cfg(test)]
     pub fn new() -> List<T> {
-        List {
-            data: Vec::new(),
-            phantom: PhantomData,
-        }
+        List { data: Vec::new() }
     }
 
     pub fn with_capacity(capacity: usize) -> List<T> {
         Self {
             data: Vec::with_capacity(capacity),
-            phantom: PhantomData,
         }
     }
-}
 
-impl<T> convert::From<Vec<u8>> for List<T>
-where
-    T: StatBuffer + Unmarshal<T> + Marshal + Copy + Sync + 'static,
-{
-    fn from(data: Vec<u8>) -> List<T> {
-        Self {
-            data,
-            phantom: PhantomData,
-        }
+    pub fn resize(&mut self, new_len: usize, value: T) {
+        self.data.resize(new_len, value);
     }
 }
 
@@ -64,7 +46,20 @@ where
     T: StatBuffer + Unmarshal<T> + Marshal + Copy + Sync + 'static,
 {
     fn as_ref(&self) -> &[u8] {
-        self.data.as_ref()
+        let ptr = self.data.as_ptr() as *const u8;
+        let size = self.len() * mem::size_of::<T>();
+        unsafe { slice::from_raw_parts(ptr, size) }
+    }
+}
+
+impl<T> AsMut<[u8]> for List<T>
+where
+    T: StatBuffer + Unmarshal<T> + Marshal + Copy + Sync + 'static,
+{
+    fn as_mut(&mut self) -> &mut [u8] {
+        let ptr = self.data.as_mut_ptr() as *mut u8;
+        let size = self.len() * mem::size_of::<T>();
+        unsafe { slice::from_raw_parts_mut(ptr, size) }
     }
 }
 

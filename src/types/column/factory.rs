@@ -15,7 +15,7 @@ use super::{
 };
 
 impl ColumnData {
-    pub fn load_data<T: ReadEx>(
+    pub(crate) fn load_data<T: ReadEx>(
         reader: &mut T,
         type_name: &str,
         size: usize,

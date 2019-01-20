@@ -7,6 +7,7 @@ use tokio_timer::Error as TimerError;
 use url::ParseError;
 
 use crate::types::Packet;
+use std::str::Utf8Error;
 
 /// This type enumerates library errors.
 #[derive(Debug, Fail)]
@@ -76,6 +77,9 @@ pub enum DriverError {
 
     #[fail(display = "Timeout error.")]
     Timeout,
+
+    #[fail(display = "Invalid utf-8 sequence.")]
+    Utf8Error(Utf8Error),
 }
 
 /// This type enumerates cast from sql type errors.
@@ -151,6 +155,12 @@ impl From<TimeoutError<Error>> for Error {
             None => Error::Driver(DriverError::Timeout),
             Some(inner) => inner,
         }
+    }
+}
+
+impl From<Utf8Error> for Error {
+    fn from(err: Utf8Error) -> Self {
+        Error::Driver(DriverError::Utf8Error(err))
     }
 }
 

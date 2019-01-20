@@ -2,16 +2,19 @@ use std::io;
 
 use crate::{
     errors::{DriverError, Error},
-    types::{ClickhouseResult, StatBuffer, Unmarshal},
+    types::{ClickhouseResult, StatBuffer, Unmarshal, column::StringPool},
 };
 
-pub trait ReadEx {
+use std::str;
+
+pub(crate) trait ReadEx {
     fn read_bytes(&mut self, rv: &mut [u8]) -> ClickhouseResult<()>;
     fn read_scalar<V>(&mut self) -> ClickhouseResult<V>
     where
         V: Copy + Unmarshal<V> + StatBuffer;
     fn read_string(&mut self) -> ClickhouseResult<String>;
     fn read_uvarint(&mut self) -> ClickhouseResult<u64>;
+    fn read_str_into_buffer(&mut self, pool: &mut StringPool) -> ClickhouseResult<()>;
 }
 
 impl<T> ReadEx for T
@@ -72,6 +75,14 @@ where
 
             i += 1;
         }
+    }
+
+    fn read_str_into_buffer(&mut self, pool: &mut StringPool) -> ClickhouseResult<()> {
+        let str_len = self.read_uvarint()? as usize;
+        let buffer = pool.allocate(str_len);
+        self.read_bytes(buffer)?;
+        str::from_utf8(buffer)?;
+        Ok(())
     }
 }
 

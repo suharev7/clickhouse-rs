@@ -13,6 +13,7 @@ pub fn put_uvarint(mut buffer: impl AsMut<[u8]>, x: u64) -> usize {
     i + 1
 }
 
+#[cfg(test)]
 mod test {
     #[test]
     fn test_put_uvarint() {

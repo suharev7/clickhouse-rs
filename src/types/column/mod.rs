@@ -1,5 +1,4 @@
-use std::ops;
-use std::sync::Arc;
+use std::{ops, sync::Arc};
 
 use chrono_tz::Tz;
 
@@ -16,6 +15,8 @@ pub use self::{
     string::StringColumnData,
 };
 
+pub(crate) use self::string_pool::StringPool;
+
 mod chunk;
 mod column_data;
 mod concat;
@@ -24,6 +25,7 @@ mod factory;
 mod list;
 mod numeric;
 mod string;
+mod string_pool;
 
 pub type BoxColumnData = Arc<ColumnData + Send + Sync>;
 

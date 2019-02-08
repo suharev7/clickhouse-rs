@@ -1,5 +1,5 @@
-pub(crate) use self::parser::Parser;
-pub use self::{
+pub(crate) use self::{
+    parser::Parser,
     encoder::Encoder,
     read_ex::ReadEx,
     uvarint::put_uvarint,

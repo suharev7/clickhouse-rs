@@ -1,4 +1,4 @@
-use std::{convert, fmt, mem, sync::Arc};
+use std::{convert, fmt, sync::Arc};
 
 use chrono::Date;
 use chrono::prelude::*;
@@ -22,6 +22,7 @@ where
         + convert::From<Value>
         + fmt::Display
         + Sync
+        + Default
         + 'static,
 {
     data: List<T>,
@@ -38,16 +39,17 @@ where
         + convert::From<Value>
         + fmt::Display
         + Sync
+        + Default
         + 'static,
 {
-    pub fn load<R: ReadEx>(
+    pub(crate) fn load<R: ReadEx>(
         reader: &mut R,
         size: usize,
         tz: Tz,
     ) -> Result<DateColumnData<T>, Error> {
-        let mut row = vec![0_u8; size * mem::size_of::<T>()];
-        reader.read_bytes(row.as_mut())?;
-        let data = List::from(row);
+        let mut data = List::with_capacity(size);
+        data.resize(size, T::default());
+        reader.read_bytes(data.as_mut())?;
         Ok(DateColumnData { data, tz })
     }
 }
@@ -88,6 +90,7 @@ where
         + Sync
         + Send
         + DateConverter
+        + Default
         + 'static,
 {
     fn sql_type(&self) -> SqlType {

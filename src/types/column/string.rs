@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{io::Write, sync::Arc};
 
 use crate::{
     binary::{Encoder, ReadEx},
@@ -7,23 +7,25 @@ use crate::{
 };
 
 use super::{BoxColumnData, column_data::ColumnData, ColumnFrom};
+use crate::types::column::string_pool::StringPool;
 
 pub struct StringColumnData {
-    data: Vec<String>,
+    pool: StringPool,
 }
 
 impl StringColumnData {
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
-            data: Vec::with_capacity(capacity),
+            pool: StringPool::with_capacity(capacity),
         }
     }
 
-    pub fn load<T: ReadEx>(reader: &mut T, size: usize) -> Result<Self, Error> {
+    pub(crate) fn load<T: ReadEx>(reader: &mut T, size: usize) -> Result<Self, Error> {
+
         let mut data = Self::with_capacity(size);
 
         for _ in 0..size {
-            data.push(Value::from(reader.read_string()?));
+            reader.read_str_into_buffer(&mut data.pool)?;
         }
 
         Ok(data)
@@ -32,14 +34,14 @@ impl StringColumnData {
 
 impl ColumnFrom for Vec<String> {
     fn column_from(data: Self) -> BoxColumnData {
-        Arc::new(StringColumnData { data })
+        Arc::new(StringColumnData { pool: data.into() })
     }
 }
 
 impl<'a> ColumnFrom for Vec<&'a str> {
     fn column_from(source: Self) -> BoxColumnData {
-        let data = source.iter().map(|s| s.to_string()).collect();
-        Arc::new(StringColumnData { data })
+        let data: Vec<_> = source.iter().map(|s| s.to_string()).collect();
+        Arc::new(StringColumnData { pool: data.into() })
     }
 }
 
@@ -49,21 +51,23 @@ impl ColumnData for StringColumnData {
     }
 
     fn save(&self, encoder: &mut Encoder) {
-        for v in &self.data {
+        for v in self.pool.strings() {
             encoder.string(v);
         }
     }
 
     fn len(&self) -> usize {
-        self.data.len()
+        self.pool.len()
     }
 
     fn push(&mut self, value: Value) {
-        self.data.push(value.into())
+        let s: String = value.into();
+        let mut b = self.pool.allocate(s.len());
+        b.write_all(s.as_bytes()).unwrap();
     }
 
     fn at(&self, index: usize) -> ValueRef {
-        let s: &str = &self.data[index];
+        let s = self.pool.get(index);
         ValueRef::from(s)
     }
 }

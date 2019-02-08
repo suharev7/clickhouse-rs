@@ -16,7 +16,7 @@ use crate::{
 mod futures;
 
 struct Inner {
-    new: Vec<BoxFuture<ClientHandle>>,
+    new: Option<BoxFuture<ClientHandle>>,
     idle: Vec<ClientHandle>,
     tasks: Vec<Task>,
     ongoing: usize,
@@ -24,7 +24,7 @@ struct Inner {
 
 impl Inner {
     fn conn_count(&self) -> usize {
-        self.new.len() + self.idle.len() + self.ongoing
+        self.new.is_some() as usize + self.idle.len() + self.ongoing
     }
 }
 
@@ -128,7 +128,7 @@ impl Pool {
         O: IntoOptions,
     {
         let inner = Arc::new(Mutex::new(Inner {
-            new: Vec::new(),
+            new: None,
             idle: Vec::new(),
             tasks: Vec::new(),
             ongoing: 0,
@@ -159,7 +159,7 @@ impl Pool {
 
     fn info(&self) -> PoolInfo {
         self.with_inner(|inner| PoolInfo {
-            new_len: inner.new.len(),
+            new_len: inner.new.is_some() as usize,
             idle_len: inner.idle.len(),
             tasks_len: inner.tasks.len(),
             ongoing: inner.ongoing,
@@ -186,8 +186,8 @@ impl Pool {
             Some(client) => Ok(Async::Ready(client)),
             None => {
                 let new_conn_created = self.with_inner(|mut inner| {
-                    if inner.new.is_empty() && inner.conn_count() < self.max {
-                        inner.new.push(self.new_connection());
+                    if inner.new.is_none() && inner.conn_count() < self.max {
+                        inner.new.replace(self.new_connection());
                         true
                     } else {
                         inner.tasks.push(task::current());
@@ -209,22 +209,21 @@ impl Pool {
 
     fn handle_futures(&mut self) -> ClickhouseResult<()> {
         self.with_inner(|mut inner| {
-            let mut i = 0;
-            while i < inner.new.len() {
-                let result = inner.new[i].poll();
-                match result {
-                    Ok(Async::Ready(client)) => {
-                        inner.new.swap_remove(i);
-                        inner.idle.push(client);
-                        continue;
-                    }
-                    Ok(Async::NotReady) => (),
-                    Err(err) => {
-                        inner.new.swap_remove(i);
-                        return Err(err);
-                    }
+            let result = match inner.new {
+                None => return Ok(()),
+                Some(ref mut new) => new.poll(),
+            };
+
+            match result {
+                Ok(Async::Ready(client)) => {
+                    inner.new = None;
+                    inner.idle.push(client);
                 }
-                i += 1;
+                Ok(Async::NotReady) => (),
+                Err(err) => {
+                    inner.new = None;
+                    return Err(err);
+                }
             }
 
             Ok(())

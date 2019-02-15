@@ -88,7 +88,7 @@ pub enum FromSqlError {
     #[fail(display = "SqlType::{} cannot be cast to {}.", src, dst)]
     InvalidType {
         src: Cow<'static, str>,
-        dst: &'static str,
+        dst: Cow<'static, str>,
     },
 
     #[fail(display = "Out of range.")]

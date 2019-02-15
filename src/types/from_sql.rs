@@ -3,7 +3,7 @@ use chrono_tz::Tz;
 
 use crate::{
     errors::{Error, FromSqlError},
-    types::{SqlType, ValueRef},
+    types::{column::Either, SqlType, ValueRef},
 };
 
 pub type FromSqlResult<T> = Result<T, Error>;
@@ -21,7 +21,7 @@ macro_rules! from_sql_impl {
                         ValueRef::$k(v) => Ok(v),
                         _ => {
                             let from = SqlType::from(value.clone()).to_string();
-                            Err(Error::FromSql(FromSqlError::InvalidType { src: from, dst: stringify!($t) }))
+                            Err(Error::FromSql(FromSqlError::InvalidType { src: from, dst: stringify!($t).into() }))
                         }
                     }
                 }
@@ -42,6 +42,45 @@ impl<'a> FromSql<'a> for String {
     }
 }
 
+impl<'a, T> FromSql<'a> for Option<T>
+where
+    T: FromSql<'a>,
+{
+    fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
+        match value {
+            ValueRef::Nullable(e) => match e {
+                Either::Left(_) => Ok(None),
+                Either::Right(u) => {
+                    let value_ref = u.as_ref().clone();
+                    Ok(Some(T::from_sql(value_ref)?))
+                }
+            },
+            _ => {
+                let from = SqlType::from(value.clone()).to_string();
+                Err(Error::FromSql(FromSqlError::InvalidType {
+                    src: from,
+                    dst: stringify!($t).into(),
+                }))
+            }
+        }
+    }
+}
+
+impl<'a> FromSql<'a> for Date<Tz> {
+    fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
+        match value {
+            ValueRef::Date(v) => Ok(v),
+            _ => {
+                let from = SqlType::from(value).to_string();
+                Err(Error::FromSql(FromSqlError::InvalidType {
+                    src: from,
+                    dst: "Date<Tz>".into(),
+                }))
+            }
+        }
+    }
+}
+
 impl<'a> FromSql<'a> for DateTime<Tz> {
     fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
         match value {
@@ -50,7 +89,7 @@ impl<'a> FromSql<'a> for DateTime<Tz> {
                 let from = SqlType::from(value).to_string();
                 Err(Error::FromSql(FromSqlError::InvalidType {
                     src: from,
-                    dst: "DateTime<Tz>",
+                    dst: "DateTime<Tz>".into(),
                 }))
             }
         }
@@ -74,7 +113,7 @@ from_sql_impl! {
 
 #[cfg(test)]
 mod test {
-    use crate::types::{ValueRef, from_sql::FromSql};
+    use crate::types::{from_sql::FromSql, ValueRef};
 
     #[test]
     fn test_u8() {

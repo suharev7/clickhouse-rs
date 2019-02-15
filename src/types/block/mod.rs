@@ -3,22 +3,23 @@ use std::{cmp, fmt, io::Cursor, io::Read};
 use byteorder::{LittleEndian, WriteBytesExt};
 use chrono_tz::Tz;
 use clickhouse_rs_cityhash_sys::city_hash_128;
-use lz4::liblz4::{LZ4_compress_default, LZ4_compressBound};
+use lz4::liblz4::{LZ4_compressBound, LZ4_compress_default};
 
 use crate::{
-    binary::{Encoder, protocol, ReadEx},
+    binary::{protocol, Encoder, ReadEx},
     errors::{Error, FromSqlError},
     types::{ClickhouseResult, FromSql},
 };
 
 use super::column::{self, Column, ColumnFrom};
 
+use self::chunk_iterator::ChunkIterator;
+pub(crate) use self::row::BlockRef;
 pub use self::{
     block_info::BlockInfo,
     row::{Row, Rows},
 };
-use self::chunk_iterator::ChunkIterator;
-pub(crate) use self::row::BlockRef;
+use crate::types::column::ArcColumnWrapper;
 
 mod block_info;
 mod chunk_iterator;
@@ -167,7 +168,7 @@ impl Block {
     where
         S: ColumnFrom,
     {
-        let data = S::column_from(values);
+        let data = S::column_from::<ArcColumnWrapper>(values);
         let column = column::new_column(name, data);
 
         self.append_column(column);
@@ -466,5 +467,18 @@ mod test {
         let block = Block::new().add_column("A", vec![1_u8, 2, 3]);
         let actual: Vec<u8> = block.rows().map(|row| row.get("A").unwrap()).collect();
         assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_write_and_read() {
+        let block = Block::new().add_column("y", vec![Some(1_u8), None]);
+
+        let mut encoder = Encoder::new();
+        block.write(&mut encoder, false);
+
+        let mut reader = Cursor::new(encoder.get_buffer_ref());
+        let rblock = Block::load(&mut reader, Tz::Zulu, false).unwrap();
+
+        assert_eq!(block, rblock);
     }
 }

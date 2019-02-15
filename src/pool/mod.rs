@@ -3,14 +3,14 @@ use std::{
     sync::{Arc, Mutex, MutexGuard},
 };
 
-use tokio::prelude::*;
 use tokio::prelude::task::{self, Task};
+use tokio::prelude::*;
 
 use crate::{
-    Client,
-    ClientHandle,
     io::BoxFuture,
-    pool::futures::GetHandle, types::{ClickhouseResult, IntoOptions, OptionsSource},
+    pool::futures::GetHandle,
+    types::{ClickhouseResult, IntoOptions, OptionsSource},
+    Client, ClientHandle,
 };
 
 mod futures;
@@ -144,9 +144,7 @@ impl Pool {
                 min = opt.pool_min;
                 max = opt.pool_max;
             }
-            Err(err) => {
-                error!("{}", err)
-            }
+            Err(err) => error!("{}", err),
         }
 
         Self {
@@ -292,7 +290,10 @@ impl Drop for ClientHandle {
 mod test {
     use std::{
         str::FromStr,
-        sync::{Arc, atomic::{AtomicBool, Ordering}},
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        },
         thread::spawn,
         time::{Duration, Instant},
     };
@@ -412,8 +413,8 @@ mod test {
 
     #[test]
     fn test_race_condition() {
-        use tokio::runtime::current_thread;
         use futures::future::lazy;
+        use tokio::runtime::current_thread;
 
         let options = Options::from_str(DATABASE_URL.as_str())
             .unwrap()
@@ -432,8 +433,7 @@ mod test {
                 let thread = spawn(|| {
                     current_thread::block_on_all(lazy(|| {
                         current_thread::spawn(lazy(move || {
-                            while local_barer.load(Ordering::SeqCst) {
-                            }
+                            while local_barer.load(Ordering::SeqCst) {}
 
                             match local_pool.poll() {
                                 Ok(_) => Ok(()),
@@ -449,12 +449,12 @@ mod test {
 
             barer.store(false, Ordering::SeqCst);
             Ok(threads)
-        }).and_then(|threads| {
-
+        })
+        .and_then(|threads| {
             for thread in threads {
                 match thread.join() {
-                    Ok(_) => {},
-                    Err(_) => return Err(())
+                    Ok(_) => {}
+                    Err(_) => return Err(()),
                 }
             }
 

@@ -5,6 +5,13 @@ use hostname::get_hostname;
 
 use crate::errors::{Error, ServerError};
 
+pub use self::{
+    block::{Block, Row, Rows},
+    column::Column,
+    options::Options,
+    query::Query,
+    query_result::QueryResult,
+};
 pub(crate) use self::{
     cmd::Cmd,
     date_converter::DateConverter,
@@ -15,13 +22,6 @@ pub(crate) use self::{
     unmarshal::Unmarshal,
     value::Value,
     value_ref::ValueRef,
-};
-pub use self::{
-    block::{Block, Row, Rows},
-    column::Column,
-    options::Options,
-    query::Query,
-    query_result::QueryResult,
 };
 
 pub(crate) mod column;
@@ -170,10 +170,32 @@ pub enum SqlType {
     Float64,
     Date,
     DateTime,
+    Nullable(&'static SqlType),
+}
+
+impl From<SqlType> for &'static SqlType {
+    fn from(value: SqlType) -> Self {
+        match value {
+            SqlType::UInt8 => &SqlType::UInt8,
+            SqlType::UInt16 => &SqlType::UInt16,
+            SqlType::UInt32 => &SqlType::UInt32,
+            SqlType::UInt64 => &SqlType::UInt64,
+            SqlType::Int8 => &SqlType::Int8,
+            SqlType::Int16 => &SqlType::Int16,
+            SqlType::Int32 => &SqlType::Int32,
+            SqlType::Int64 => &SqlType::Int64,
+            SqlType::String => &SqlType::String,
+            SqlType::Float32 => &SqlType::Float32,
+            SqlType::Float64 => &SqlType::Float64,
+            SqlType::Date => &SqlType::Date,
+            SqlType::DateTime => &SqlType::DateTime,
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl SqlType {
-    pub fn to_string(self) -> Cow<'static, str> {
+    pub fn to_string(&self) -> Cow<'static, str> {
         match self {
             SqlType::UInt8 => "UInt8".into(),
             SqlType::UInt16 => "UInt16".into(),
@@ -188,13 +210,14 @@ impl SqlType {
             SqlType::Float64 => "Float64".into(),
             SqlType::Date => "Date".into(),
             SqlType::DateTime => "DateTime".into(),
+            SqlType::Nullable(&nested) => format!("Nullable({})", nested).into(),
         }
     }
 }
 
 impl fmt::Display for SqlType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", Self::to_string(*self))
+        write!(f, "{}", Self::to_string(self))
     }
 }
 
@@ -203,6 +226,13 @@ fn test_display() {
     let expected = "UInt8".to_string();
     let actual = format!("{}", SqlType::UInt8);
     assert_eq!(expected, actual);
+}
+
+#[test]
+fn test_to_string() {
+    let expected: Cow<'static, str> = "Nullable(UInt8)".into();
+    let actual = SqlType::Nullable(&SqlType::UInt8).to_string();
+    assert_eq!(expected, actual)
 }
 
 /// Library generic result type.

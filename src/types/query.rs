@@ -40,7 +40,7 @@ impl Query {
 
 impl<T> From<T> for Query
 where
-    T: AsRef<str>
+    T: AsRef<str>,
 {
     fn from(source: T) -> Self {
         Self::new(source)

@@ -1,13 +1,15 @@
-use std::{io::Write, sync::Arc};
+use std::io::Write;
 
 use crate::{
     binary::{Encoder, ReadEx},
     errors::Error,
-    types::{SqlType, Value, ValueRef},
+    types::{
+        column::{nullable::NullableColumnData, ColumnWrapper, StringPool},
+        SqlType, Value, ValueRef,
+    },
 };
 
-use super::{BoxColumnData, column_data::ColumnData, ColumnFrom};
-use crate::types::column::string_pool::StringPool;
+use super::{column_data::ColumnData, ColumnFrom};
 
 pub struct StringColumnData {
     pool: StringPool,
@@ -21,7 +23,6 @@ impl StringColumnData {
     }
 
     pub(crate) fn load<T: ReadEx>(reader: &mut T, size: usize) -> Result<Self, Error> {
-
         let mut data = Self::with_capacity(size);
 
         for _ in 0..size {
@@ -33,15 +34,49 @@ impl StringColumnData {
 }
 
 impl ColumnFrom for Vec<String> {
-    fn column_from(data: Self) -> BoxColumnData {
-        Arc::new(StringColumnData { pool: data.into() })
+    fn column_from<W: ColumnWrapper>(data: Self) -> W::Wrapper {
+        W::wrap(StringColumnData { pool: data.into() })
     }
 }
 
 impl<'a> ColumnFrom for Vec<&'a str> {
-    fn column_from(source: Self) -> BoxColumnData {
+    fn column_from<W: ColumnWrapper>(source: Self) -> W::Wrapper {
         let data: Vec<_> = source.iter().map(|s| s.to_string()).collect();
-        Arc::new(StringColumnData { pool: data.into() })
+        W::wrap(StringColumnData { pool: data.into() })
+    }
+}
+
+impl ColumnFrom for Vec<Option<String>> {
+    fn column_from<W: ColumnWrapper>(source: Self) -> W::Wrapper {
+        let inner = Box::new(StringColumnData::with_capacity(source.len()));
+
+        let mut data = NullableColumnData {
+            inner,
+            nulls: Vec::with_capacity(source.len()),
+        };
+
+        for value in source {
+            data.push(value.into());
+        }
+
+        W::wrap(data)
+    }
+}
+
+impl ColumnFrom for Vec<Option<&str>> {
+    fn column_from<W: ColumnWrapper>(source: Self) -> W::Wrapper {
+        let inner = Box::new(StringColumnData::with_capacity(source.len()));
+
+        let mut data = NullableColumnData {
+            inner,
+            nulls: Vec::with_capacity(source.len()),
+        };
+
+        for value in source {
+            data.push(value.into());
+        }
+
+        W::wrap(data)
     }
 }
 
@@ -50,8 +85,9 @@ impl ColumnData for StringColumnData {
         SqlType::String
     }
 
-    fn save(&self, encoder: &mut Encoder) {
-        for v in self.pool.strings() {
+    fn save(&self, encoder: &mut Encoder, start: usize, end: usize) {
+        let strings = self.pool.strings();
+        for v in strings.skip(start).take(end - start) {
             encoder.string(v);
         }
     }

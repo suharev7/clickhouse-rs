@@ -1,5 +1,5 @@
-use tokio::prelude::*;
 use crate::errors::Error;
+use tokio::prelude::*;
 
 pub(super) enum Either<T, L, R>
 where

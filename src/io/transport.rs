@@ -6,15 +6,14 @@ use std::{
 
 use chrono_tz::Tz;
 use futures::{Async, Poll, Stream};
-use tokio::net::TcpStream;
-use tokio::prelude::*;
+use tokio::{net::TcpStream, prelude::*};
 
 use crate::{
     binary::Parser,
     errors::{DriverError, Error},
     io::BoxFuture,
     pool::PoolBinding,
-    types::{Cmd, Context, Packet},
+    types::{Block, Cmd, Context, Packet},
     ClientHandle,
 };
 
@@ -188,24 +187,28 @@ impl Stream for ClickhouseTransport {
 }
 
 impl PacketStream {
-    pub fn read_block(mut self, context: Context, pool: PoolBinding) -> BoxFuture<ClientHandle> {
+    pub fn read_block(
+        mut self,
+        context: Context,
+        pool: PoolBinding,
+    ) -> BoxFuture<(ClientHandle, Option<Block>)> {
         self.read_block = true;
 
         Box::new(
-            self.fold(None, move |acc, package| match package {
+            self.fold((None, None), move |(c, b), package| match package {
                 Packet::Eof(inner) => {
                     let client = ClientHandle {
                         inner: Some(inner),
                         context: context.clone(),
                         pool: pool.clone(),
                     };
-                    future::ok::<_, Error>(Some(client))
+                    future::ok::<_, Error>((Some(client), b))
                 }
-                Packet::Block(_) => future::ok::<_, Error>(acc),
+                Packet::Block(block) => future::ok::<_, Error>((c, Some(block))),
                 Packet::Exception(e) => future::err(Error::Server(e)),
                 _ => future::err(Error::Driver(DriverError::UnexpectedPacket)),
             })
-            .map(Option::unwrap),
+            .map(|(c, b)| (c.unwrap(), b)),
         )
     }
 }

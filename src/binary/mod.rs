@@ -1,9 +1,4 @@
-pub(crate) use self::{
-    parser::Parser,
-    encoder::Encoder,
-    read_ex::ReadEx,
-    uvarint::put_uvarint,
-};
+pub(crate) use self::{encoder::Encoder, parser::Parser, read_ex::ReadEx, uvarint::put_uvarint};
 
 mod encoder;
 mod parser;

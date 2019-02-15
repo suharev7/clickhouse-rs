@@ -1,3 +1,4 @@
+use crate::types::column::Either;
 use crate::{
     binary,
     types::{DateConverter, Marshal, StatBuffer, Value, ValueRef},
@@ -42,6 +43,14 @@ impl Encoder {
             ValueRef::Float64(v) => self.write(v),
             ValueRef::Date(_) => self.write(u16::get_stamp(Value::from(value))),
             ValueRef::DateTime(_) => self.write(u32::get_stamp(Value::from(value))),
+            ValueRef::Nullable(v) => match v {
+                Either::Left(t) => {
+                    let default_value = Value::default(t);
+                    let default_val_ref: ValueRef = (&default_value).into();
+                    self.value(default_val_ref)
+                }
+                Either::Right(u) => self.value(*u),
+            },
         }
     }
 

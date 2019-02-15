@@ -1,12 +1,15 @@
-use std::{convert, sync::Arc};
+use std::{convert, mem};
 
 use crate::{
     binary::{Encoder, ReadEx},
     errors::Error,
-    types::{Marshal, SqlType, StatBuffer, Unmarshal, Value, ValueRef},
+    types::{
+        column::{nullable::NullableColumnData, BoxColumnWrapper, ColumnWrapper},
+        Marshal, SqlType, StatBuffer, Unmarshal, Value, ValueRef,
+    },
 };
 
-use super::{BoxColumnData, column_data::ColumnData, ColumnFrom, list::List};
+use super::{column_data::ColumnData, list::List, ColumnFrom};
 
 pub struct VectorColumnData<T>
 where
@@ -36,12 +39,43 @@ where
         + Default
         + 'static,
 {
-    fn column_from(source: Self) -> BoxColumnData {
+    fn column_from<W: ColumnWrapper>(source: Self) -> W::Wrapper {
         let mut data = List::with_capacity(source.len());
         for s in source {
             data.push(s);
         }
-        Arc::new(VectorColumnData { data })
+        W::wrap(VectorColumnData { data })
+    }
+}
+
+impl<T> ColumnFrom for Vec<Option<T>>
+where
+    Value: convert::From<T>,
+    T: StatBuffer
+        + Unmarshal<T>
+        + Marshal
+        + Copy
+        + convert::Into<Value>
+        + convert::From<Value>
+        + Send
+        + Sync
+        + Default
+        + 'static,
+{
+    fn column_from<W: ColumnWrapper>(source: Self) -> W::Wrapper {
+        let fake: Vec<T> = Vec::with_capacity(source.len());
+        let inner = Vec::column_from::<BoxColumnWrapper>(fake);
+
+        let mut data = NullableColumnData {
+            inner,
+            nulls: Vec::with_capacity(source.len()),
+        };
+
+        for value in source {
+            data.push(value.into());
+        }
+
+        W::wrap(data)
     }
 }
 
@@ -64,7 +98,10 @@ where
         }
     }
 
-    pub(crate) fn load<R: ReadEx>(reader: &mut R, size: usize) -> Result<VectorColumnData<T>, Error> {
+    pub(crate) fn load<R: ReadEx>(
+        reader: &mut R,
+        size: usize,
+    ) -> Result<VectorColumnData<T>, Error> {
         let mut data = List::with_capacity(size);
         data.resize(size, T::default());
         reader.read_bytes(data.as_mut())?;
@@ -89,8 +126,11 @@ where
         T::sql_type()
     }
 
-    fn save(&self, encoder: &mut Encoder) {
-        encoder.write_bytes(self.data.as_ref())
+    fn save(&self, encoder: &mut Encoder, start: usize, end: usize) {
+        let start_index = start * mem::size_of::<T>();
+        let end_index = end * mem::size_of::<T>();
+        let data = self.data.as_ref();
+        encoder.write_bytes(&data[start_index..end_index]);
     }
 
     fn len(&self) -> usize {

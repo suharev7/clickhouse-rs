@@ -198,8 +198,8 @@ impl Client {
                         pool: PoolBinding::None,
                     })
                 })
-                .map_err(|error| error.into())
-                .and_then(|client| client.hello())
+                .map_err(Into::into)
+                .and_then(ClientHandle::hello)
                 .timeout(timeout)
                 .map_err(Error::from),
         )

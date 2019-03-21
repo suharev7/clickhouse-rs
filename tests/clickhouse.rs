@@ -9,7 +9,7 @@ use chrono::prelude::*;
 use chrono_tz::Tz::{self, UTC};
 use tokio::prelude::*;
 
-use clickhouse_rs::{errors::Error, types::Block, Pool};
+use clickhouse_rs::{errors::Error, types::Block, Pool, ClientHandle};
 use std::f64::EPSILON;
 
 pub type BoxFuture<T> = Box<Future<Item = T, Error = Error> + Send>;
@@ -35,7 +35,7 @@ where
 #[test]
 fn test_ping() {
     let pool = Pool::new(database_url());
-    let done = pool.get_handle().and_then(|c| c.ping()).map(|_| ());
+    let done = pool.get_handle().and_then(ClientHandle::ping).map(|_| ());
 
     run(done).unwrap()
 }
@@ -43,7 +43,7 @@ fn test_ping() {
 #[test]
 fn fn_connection_by_wrong_address() {
     let pool = Pool::new("tcp://badaddr:9000");
-    let done = pool.get_handle().and_then(|c| c.ping()).map(|_| ());
+    let done = pool.get_handle().and_then(ClientHandle::ping).map(|_| ());
 
     run(done).unwrap_err();
 }

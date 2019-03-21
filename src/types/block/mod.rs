@@ -271,7 +271,7 @@ impl Block {
 
 impl fmt::Debug for Block {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        let titles: Vec<&str> = self.columns.iter().map(|column| column.name()).collect();
+        let titles: Vec<&str> = self.columns.iter().map(Column::name).collect();
 
         let cells: Vec<_> = self.columns.iter().map(|col| text_cells(&col)).collect();
 
@@ -307,7 +307,7 @@ impl fmt::Debug for Block {
 }
 
 fn column_width(column: &[String]) -> usize {
-    column.iter().map(|cell| cell.len()).max().unwrap_or(0)
+    column.iter().map(String::len).max().unwrap_or(0)
 }
 
 fn print_line(

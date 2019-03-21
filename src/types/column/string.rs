@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::{string::ToString, io::Write};
 
 use crate::{
     binary::{Encoder, ReadEx},
@@ -41,7 +41,7 @@ impl ColumnFrom for Vec<String> {
 
 impl<'a> ColumnFrom for Vec<&'a str> {
     fn column_from<W: ColumnWrapper>(source: Self) -> W::Wrapper {
-        let data: Vec<_> = source.iter().map(|s| s.to_string()).collect();
+        let data: Vec<_> = source.iter().map(ToString::to_string).collect();
         W::wrap(StringColumnData { pool: data.into() })
     }
 }

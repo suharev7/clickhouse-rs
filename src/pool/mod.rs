@@ -303,6 +303,7 @@ mod test {
     use crate::{errors::Error, io::BoxFuture, test_misc::DATABASE_URL, types::Options};
 
     use super::Pool;
+    use crate::ClientHandle;
 
     /// Same as `tokio::run`, but will panic if future panics and will return the result
     /// of future execution.
@@ -340,7 +341,7 @@ mod test {
     fn test_detach() {
         let pool = Pool::new(DATABASE_URL.as_str());
 
-        let done = pool.get_handle().and_then(|c| c.ping()).and_then(|mut c| {
+        let done = pool.get_handle().and_then(ClientHandle::ping).and_then(|mut c| {
             c.pool.detach();
             Ok(())
         });

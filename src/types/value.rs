@@ -1,10 +1,9 @@
-use std::convert;
-use std::fmt;
+use std::{convert, fmt};
 
 use chrono::prelude::*;
 use chrono_tz::Tz;
 
-use crate::types::SqlType;
+use crate::types::{column::Either, DateConverter, SqlType};
 
 type AppDateTime = DateTime<Tz>;
 type AppDate = Date<Tz>;
@@ -25,6 +24,28 @@ pub enum Value {
     Float64(f64),
     Date(Date<Tz>),
     DateTime(DateTime<Tz>),
+    Nullable(Either<SqlType, Box<Value>>),
+}
+
+impl Value {
+    pub(crate) fn default(sql_type: SqlType) -> Value {
+        match sql_type {
+            SqlType::UInt8 => Value::UInt8(0),
+            SqlType::UInt16 => Value::UInt16(0),
+            SqlType::UInt32 => Value::UInt32(0),
+            SqlType::UInt64 => Value::UInt64(0),
+            SqlType::Int8 => Value::Int8(0),
+            SqlType::Int16 => Value::Int16(0),
+            SqlType::Int32 => Value::Int32(0),
+            SqlType::Int64 => Value::Int64(0),
+            SqlType::String => Value::String(String::default()),
+            SqlType::Float32 => Value::Float32(0.0),
+            SqlType::Float64 => Value::Float64(0.0),
+            SqlType::Date => 0_u16.to_date(Tz::Zulu).into(),
+            SqlType::DateTime => 0_u32.to_date(Tz::Zulu).into(),
+            SqlType::Nullable(inner) => Value::Nullable(Either::Left(*inner)),
+        }
+    }
 }
 
 impl fmt::Display for Value {
@@ -45,6 +66,10 @@ impl fmt::Display for Value {
             Value::DateTime(ref time) => write!(f, "{}", time),
             Value::Date(v) if f.alternate() => fmt::Display::fmt(v, f),
             Value::Date(v) => fmt::Display::fmt(&v.format("%Y-%m-%d"), f),
+            Value::Nullable(v) => match v {
+                Either::Left(_) => write!(f, "NULL"),
+                Either::Right(data) => data.fmt(f),
+            },
         }
     }
 }
@@ -65,6 +90,29 @@ impl convert::From<Value> for SqlType {
             Value::Float64(_) => SqlType::Float64,
             Value::Date(_) => SqlType::Date,
             Value::DateTime(_) => SqlType::DateTime,
+            Value::Nullable(d) => match d {
+                Either::Left(t) => SqlType::Nullable(t.into()),
+                Either::Right(inner) => {
+                    let sql_type = SqlType::from(inner.as_ref().to_owned());
+                    SqlType::Nullable(sql_type.into())
+                }
+            },
+        }
+    }
+}
+
+impl<T> convert::From<Option<T>> for Value
+where
+    Value: convert::From<T>,
+    T: Default,
+{
+    fn from(value: Option<T>) -> Value {
+        match value {
+            None => {
+                let default_value: Value = T::default().into();
+                Value::Nullable(Either::Left(default_value.into()))
+            }
+            Some(inner) => Value::Nullable(Either::Right(Box::new(inner.into()))),
         }
     }
 }
@@ -243,5 +291,35 @@ mod test {
         let v = Value::String("d2384838-dfe8-43ea-b1f7-63fb27b91088".to_string());
         let u: String = v.into();
         assert_eq!(u, "d2384838-dfe8-43ea-b1f7-63fb27b91088".to_string());
+    }
+
+    #[test]
+    fn test_display() {
+        assert_eq!(format!("{}", Value::UInt8(42)), "42".to_string());
+        assert_eq!(format!("{}", Value::UInt16(42)), "42".to_string());
+        assert_eq!(format!("{}", Value::UInt32(42)), "42".to_string());
+        assert_eq!(format!("{}", Value::UInt64(42)), "42".to_string());
+
+        assert_eq!(format!("{}", Value::Int8(42)), "42".to_string());
+        assert_eq!(format!("{}", Value::Int16(42)), "42".to_string());
+        assert_eq!(format!("{}", Value::Int32(42)), "42".to_string());
+        assert_eq!(format!("{}", Value::Int64(42)), "42".to_string());
+
+        assert_eq!(
+            format!("{}", Value::String("text".to_string())),
+            "text".to_string()
+        );
+
+        assert_eq!(
+            format!("{}", Value::Nullable(Either::Left(SqlType::UInt8))),
+            "NULL".to_string()
+        );
+        assert_eq!(
+            format!(
+                "{}",
+                Value::Nullable(Either::Right(Box::new(Value::UInt8(42))))
+            ),
+            "42".to_string()
+        );
     }
 }

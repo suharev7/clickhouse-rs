@@ -2,7 +2,7 @@ use std::io;
 
 use crate::{
     errors::{DriverError, Error},
-    types::{ClickhouseResult, StatBuffer, Unmarshal, column::StringPool},
+    types::{column::StringPool, ClickhouseResult, StatBuffer, Unmarshal},
 };
 
 use std::str;

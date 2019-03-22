@@ -1,19 +1,19 @@
-use std::ops;
+use std::{cmp, ops};
 
 use crate::{
     binary::Encoder,
     types::{SqlType, Value, ValueRef},
 };
 
-use super::{BoxColumnData, ColumnData};
+use super::{ArcColumnData, ColumnData};
 
 pub struct ChunkColumnData {
-    data: BoxColumnData,
+    data: ArcColumnData,
     range: ops::Range<usize>,
 }
 
 impl ChunkColumnData {
-    pub fn new(data: BoxColumnData, range: ops::Range<usize>) -> Self {
+    pub fn new(data: ArcColumnData, range: ops::Range<usize>) -> Self {
         Self { data, range }
     }
 }
@@ -23,10 +23,12 @@ impl ColumnData for ChunkColumnData {
         self.data.sql_type()
     }
 
-    fn save(&self, encoder: &mut Encoder) {
-        for i in self.range.clone() {
-            encoder.value(self.data.at(i))
-        }
+    fn save(&self, encoder: &mut Encoder, start: usize, end: usize) {
+        self.data.save(
+            encoder,
+            self.range.start + start,
+            cmp::min(self.range.end, self.range.start + end),
+        )
     }
 
     fn len(&self) -> usize {

@@ -1,17 +1,15 @@
 use std::{ops, sync::Arc};
 
-use chrono_tz::Tz;
-
 use crate::{
     binary::{Encoder, ReadEx},
     types::{ClickhouseResult, SqlType, ValueRef},
 };
+use chrono_tz::Tz;
+use std::fmt;
 
 use self::chunk::ChunkColumnData;
 pub use self::{
-    column_data::ColumnData,
-    concat::ConcatColumnData,
-    numeric::VectorColumnData,
+    column_data::ColumnData, concat::ConcatColumnData, numeric::VectorColumnData,
     string::StringColumnData,
 };
 
@@ -23,25 +21,26 @@ mod concat;
 mod date;
 mod factory;
 mod list;
+mod nullable;
 mod numeric;
 mod string;
 mod string_pool;
 
-pub type BoxColumnData = Arc<ColumnData + Send + Sync>;
+pub type ArcColumnData = Arc<dyn ColumnData + Send + Sync>;
 
 /// Represents Clickhouse Column
 pub struct Column {
     name: String,
-    data: BoxColumnData,
+    data: ArcColumnData,
 }
 
 pub trait ColumnFrom {
-    fn column_from(source: Self) -> BoxColumnData;
+    fn column_from<W: ColumnWrapper>(source: Self) -> W::Wrapper;
 }
 
 impl ColumnFrom for Column {
-    fn column_from(source: Self) -> BoxColumnData {
-        source.data
+    fn column_from<W: ColumnWrapper>(source: Self) -> W::Wrapper {
+        W::wrap_arc(source.data)
     }
 }
 
@@ -78,7 +77,7 @@ impl Column {
     pub(crate) fn read<R: ReadEx>(reader: &mut R, size: usize, tz: Tz) -> ClickhouseResult<Column> {
         let name = reader.read_string()?;
         let type_name = reader.read_string()?;
-        let data = ColumnData::load_data(reader, &type_name, size, tz)?;
+        let data = ColumnData::load_data::<ArcColumnWrapper, _>(reader, &type_name, size, tz)?;
         let column = Self { name, data };
         Ok(column)
     }
@@ -98,7 +97,8 @@ impl Column {
     pub(crate) fn write(&self, encoder: &mut Encoder) {
         encoder.string(&self.name);
         encoder.string(self.data.sql_type().to_string().as_ref());
-        self.data.save(encoder);
+        let len = self.data.len();
+        self.data.save(encoder, 0, len);
     }
 
     pub(crate) fn len(&self) -> usize {
@@ -137,5 +137,50 @@ pub fn new_column(name: &str, data: Arc<(ColumnData + Sync + Send + 'static)>) -
     Column {
         name: name.to_string(),
         data,
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Either<L, R>
+where
+    L: fmt::Debug + PartialEq + Clone,
+    R: fmt::Debug + PartialEq + Clone,
+{
+    Left(L),
+    Right(R),
+}
+
+pub trait ColumnWrapper {
+    type Wrapper;
+    fn wrap<T: ColumnData + Send + Sync + 'static>(column: T) -> Self::Wrapper;
+
+    fn wrap_arc(data: ArcColumnData) -> Self::Wrapper;
+}
+
+pub(crate) struct ArcColumnWrapper {}
+
+impl ColumnWrapper for ArcColumnWrapper {
+    type Wrapper = Arc<dyn ColumnData + Send + Sync>;
+
+    fn wrap<T: ColumnData + Send + Sync + 'static>(column: T) -> Self::Wrapper {
+        Arc::new(column)
+    }
+
+    fn wrap_arc(data: ArcColumnData) -> Self::Wrapper {
+        data
+    }
+}
+
+pub(crate) struct BoxColumnWrapper {}
+
+impl ColumnWrapper for BoxColumnWrapper {
+    type Wrapper = Box<dyn ColumnData + Send + Sync>;
+
+    fn wrap<T: ColumnData + Send + Sync + 'static>(column: T) -> Self::Wrapper {
+        Box::new(column)
+    }
+
+    fn wrap_arc(_: ArcColumnData) -> Self::Wrapper {
+        unimplemented!()
     }
 }

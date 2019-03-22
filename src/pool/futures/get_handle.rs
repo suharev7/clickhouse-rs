@@ -1,10 +1,6 @@
 use tokio::prelude::*;
 
-use crate::{
-    errors::Error,
-    pool::Pool,
-    ClientHandle
-};
+use crate::{errors::Error, pool::Pool, ClientHandle};
 
 pub struct GetHandle {
     pool: Pool,

@@ -9,13 +9,10 @@ use crate::{
     ClientHandle,
 };
 
-use self::{
-    fold_block::FoldBlock,
-    either::Either,
-};
+use self::{either::Either, fold_block::FoldBlock};
 
-mod fold_block;
 mod either;
+mod fold_block;
 
 /// Result of a query or statement execution.
 pub struct QueryResult {
@@ -91,18 +88,18 @@ impl QueryResult {
         Box::new(
             self.fold_packets(acc, move |(h, acc), packet| match packet {
                 Packet::Block(b) => Either::Left(f(acc, b).into_future().map(move |a| (h, a))),
-                Packet::Eof(inner) => {
-                    Either::Right(future::ok((
-                        Some(ClientHandle {
-                            inner: Some(inner),
-                            context: context.clone(),
-                            pool: pool.clone(),
-                        }),
-                        acc,
-                    )))
-                }
+                Packet::Eof(inner) => Either::Right(future::ok((
+                    Some(ClientHandle {
+                        inner: Some(inner),
+                        context: context.clone(),
+                        pool: pool.clone(),
+                    }),
+                    acc,
+                ))),
                 Packet::ProfileInfo(_) | Packet::Progress(_) => Either::Right(future::ok((h, acc))),
-                Packet::Exception(exception) => Either::Right(future::err(Error::Server(exception))),
+                Packet::Exception(exception) => {
+                    Either::Right(future::err(Error::Server(exception)))
+                }
                 _ => Either::Right(future::err(Error::Driver(DriverError::UnexpectedPacket))),
             })
             .map(|(c, t)| (c.unwrap(), t))

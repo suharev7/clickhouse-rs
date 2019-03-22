@@ -2,12 +2,12 @@ use std::convert;
 
 use crate::{
     binary::Encoder,
-    types::{SqlType, Value, ValueRef}
+    types::{SqlType, Value, ValueRef},
 };
 
 pub trait ColumnData {
     fn sql_type(&self) -> SqlType;
-    fn save(&self, encoder: &mut Encoder);
+    fn save(&self, encoder: &mut Encoder, start: usize, end: usize);
     fn len(&self) -> usize;
     fn push(&mut self, value: Value);
     fn at(&self, index: usize) -> ValueRef;

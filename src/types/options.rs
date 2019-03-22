@@ -467,7 +467,7 @@ fn parse_compression(source: &str) -> std::result::Result<bool, ()> {
 mod test {
     use std::time::Duration;
 
-    use super::{from_url, Options, parse_compression, parse_duration};
+    use super::{from_url, parse_compression, parse_duration, Options};
 
     #[test]
     fn test_parse_default() {

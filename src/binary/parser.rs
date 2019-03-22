@@ -5,7 +5,7 @@ use chrono_tz::Tz;
 use crate::{
     binary::{protocol, ReadEx},
     errors::{DriverError, Error, ServerError},
-    types::{ClickhouseResult, Packet, ProfileInfo, Progress, ServerInfo, Block},
+    types::{Block, ClickhouseResult, Packet, ProfileInfo, Progress, ServerInfo},
 };
 
 /// The internal clickhouse response parser.

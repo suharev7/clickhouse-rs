@@ -1,23 +1,26 @@
 use std::iter;
 
-use crate::{binary::Encoder, types::{SqlType, Value, ValueRef}};
+use crate::{
+    binary::Encoder,
+    types::{SqlType, Value, ValueRef},
+};
 
-use super::{BoxColumnData, column_data::ColumnData};
+use super::{column_data::ColumnData, ArcColumnData};
 
 pub struct ConcatColumnData {
-    data: Vec<BoxColumnData>,
+    data: Vec<ArcColumnData>,
     index: Vec<usize>,
 }
 
 impl ConcatColumnData {
-    pub fn concat(data: Vec<BoxColumnData>) -> Self {
+    pub fn concat(data: Vec<ArcColumnData>) -> Self {
         Self::check_columns(&data);
 
-        let index = build_index(data.iter().map(|x| x.len()));
+        let index = build_index(data.iter().map(len_of_column_data));
         Self { data, index }
     }
 
-    fn check_columns(data: &[BoxColumnData]) {
+    fn check_columns(data: &[ArcColumnData]) {
         match data.first() {
             None => panic!("data should not be empty."),
             Some(first) => {
@@ -40,10 +43,8 @@ impl ColumnData for ConcatColumnData {
         self.data[0].sql_type()
     }
 
-    fn save(&self, encoder: &mut Encoder) {
-        for chunk in &self.data {
-            chunk.save(encoder)
-        }
+    fn save(&self, _: &mut Encoder, _: usize, _: usize) {
+        unimplemented!()
     }
 
     fn len(&self) -> usize {
@@ -101,14 +102,16 @@ fn find_chunk(index: &[usize], ix: usize) -> usize {
     0
 }
 
+fn len_of_column_data(x: &ArcColumnData) -> usize {
+    x.len()
+}
+
 #[cfg(test)]
 mod test {
     use std::sync::Arc;
 
     use crate::types::column::{
-        column_data::ColumnDataExt,
-        numeric::VectorColumnData,
-        string::StringColumnData,
+        column_data::ColumnDataExt, numeric::VectorColumnData, string::StringColumnData,
     };
 
     use super::*;
@@ -195,14 +198,14 @@ mod test {
         assert_eq!(actual.len(), 4);
     }
 
-    fn make_string_column() -> BoxColumnData {
+    fn make_string_column() -> ArcColumnData {
         let mut data = StringColumnData::with_capacity(1);
         data.append("13298a5f-6a10-4fbe-9644-807f7ebf82cc".to_string());
         data.append("df0e62bb-c0db-4728-a558-821f8e8da38c".to_string());
         Arc::new(data)
     }
 
-    fn make_num_column() -> BoxColumnData {
+    fn make_num_column() -> ArcColumnData {
         let mut data = VectorColumnData::<u32>::with_capacity(1);
         data.append(1_u32);
         data.append(2_u32);

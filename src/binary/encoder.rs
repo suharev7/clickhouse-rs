@@ -1,6 +1,6 @@
 use crate::{
     binary,
-    types::{DateConverter, Marshal, StatBuffer, Value, ValueRef},
+    types::{Marshal, StatBuffer},
 };
 
 const MAX_VARINT_LEN64: usize = 10;
@@ -25,24 +25,6 @@ impl Encoder {
         let str = text.as_ref().as_bytes();
         self.uvarint(str.len() as u64);
         self.write_bytes(str);
-    }
-
-    pub fn value(&mut self, value: ValueRef) {
-        match value {
-            ValueRef::UInt8(v) => self.write(v),
-            ValueRef::UInt16(v) => self.write(v),
-            ValueRef::UInt32(v) => self.write(v),
-            ValueRef::UInt64(v) => self.write(v),
-            ValueRef::Int8(v) => self.write(v),
-            ValueRef::Int16(v) => self.write(v),
-            ValueRef::Int32(v) => self.write(v),
-            ValueRef::Int64(v) => self.write(v),
-            ValueRef::String(v) => self.string(v),
-            ValueRef::Float32(v) => self.write(v),
-            ValueRef::Float64(v) => self.write(v),
-            ValueRef::Date(_) => self.write(u16::get_stamp(Value::from(value))),
-            ValueRef::DateTime(_) => self.write(u32::get_stamp(Value::from(value))),
-        }
     }
 
     pub fn write<T>(&mut self, value: T)

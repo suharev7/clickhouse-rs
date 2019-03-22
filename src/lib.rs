@@ -61,13 +61,13 @@
 //!         CREATE TABLE IF NOT EXISTS payment (
 //!             customer_id  UInt32,
 //!             amount       UInt32,
-//!             account_name String
+//!             account_name Nullable(String)
 //!         ) Engine=Memory";
 //!
 //!     let block = Block::new()
-//!         .add_column("customer_id",  vec![1_u32,  3,  5,  7,     9])
-//!         .add_column("amount",       vec![2_u32,  4,  6,  8,    10])
-//!         .add_column("account_name", vec!["foo", "", "", "", "bar"]);
+//!         .add_column("customer_id",  vec![1_u32,  3,  5,  7,  9])
+//!         .add_column("amount",       vec![2_u32,  4,  6,  8, 10])
+//!         .add_column("account_name", vec![Some("foo"), None, None, None, Some("bar")]);
 //!
 //!     # let database_url = env::var("DATABASE_URL").unwrap_or("tcp://localhost:9000?compression=lz4".into());
 //!     let pool = Pool::new(database_url);
@@ -81,8 +81,8 @@
 //!            for row in block.rows() {
 //!                let id: u32     = row.get("customer_id")?;
 //!                let amount: u32 = row.get("amount")?;
-//!                let name: &str  = row.get("account_name")?;
-//!                println!("Found payment {}: {} {}", id, amount, name);
+//!                let name: Option<&str>  = row.get("account_name")?;
+//!                println!("Found payment {}: {} {:?}", id, amount, name);
 //!            }
 //!            Ok(())
 //!        })
@@ -120,15 +120,15 @@ use std::fmt;
 use futures::{Future, Stream};
 use tokio::prelude::*;
 
+pub use crate::pool::Pool;
 use crate::{
     connecting_stream::ConnectingStream,
-    errors::{DriverError, Error},
+    errors::{DriverError, Error, FromSqlError},
     io::{BoxFuture, ClickhouseTransport},
     pool::PoolBinding,
     retry_guard::RetryGuard,
     types::{Block, Cmd, Context, IntoOptions, Options, OptionsSource, Packet, Query, QueryResult},
 };
-pub use crate::pool::Pool;
 
 mod binary;
 mod client_info;
@@ -198,8 +198,8 @@ impl Client {
                         pool: PoolBinding::None,
                     })
                 })
-                .map_err(|error| error.into())
-                .and_then(|client| client.hello())
+                .map_err(Into::into)
+                .and_then(ClientHandle::hello)
                 .timeout(timeout)
                 .map_err(Error::from),
         )
@@ -345,6 +345,11 @@ impl ClientHandle {
         let context = self.context.clone();
         let pool = self.pool.clone();
 
+        let mut sql_types = Vec::with_capacity(block.column_count());
+        for column in block.columns() {
+            sql_types.push(column.sql_type());
+        }
+
         let send_cmd = Cmd::Union(
             Box::new(Cmd::SendData(block, context.clone())),
             Box::new(Cmd::SendData(Block::default(), context.clone())),
@@ -357,12 +362,39 @@ impl ClientHandle {
                 .unwrap()
                 .call(Cmd::SendQuery(query, context.clone()))
                 .read_block(context.clone(), pool.clone())
-                .and_then(move |mut c| {
-                    c.inner
-                        .take()
-                        .unwrap()
-                        .call(send_cmd)
-                        .read_block(context, pool)
+                .and_then(move |(mut c, b)| {
+                    let dst_block = b.unwrap();
+
+                    if dst_block.column_count() != sql_types.len() {
+                        let err: BoxFuture<Self> = Box::new(future::err::<Self, Error>(
+                            Error::FromSql(FromSqlError::OutOfRange),
+                        ));
+                        return err;
+                    }
+
+                    for (index, column) in dst_block.columns().iter().enumerate() {
+                        let dst_type = column.sql_type();
+                        let src_type = sql_types[index];
+
+                        if dst_type != src_type {
+                            let err: BoxFuture<Self> = Box::new(future::err::<Self, Error>(
+                                Error::FromSql(FromSqlError::InvalidType {
+                                    src: src_type.to_string(),
+                                    dst: dst_type.to_string(),
+                                }),
+                            ));
+                            return err;
+                        }
+                    }
+
+                    Box::new(
+                        c.inner
+                            .take()
+                            .unwrap()
+                            .call(send_cmd)
+                            .read_block(context, pool)
+                            .map(|(c, _)| c),
+                    )
                 })
         })
     }
@@ -420,7 +452,7 @@ mod test_misc {
     use std::env;
 
     lazy_static! {
-        pub static ref DATABASE_URL: String =
-            env::var("DATABASE_URL").unwrap_or_else(|_| "tcp://localhost:9000?compression=lz4".into());
+        pub static ref DATABASE_URL: String = env::var("DATABASE_URL")
+            .unwrap_or_else(|_| "tcp://localhost:9000?compression=lz4".into());
     }
 }

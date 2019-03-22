@@ -1,5 +1,5 @@
-use std::str::from_utf8_unchecked;
 use std::io::Write;
+use std::str::from_utf8_unchecked;
 
 const AVG_STR_SIZE: usize = 80;
 

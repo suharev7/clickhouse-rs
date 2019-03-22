@@ -5,10 +5,10 @@ use chrono_tz::Tz;
 
 use crate::{
     errors::{Error, FromSqlError},
-    types::{ClickhouseResult, SqlType, Value},
+    types::{column::Either, ClickhouseResult, SqlType, Value},
 };
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum ValueRef<'a> {
     UInt8(u8),
     UInt16(u16),
@@ -23,6 +23,7 @@ pub enum ValueRef<'a> {
     Float64(f64),
     Date(Date<Tz>),
     DateTime(DateTime<Tz>),
+    Nullable(Either<SqlType, Box<ValueRef<'a>>>),
 }
 
 impl<'a> fmt::Display for ValueRef<'a> {
@@ -43,6 +44,10 @@ impl<'a> fmt::Display for ValueRef<'a> {
             ValueRef::Date(v) => fmt::Display::fmt(&v.format("%Y-%m-%d"), f),
             ValueRef::DateTime(ref time) if f.alternate() => write!(f, "{}", time.to_rfc2822()),
             ValueRef::DateTime(v) => fmt::Display::fmt(v, f),
+            ValueRef::Nullable(v) => match v {
+                Either::Left(_) => write!(f, "NULL"),
+                Either::Right(inner) => write!(f, "{}", inner),
+            },
         }
     }
 }
@@ -63,6 +68,10 @@ impl<'a> convert::From<ValueRef<'a>> for SqlType {
             ValueRef::Float64(_) => SqlType::Float64,
             ValueRef::Date(_) => SqlType::Date,
             ValueRef::DateTime(_) => SqlType::DateTime,
+            ValueRef::Nullable(u) => match u {
+                Either::Left(sql_type) => sql_type,
+                Either::Right(value_ref) => SqlType::from(*value_ref),
+            },
         }
     }
 }
@@ -70,12 +79,12 @@ impl<'a> convert::From<ValueRef<'a>> for SqlType {
 impl<'a> ValueRef<'a> {
     pub fn as_str(&self) -> ClickhouseResult<&'a str> {
         if let ValueRef::String(t) = self {
-            return Ok(t)
+            return Ok(t);
         }
-        let from = SqlType::from(*self).to_string();
+        let from = SqlType::from(self.clone()).to_string();
         Err(Error::FromSql(FromSqlError::InvalidType {
             src: from,
-            dst: "String",
+            dst: "String".into(),
         }))
     }
 }
@@ -96,6 +105,13 @@ impl<'a> From<ValueRef<'a>> for Value {
             ValueRef::Float64(v) => Value::Float64(v),
             ValueRef::Date(v) => Value::Date(v),
             ValueRef::DateTime(v) => Value::DateTime(v),
+            ValueRef::Nullable(u) => match u {
+                Either::Left(sql_type) => Value::Nullable(Either::Left(sql_type)),
+                Either::Right(v) => {
+                    let value: Value = (*v).into();
+                    Value::Nullable(Either::Right(Box::new(value)))
+                }
+            },
         }
     }
 }
@@ -149,6 +165,13 @@ impl<'a> From<&'a Value> for ValueRef<'a> {
             Value::Float64(v) => ValueRef::Float64(*v),
             Value::Date(v) => ValueRef::Date(*v),
             Value::DateTime(v) => ValueRef::DateTime(*v),
+            Value::Nullable(u) => match u {
+                Either::Left(sql_type) => ValueRef::Nullable(Either::Left(*sql_type)),
+                Either::Right(v) => {
+                    let value_ref = v.as_ref().into();
+                    ValueRef::Nullable(Either::Right(Box::new(value_ref)))
+                }
+            },
         }
     }
 }

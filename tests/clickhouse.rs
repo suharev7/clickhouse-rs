@@ -9,7 +9,7 @@ use chrono::prelude::*;
 use chrono_tz::Tz::{self, UTC};
 use tokio::prelude::*;
 
-use clickhouse_rs::{errors::Error, types::Block, Pool};
+use clickhouse_rs::{errors::Error, types::Block, Pool, ClientHandle};
 use std::f64::EPSILON;
 
 pub type BoxFuture<T> = Box<Future<Item = T, Error = Error> + Send>;
@@ -35,7 +35,7 @@ where
 #[test]
 fn test_ping() {
     let pool = Pool::new(database_url());
-    let done = pool.get_handle().and_then(|c| c.ping()).map(|_| ());
+    let done = pool.get_handle().and_then(ClientHandle::ping).map(|_| ());
 
     run(done).unwrap()
 }
@@ -43,7 +43,7 @@ fn test_ping() {
 #[test]
 fn fn_connection_by_wrong_address() {
     let pool = Pool::new("tcp://badaddr:9000");
-    let done = pool.get_handle().and_then(|c| c.ping()).map(|_| ());
+    let done = pool.get_handle().and_then(ClientHandle::ping).map(|_| ());
 
     run(done).unwrap_err();
 }
@@ -374,4 +374,101 @@ fn test_big_block() {
 
     let actual = run(done).unwrap();
     assert_eq!(actual, 20000)
+}
+
+#[test]
+fn test_nullable() {
+    let ddl = "
+        CREATE TABLE clickhouse_test_nullable (
+            int8     Nullable(Int8),
+            int16    Nullable(Int16),
+            int32    Nullable(Int32),
+            int64    Nullable(Int64),
+            uint8    Nullable(UInt8),
+            uint16   Nullable(UInt16),
+            uint32   Nullable(UInt32),
+            uint64   Nullable(UInt64),
+            float32  Nullable(Float32),
+            float64  Nullable(Float64),
+            string   Nullable(String),
+            date     Nullable(Date),
+            datetime Nullable(DateTime)
+        ) Engine=Memory";
+
+    let query = "
+        SELECT
+            int8,
+            int16,
+            int32,
+            int64,
+            uint8,
+            uint16,
+            uint32,
+            uint64,
+            float32,
+            float64,
+            string,
+            date,
+            datetime
+        FROM clickhouse_test_nullable";
+
+    let date_value: Date<Tz> = UTC.ymd(2016, 10, 22);
+    let date_time_value: DateTime<Tz> = UTC.ymd(2014, 7, 8).and_hms(14, 0, 0);
+
+    let block = Block::new()
+        .add_column("int8", vec![Some(1_i8)])
+        .add_column("int16", vec![Some(1_i16)])
+        .add_column("int32", vec![Some(1_i32)])
+        .add_column("int64", vec![Some(1_i64)])
+        .add_column("uint8", vec![Some(1_u8)])
+        .add_column("uint16", vec![Some(1_u16)])
+        .add_column("uint32", vec![Some(1_u32)])
+        .add_column("uint64", vec![Some(1_u64)])
+        .add_column("float32", vec![Some(1_f32)])
+        .add_column("float64", vec![Some(1_f64)])
+        .add_column("string", vec![Some("text")])
+        .add_column("date", vec![Some(date_value)])
+        .add_column("datetime", vec![Some(date_time_value)]);
+
+    let pool = Pool::new(database_url());
+    let done = pool
+        .get_handle()
+        .and_then(|c| c.execute("DROP TABLE IF EXISTS clickhouse_test_nullable"))
+        .and_then(move |c| c.execute(ddl))
+        .and_then(move |c| c.insert("clickhouse_test_nullable", block))
+        .and_then(move |c| c.query(query).fetch_all())
+        .and_then(move |(_, block)| {
+
+            let int8: Option<i8> = block.get(0, "int8")?;
+            let int16: Option<i16> = block.get(0, "int16")?;
+            let int32: Option<i32> = block.get(0, "int32")?;
+            let int64: Option<i64> = block.get(0, "int64")?;
+            let uint8: Option<u8> = block.get(0, "uint8")?;
+            let uint16: Option<u16> = block.get(0, "uint16")?;
+            let uint32: Option<u32> = block.get(0, "uint32")?;
+            let uint64: Option<u64> = block.get(0, "uint64")?;
+            let float32: Option<f32> = block.get(0, "float32")?;
+            let float64: Option<f64> = block.get(0, "float64")?;
+            let string: Option<&str> = block.get(0, "string")?;
+            let date: Option<Date<Tz>> = block.get(0, "date")?;
+            let datetime: Option<DateTime<Tz>> = block.get(0, "datetime")?;
+
+            assert_eq!(int8, Some(1_i8));
+            assert_eq!(int16, Some(1_i16));
+            assert_eq!(int32, Some(1_i32));
+            assert_eq!(int64, Some(1_i64));
+            assert_eq!(uint8, Some(1_u8));
+            assert_eq!(uint16, Some(1_u16));
+            assert_eq!(uint32, Some(1_u32));
+            assert_eq!(uint64, Some(1_u64));
+            assert_eq!(float32, Some(1_f32));
+            assert_eq!(float64, Some(1_f64));
+            assert_eq!(string, Some("text"));
+            assert_eq!(date, Some(date_value));
+            assert_eq!(datetime, Some(date_time_value));
+
+            Ok(())
+        });
+
+    run(done).unwrap();
 }

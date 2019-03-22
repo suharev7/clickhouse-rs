@@ -22,6 +22,7 @@ clickhouse-rs = "*"
 * Float32, Float64
 * String
 * UInt8, UInt16, UInt32, UInt64, Int8, Int16, Int32, Int64
+* Nullable(T)
 
 ## DNS
 
@@ -66,13 +67,13 @@ pub fn main() {
         CREATE TABLE IF NOT EXISTS payment (
             customer_id  UInt32,
             amount       UInt32,
-            account_name String
+            account_name Nullable(String)
         ) Engine=Memory";
 
     let block = Block::new()
         .add_column("customer_id",  vec![1_u32,  3,  5,  7,     9])
         .add_column("amount",       vec![2_u32,  4,  6,  8,    10])
-        .add_column("account_name", vec!["foo", "", "", "", "bar"]);
+        .add_column("account_name", vec![Some("foo"), None, None, None, Some("bar")]);
 
     let pool = Pool::new(database_url);
     
@@ -83,10 +84,10 @@ pub fn main() {
        .and_then(move |c| c.query("SELECT * FROM payment").fetch_all())
        .and_then(move |(_, block)| {
            for row in block.rows() {
-               let id: u32     = row.get("customer_id")?;
-               let amount: u32 = row.get("amount")?;
-               let name: &str  = row.get("account_name")?;
-               println!("Found payment {}: {} {}", id, amount, name);
+               let id: u32            = row.get("customer_id")?;
+               let amount: u32        = row.get("amount")?;
+               let name: Option<&str> = row.get("account_name")?;
+               println!("Found payment {}: {} {:?}", id, amount, name);
            }
            Ok(())
        })

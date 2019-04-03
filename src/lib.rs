@@ -124,7 +124,7 @@ pub use crate::pool::Pool;
 use crate::{
     connecting_stream::ConnectingStream,
     errors::{DriverError, Error, FromSqlError},
-    io::{BoxFuture, ClickhouseTransport},
+    io::{BoxFuture, BoxStream, ClickhouseTransport},
     pool::PoolBinding,
     retry_guard::RetryGuard,
     types::{Block, Cmd, Context, IntoOptions, Options, OptionsSource, Packet, Query, QueryResult},
@@ -409,6 +409,25 @@ impl ClientHandle {
 
         if ping_before_query {
             Box::new(self.check_connection().and_then(move |c| Box::new(f(c))))
+        } else {
+            Box::new(f(self))
+        }
+    }
+
+    pub(crate) fn wrap_stream<T, R, F>(self, f: F) -> BoxStream<T>
+    where
+        F: FnOnce(Self) -> R + Send + 'static,
+        R: Stream<Item = T, Error = Error> + Send + 'static,
+        T: Send + 'static,
+    {
+        let ping_before_query = match self.context.options.get() {
+            Ok(val) => val.ping_before_query,
+            Err(err) => return Box::new(stream::once(Err(err))),
+        };
+
+        if ping_before_query {
+            let fut = self.check_connection().and_then(move |c| future::ok(Box::new(f(c)))).flatten_stream();
+            Box::new(fut)
         } else {
             Box::new(f(self))
         }

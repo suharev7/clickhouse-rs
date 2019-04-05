@@ -4,7 +4,7 @@ use tokio::prelude::*;
 
 use crate::{
     errors::{DriverError, Error},
-    io::{BoxFuture, ClickhouseTransport},
+    io::{BoxFuture, BoxStream, ClickhouseTransport},
     types::{Block, Cmd, Packet, Query, Row},
     ClientHandle,
 };
@@ -128,6 +128,55 @@ impl QueryResult {
                 .unwrap()
                 .call(Cmd::SendQuery(query, context.clone()))
                 .fold(init, f)
+        })
+    }
+
+    /// Method that produces a stream of blocks containing rows
+    pub fn stream_blocks(self) -> BoxStream<Result<Block, Error>>
+    {
+        let release_pool = self.client.pool.clone();
+
+        Box::new(
+            self.map_packets(|packet| match packet {
+                Packet::Block(b) => {
+                    if b.row_count() == 0 {
+                        None
+                    } else {
+                        Some(Ok(b))
+                    }
+                },
+                Packet::Eof(_) => None,
+                Packet::ProfileInfo(_) | Packet::Progress(_) => None,
+                Packet::Exception(exception) => {
+                    Some(Err(Error::Server(exception)))
+                }
+                _ => Some(Err(Error::Driver(DriverError::UnexpectedPacket))),
+            })
+            .filter_map(|some_either| some_either)
+            .map_err(move |err| {
+                // hwc: not sure why I have to clone again
+                release_pool.clone().release_conn();
+                err
+            })
+        )
+    }
+
+    fn map_packets<F, T>(self, f: F) -> BoxStream<T>
+    where
+        F: Fn(Packet<ClickhouseTransport>) -> T + Send + 'static,
+        T: Send + 'static,
+    {
+        let context = self.client.context.clone();
+        let query = self.query;
+
+        self.client.wrap_stream(move |mut c| {
+            info!("[send query] {}", query.get_sql());
+            c.pool.detach();
+            c.inner
+                .take()
+                .unwrap()
+                .call(Cmd::SendQuery(query, context.clone()))
+                .map(f)
         })
     }
 }

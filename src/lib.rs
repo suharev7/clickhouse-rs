@@ -16,6 +16,7 @@
 //! * Float32, Float64
 //! * String
 //! * UInt8, UInt16, UInt32, UInt64, Int8, Int16, Int32, Int64
+//! * Nullable(T)
 //!
 //! ### DNS
 //!
@@ -426,7 +427,10 @@ impl ClientHandle {
         };
 
         if ping_before_query {
-            let fut = self.check_connection().and_then(move |c| future::ok(Box::new(f(c)))).flatten_stream();
+            let fut = self
+                .check_connection()
+                .and_then(move |c| future::ok(Box::new(f(c))))
+                .flatten_stream();
             Box::new(fut)
         } else {
             Box::new(f(self))

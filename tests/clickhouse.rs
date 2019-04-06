@@ -9,10 +9,10 @@ use chrono::prelude::*;
 use chrono_tz::Tz::{self, UTC};
 use tokio::prelude::*;
 
-use clickhouse_rs::{errors::Error, types::Block, Pool, ClientHandle};
+use clickhouse_rs::{errors::Error, types::Block, ClientHandle, Pool};
 use std::f64::EPSILON;
 
-pub type BoxFuture<T> = Box<Future<Item = T, Error = Error> + Send>;
+type BoxFuture<T> = Box<Future<Item = T, Error = Error> + Send>;
 
 fn database_url() -> String {
     env::var("DATABASE_URL").unwrap_or_else(|_| "tcp://localhost:9000?compression=lz4".into())
@@ -319,6 +319,22 @@ fn test_with_totals() {
 }
 
 #[test]
+fn test_stream_rows() {
+    let pool = Pool::new(database_url());
+
+    let done = pool.get_handle().and_then(|c| {
+        c.query("SELECT number FROM system.numbers LIMIT 10")
+            .stream_rows()
+            .fold(0_u64, |acc, row| -> Result<u64, Error> {
+                let number: u64 = row.get("number")?;
+                Ok(acc + number)
+            })
+    });
+
+    assert_eq!(45, run(done).unwrap());
+}
+
+#[test]
 fn test_concurrent_queries() {
     fn query_sum(n: u64) -> BoxFuture<u64> {
         let sql = format!("SELECT number FROM system.numbers LIMIT {}", n);
@@ -327,9 +343,8 @@ fn test_concurrent_queries() {
         Box::new(
             pool.get_handle()
                 .and_then(move |c| {
-                    c.query(sql.as_str()).fold(0_u64, |acc, row| {
-                        Ok(acc + row.get::<u64, _>("number")?)
-                    })
+                    c.query(sql.as_str())
+                        .fold(0_u64, |acc, row| Ok(acc + row.get::<u64, _>("number")?))
                 })
                 .map(|(_, value)| value),
         )
@@ -368,9 +383,7 @@ fn test_big_block() {
     let done = pool
         .get_handle()
         .and_then(move |c| c.query(sql).fetch_all())
-        .and_then(move |(_, block)| {
-            Ok(block.row_count())
-        });
+        .and_then(move |(_, block)| Ok(block.row_count()));
 
     let actual = run(done).unwrap();
     assert_eq!(actual, 20000)
@@ -438,7 +451,6 @@ fn test_nullable() {
         .and_then(move |c| c.insert("clickhouse_test_nullable", block))
         .and_then(move |c| c.query(query).fetch_all())
         .and_then(move |(_, block)| {
-
             let int8: Option<i8> = block.get(0, "int8")?;
             let int16: Option<i16> = block.get(0, "int16")?;
             let int32: Option<i32> = block.get(0, "int32")?;

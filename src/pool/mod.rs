@@ -341,10 +341,13 @@ mod test {
     fn test_detach() {
         let pool = Pool::new(DATABASE_URL.as_str());
 
-        let done = pool.get_handle().and_then(ClientHandle::ping).and_then(|mut c| {
-            c.pool.detach();
-            Ok(())
-        });
+        let done = pool
+            .get_handle()
+            .and_then(ClientHandle::ping)
+            .and_then(|mut c| {
+                c.pool.detach();
+                Ok(())
+            });
 
         run(done).unwrap();
         assert_eq!(pool.info().idle_len, 0);

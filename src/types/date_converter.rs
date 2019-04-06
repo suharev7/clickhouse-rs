@@ -1,4 +1,4 @@
-use chrono::{Date, prelude::*};
+use chrono::{prelude::*, Date};
 use chrono_tz::Tz;
 
 use crate::types::{SqlType, Value, ValueRef};

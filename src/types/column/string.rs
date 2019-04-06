@@ -1,4 +1,4 @@
-use std::{string::ToString, io::Write};
+use std::{io::Write, string::ToString};
 
 use crate::{
     binary::{Encoder, ReadEx},

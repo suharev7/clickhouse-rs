@@ -5,7 +5,10 @@ use tokio::prelude::*;
 use crate::{
     errors::{DriverError, Error},
     io::{BoxFuture, BoxStream, ClickhouseTransport},
-    types::{Block, Cmd, Packet, Query, Row},
+    types::{
+        block::BlockRef, query_result::stream_blocks::BlockStream, Block, Cmd, Packet, Query, Row,
+        Rows,
+    },
     ClientHandle,
 };
 
@@ -13,6 +16,7 @@ use self::{either::Either, fold_block::FoldBlock};
 
 mod either;
 mod fold_block;
+mod stream_blocks;
 
 /// Result of a query or statement execution.
 pub struct QueryResult {
@@ -35,7 +39,7 @@ impl QueryResult {
     /// # let done =
     /// pool.get_handle()
     ///     .and_then(|c| {
-    ///         c.query("SELECT * FROM system.numbers LIMIT 10")
+    ///         c.query("SELECT number FROM system.numbers LIMIT 10000000")
     ///             .fold(0, |acc, row| {
     ///                 let number: u64 = row.get("number")?;
     ///                 Ok(acc + number)
@@ -132,52 +136,64 @@ impl QueryResult {
     }
 
     /// Method that produces a stream of blocks containing rows
-    pub fn stream_blocks(self) -> BoxStream<Result<Block, Error>>
-    {
-        let release_pool = self.client.pool.clone();
-
-        Box::new(
-            self.map_packets(|packet| match packet {
-                Packet::Block(b) => {
-                    if b.row_count() == 0 {
-                        None
-                    } else {
-                        Some(Ok(b))
-                    }
-                },
-                Packet::Eof(_) => None,
-                Packet::ProfileInfo(_) | Packet::Progress(_) => None,
-                Packet::Exception(exception) => {
-                    Some(Err(Error::Server(exception)))
-                }
-                _ => Some(Err(Error::Driver(DriverError::UnexpectedPacket))),
-            })
-            .filter_map(|some_either| some_either)
-            .map_err(move |err| {
-                // hwc: not sure why I have to clone again
-                release_pool.clone().release_conn();
-                err
-            })
-        )
-    }
-
-    fn map_packets<F, T>(self, f: F) -> BoxStream<T>
-    where
-        F: Fn(Packet<ClickhouseTransport>) -> T + Send + 'static,
-        T: Send + 'static,
-    {
-        let context = self.client.context.clone();
+    ///
+    /// example:
+    /// ```rust
+    /// # extern crate clickhouse_rs;
+    /// # extern crate futures;
+    /// # use futures::{Future, Stream};
+    /// # use clickhouse_rs::Pool;
+    /// # use std::env;
+    /// # let database_url = env::var("DATABASE_URL").unwrap_or("tcp://localhost:9000?compression=lz4".into());
+    /// # let pool = Pool::new(database_url);
+    /// # let done =
+    ///  pool.get_handle()
+    ///      .and_then(|c| {
+    /// #        let sql_query = "SELECT number FROM system.numbers LIMIT 100000";
+    ///          c.query(sql_query)
+    ///              .stream_blocks()
+    ///              .for_each(|block| {
+    ///                  println!("{:?}\nblock counts: {} rows", block, block.row_count());
+    /// #                Ok(())
+    ///              })
+    ///      })
+    /// #    .map(|_| ())
+    /// #    .map_err(|err| eprintln!("database error: {}", err));
+    /// # tokio::run(done)
+    /// ```
+    pub fn stream_blocks(self) -> BoxStream<Block> {
         let query = self.query;
 
         self.client.wrap_stream(move |mut c| {
             info!("[send query] {}", query.get_sql());
+
             c.pool.detach();
-            c.inner
-                .take()
-                .unwrap()
-                .call(Cmd::SendQuery(query, context.clone()))
-                .map(f)
+
+            let context = c.context.clone();
+            let pool = c.pool.clone();
+
+            BlockStream::new(
+                c.inner
+                    .take()
+                    .unwrap()
+                    .call(Cmd::SendQuery(query, context.clone())),
+                context,
+                pool,
+            )
         })
+    }
+
+    /// Method that produces a stream of rows
+    pub fn stream_rows(self) -> BoxStream<Row<'static>> {
+        Box::new(
+            self.stream_blocks()
+                .map(Arc::new)
+                .map(|block| {
+                    let block_ref = BlockRef::Owned(block);
+                    stream::iter_ok(Rows { row: 0, block_ref })
+                })
+                .flatten(),
+        )
     }
 }
 

@@ -53,8 +53,9 @@ where
     type Error = Error;
 
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+        let mut state;
         loop {
-            let mut state = mem::replace(&mut self.state, State::Empty);
+            state = mem::replace(&mut self.state, State::Empty);
 
             match state {
                 State::Empty => unreachable!(),
@@ -64,12 +65,16 @@ where
                         self.state = State::Run((self.f)(acc, row).into_future());
                     }
                 },
-                State::Run(ref mut inner) => {
-                    let row = try_ready!(inner.poll());
-                    self.state = State::Ready(row);
-                }
+                State::Run(ref mut inner) => match inner.poll() {
+                    Ok(Async::Ready(item)) => self.state = State::Ready(item),
+                    Ok(Async::NotReady) => break,
+                    Err(e) => return Err(e),
+                },
             }
         }
+
+        self.state = state;
+        Ok(Async::NotReady)
     }
 }
 

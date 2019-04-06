@@ -187,7 +187,7 @@ impl Stream for ClickhouseTransport {
 }
 
 impl PacketStream {
-    pub fn read_block(
+    pub(crate) fn read_block(
         mut self,
         context: Context,
         pool: PoolBinding,

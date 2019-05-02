@@ -3,14 +3,13 @@ extern crate chrono_tz;
 extern crate clickhouse_rs;
 extern crate tokio;
 
-use std::env;
+use std::{env, f64::EPSILON, fmt::Debug};
 
 use chrono::prelude::*;
 use chrono_tz::Tz::{self, UTC};
 use tokio::prelude::*;
 
-use clickhouse_rs::{errors::Error, types::Block, ClientHandle, Pool};
-use std::f64::EPSILON;
+use clickhouse_rs::{errors::Error, types::Block, types::FromSql, ClientHandle, Pool};
 
 type BoxFuture<T> = Box<Future<Item = T, Error = Error> + Send>;
 
@@ -483,4 +482,33 @@ fn test_nullable() {
         });
 
     run(done).unwrap();
+}
+
+#[test]
+fn test_generic_column() {
+    fn extract_to_vec<'a, T>(name: &str, block: &'a Block) -> Vec<T>
+    where
+        T: FromSql<'a> + Debug + 'static,
+    {
+        let n = block.row_count();
+        let mut result = Vec::with_capacity(n);
+        for row_index in 0..n {
+            let value: T = block.get(row_index, name).unwrap();
+            result.push(value)
+        }
+        result
+    }
+
+    let block = Block::new()
+        .add_column("int", vec![1u32, 2, 3])
+        .add_column("str", vec!["A", "B", "C"]);
+
+    let int_vec: Vec<u32> = extract_to_vec("int", &block);
+    let str_vec: Vec<String> = extract_to_vec("str", &block);
+
+    assert_eq!(int_vec, vec![1u32, 2, 3]);
+    assert_eq!(
+        str_vec,
+        vec!["A".to_string(), "B".to_string(), "C".to_string()]
+    );
 }

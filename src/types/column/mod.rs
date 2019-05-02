@@ -20,6 +20,7 @@ mod column_data;
 mod concat;
 mod date;
 mod factory;
+pub(crate) mod fixed_string;
 mod list;
 mod nullable;
 mod numeric;
@@ -30,8 +31,8 @@ pub type ArcColumnData = Arc<dyn ColumnData + Send + Sync>;
 
 /// Represents Clickhouse Column
 pub struct Column {
-    name: String,
-    data: ArcColumnData,
+    pub(crate) name: String,
+    pub(crate) data: ArcColumnData,
 }
 
 pub trait ColumnFrom {

@@ -39,6 +39,10 @@ impl Value {
             SqlType::Int32 => Value::Int32(0),
             SqlType::Int64 => Value::Int64(0),
             SqlType::String => Value::String(String::default()),
+            SqlType::FixedString(str_len) => {
+                let bytes = vec![0_u8; str_len];
+                Value::String(unsafe { String::from_utf8_unchecked(bytes) })
+            }
             SqlType::Float32 => Value::Float32(0.0),
             SqlType::Float64 => Value::Float64(0.0),
             SqlType::Date => 0_u16.to_date(Tz::Zulu).into(),
@@ -321,5 +325,17 @@ mod test {
             ),
             "42".to_string()
         );
+    }
+
+    #[test]
+    fn test_default_fixed_str() {
+        for n in 0_usize..1000_usize {
+            let actual = Value::default(SqlType::FixedString(n));
+            let actual_str: String = actual.into();
+            assert_eq!(actual_str.len(), n);
+            for ch in actual_str.as_bytes() {
+                assert_eq!(*ch, 0_u8);
+            }
+        }
     }
 }

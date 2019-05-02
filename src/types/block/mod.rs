@@ -1,4 +1,8 @@
-use std::{cmp, fmt, io::Cursor, io::Read};
+use std::{
+    cmp, fmt,
+    io::{Cursor, Read},
+    sync::Arc,
+};
 
 use byteorder::{LittleEndian, WriteBytesExt};
 use chrono_tz::Tz;
@@ -8,10 +12,16 @@ use lz4::liblz4::{LZ4_compressBound, LZ4_compress_default};
 use crate::{
     binary::{protocol, Encoder, ReadEx},
     errors::{Error, FromSqlError},
-    types::{ClickhouseResult, FromSql},
+    types::{
+        ClickhouseResult,
+        FromSql,
+        SqlType,
+        column::{
+            {self, Column, ColumnFrom, ArcColumnWrapper},
+            fixed_string::{FixedStringAdapter, NullableFixedStringAdapter}
+        }
+    },
 };
-
-use super::column::{self, Column, ColumnFrom};
 
 use self::chunk_iterator::ChunkIterator;
 pub(crate) use self::row::BlockRef;
@@ -19,7 +29,6 @@ pub use self::{
     block_info::BlockInfo,
     row::{Row, Rows},
 };
-use crate::types::column::ArcColumnWrapper;
 
 mod block_info;
 mod chunk_iterator;
@@ -190,6 +199,72 @@ impl Block {
 }
 
 impl Block {
+    pub(crate) fn cast_to(self, header: &Block) -> Result<Self, Error> {
+        let mut columns = self.columns;
+        let info = self.info;
+        columns.reverse();
+
+        if header.column_count() != columns.len() {
+            return Err(Error::FromSql(FromSqlError::OutOfRange));
+        }
+
+        let mut new_columns = Vec::with_capacity(columns.len());
+        for column in header.columns().iter() {
+            let old_column = columns.pop().unwrap();
+            let dst_type = column.sql_type();
+            let src_type = old_column.sql_type();
+
+            if dst_type == src_type {
+                new_columns.push(old_column);
+                continue;
+            }
+
+            if let SqlType::FixedString(str_len) = dst_type {
+                if src_type == SqlType::String {
+                    let name = old_column.name().to_owned();
+                    let adapter = FixedStringAdapter {
+                        column: old_column,
+                        str_len,
+                    };
+                    new_columns.push(Column {
+                        name,
+                        data: Arc::new(adapter),
+                    });
+                    continue;
+                }
+            }
+
+            if let SqlType::Nullable(left_type) = dst_type {
+                if let SqlType::FixedString(str_len) = left_type {
+                    if let SqlType::Nullable(right_type) = src_type {
+                        if *right_type == SqlType::String {
+                            let name = old_column.name().to_owned();
+                            let adapter = NullableFixedStringAdapter {
+                                column: old_column,
+                                str_len: *str_len,
+                            };
+                            new_columns.push(Column {
+                                name,
+                                data: Arc::new(adapter),
+                            });
+                            continue;
+                        }
+                    }
+                }
+            }
+
+            return Err(Error::FromSql(FromSqlError::InvalidType {
+                src: src_type.to_string(),
+                dst: dst_type.to_string(),
+            }));
+        }
+
+        Ok(Block {
+            info,
+            columns: new_columns,
+        })
+    }
+
     pub(crate) fn write(&self, encoder: &mut Encoder, compress: bool) {
         if compress {
             let mut tmp_encoder = Encoder::new();

@@ -512,3 +512,41 @@ fn test_generic_column() {
         vec!["A".to_string(), "B".to_string(), "C".to_string()]
     );
 }
+
+#[test]
+fn test_fixed_string() {
+    let ddl = "
+        CREATE TABLE clickhouse_test_fixed (
+            text     FixedString(4),
+            opt_text Nullable(FixedString(4))
+        ) Engine=Memory";
+
+    let query = "
+        SELECT
+            text,
+            opt_text
+        FROM clickhouse_test_fixed";
+
+    let block = Block::new()
+        .add_column("opt_text", vec![Some("text")])
+        .add_column("text", vec!["text"]);
+
+    let pool = Pool::new(database_url());
+    let done = pool
+        .get_handle()
+        .and_then(|c| c.execute("DROP TABLE IF EXISTS clickhouse_test_fixed"))
+        .and_then(move |c| c.execute(ddl))
+        .and_then(move |c| c.insert("clickhouse_test_fixed", block))
+        .and_then(move |c| c.query(query).fetch_all())
+        .and_then(move |(_, block)| {
+            let text: &str = block.get(0, "text")?;
+            let opt_text: Option<&str> = block.get(0, "opt_text")?;
+
+            assert_eq!(text, "text");
+            assert_eq!(opt_text, Some("text"));
+
+            Ok(())
+        });
+
+    run(done).unwrap();
+}

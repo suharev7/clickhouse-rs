@@ -14,7 +14,7 @@
 //! * Date
 //! * DateTime
 //! * Float32, Float64
-//! * String
+//! * String, FixedString(N)
 //! * UInt8, UInt16, UInt32, UInt64, Int8, Int16, Int32, Int64
 //! * Nullable(T)
 //!
@@ -62,7 +62,7 @@
 //!         CREATE TABLE IF NOT EXISTS payment (
 //!             customer_id  UInt32,
 //!             amount       UInt32,
-//!             account_name Nullable(String)
+//!             account_name Nullable(FixedString(3))
 //!         ) Engine=Memory";
 //!
 //!     let block = Block::new()
@@ -104,7 +104,6 @@ extern crate failure;
 #[macro_use]
 extern crate futures;
 extern crate hostname;
-#[cfg(test)]
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
@@ -124,7 +123,7 @@ use tokio::prelude::*;
 pub use crate::pool::Pool;
 use crate::{
     connecting_stream::ConnectingStream,
-    errors::{DriverError, Error, FromSqlError},
+    errors::{DriverError, Error},
     io::{BoxFuture, BoxStream, ClickhouseTransport},
     pool::PoolBinding,
     retry_guard::RetryGuard,
@@ -346,16 +345,6 @@ impl ClientHandle {
         let context = self.context.clone();
         let pool = self.pool.clone();
 
-        let mut sql_types = Vec::with_capacity(block.column_count());
-        for column in block.columns() {
-            sql_types.push(column.sql_type());
-        }
-
-        let send_cmd = Cmd::Union(
-            Box::new(Cmd::SendData(block, context.clone())),
-            Box::new(Cmd::SendData(Block::default(), context.clone())),
-        );
-
         self.wrap_future(|mut c| {
             info!("[insert]     {}", query.get_sql());
             c.inner
@@ -363,30 +352,18 @@ impl ClientHandle {
                 .unwrap()
                 .call(Cmd::SendQuery(query, context.clone()))
                 .read_block(context.clone(), pool.clone())
-                .and_then(move |(mut c, b)| {
+                .and_then(move |(mut c, b)| -> BoxFuture<Self> {
                     let dst_block = b.unwrap();
 
-                    if dst_block.column_count() != sql_types.len() {
-                        let err: BoxFuture<Self> = Box::new(future::err::<Self, Error>(
-                            Error::FromSql(FromSqlError::OutOfRange),
-                        ));
-                        return err;
-                    }
+                    let casted_block = match block.cast_to(&dst_block) {
+                        Ok(value) => value,
+                        Err(err) => return Box::new(future::err::<Self, Error>(err)),
+                    };
 
-                    for (index, column) in dst_block.columns().iter().enumerate() {
-                        let dst_type = column.sql_type();
-                        let src_type = sql_types[index];
-
-                        if dst_type != src_type {
-                            let err: BoxFuture<Self> = Box::new(future::err::<Self, Error>(
-                                Error::FromSql(FromSqlError::InvalidType {
-                                    src: src_type.to_string(),
-                                    dst: dst_type.to_string(),
-                                }),
-                            ));
-                            return err;
-                        }
-                    }
+                    let send_cmd = Cmd::Union(
+                        Box::new(Cmd::SendData(casted_block, context.clone())),
+                        Box::new(Cmd::SendData(Block::default(), context.clone())),
+                    );
 
                     Box::new(
                         c.inner

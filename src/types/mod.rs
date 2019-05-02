@@ -9,13 +9,13 @@ pub use self::{
     block::{Block, Row, Rows},
     column::Column,
     options::Options,
+    from_sql::FromSql,
     query::Query,
     query_result::QueryResult,
 };
 pub(crate) use self::{
     cmd::Cmd,
     date_converter::DateConverter,
-    from_sql::FromSql,
     marshal::Marshal,
     options::{IntoOptions, OptionsSource},
     stat_buffer::StatBuffer,

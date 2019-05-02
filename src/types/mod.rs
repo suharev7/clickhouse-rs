@@ -1,4 +1,4 @@
-use std::{borrow::Cow, fmt};
+use std::{borrow::Cow, fmt, collections::HashMap, sync::Mutex};
 
 use chrono_tz::Tz;
 use hostname::get_hostname;
@@ -155,7 +155,7 @@ impl<S> Packet<S> {
     }
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum SqlType {
     UInt8,
     UInt16,
@@ -166,11 +166,16 @@ pub enum SqlType {
     Int32,
     Int64,
     String,
+    FixedString(usize),
     Float32,
     Float64,
     Date,
     DateTime,
     Nullable(&'static SqlType),
+}
+
+lazy_static! {
+    static ref TYPES_CACHE: Mutex<HashMap<SqlType, Box<SqlType>>> = Mutex::new(HashMap::new());
 }
 
 impl From<SqlType> for &'static SqlType {
@@ -189,7 +194,15 @@ impl From<SqlType> for &'static SqlType {
             SqlType::Float64 => &SqlType::Float64,
             SqlType::Date => &SqlType::Date,
             SqlType::DateTime => &SqlType::DateTime,
-            _ => unreachable!(),
+            _ => {
+                let mut guard = TYPES_CACHE.lock().unwrap();
+                loop {
+                    if let Some(value_ref) = guard.get(&value) {
+                        return unsafe { &*(value_ref.as_ref() as *const SqlType) };
+                    }
+                    guard.insert(value, Box::new(value));
+                }
+            }
         }
     }
 }
@@ -206,6 +219,7 @@ impl SqlType {
             SqlType::Int32 => "Int32".into(),
             SqlType::Int64 => "Int64".into(),
             SqlType::String => "String".into(),
+            SqlType::FixedString(str_len) => format!("FixedString({})", str_len).into(),
             SqlType::Float32 => "Float32".into(),
             SqlType::Float64 => "Float64".into(),
             SqlType::Date => "Date".into(),

@@ -20,7 +20,7 @@ clickhouse-rs = "*"
 * Date
 * DateTime
 * Float32, Float64
-* String
+* String, FixedString(N)
 * UInt8, UInt16, UInt32, UInt64, Int8, Int16, Int32, Int64
 * Nullable(T)
 
@@ -67,7 +67,7 @@ pub fn main() {
         CREATE TABLE IF NOT EXISTS payment (
             customer_id  UInt32,
             amount       UInt32,
-            account_name Nullable(String)
+            account_name Nullable(FixedString(3))
         ) Engine=Memory";
 
     let block = Block::new()

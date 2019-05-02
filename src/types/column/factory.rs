@@ -6,6 +6,7 @@ use super::{
     column_data::ColumnData, date::DateColumnData, nullable::NullableColumnData,
     numeric::VectorColumnData, string::StringColumnData, ColumnWrapper,
 };
+use crate::types::column::fixed_string::FixedStringColumnData;
 
 impl ColumnData {
     pub(crate) fn load_data<W: ColumnWrapper, T: ReadEx>(
@@ -31,12 +32,26 @@ impl ColumnData {
             _ => {
                 if let Some(inner_type) = parse_nullable_type(type_name) {
                     W::wrap(NullableColumnData::load(reader, inner_type, size, tz)?)
+                } else if let Some(str_len) = parse_fixed_string(type_name) {
+                    W::wrap(FixedStringColumnData::load(reader, size, str_len)?)
                 } else {
                     let message = format!("Unsupported column type \"{}\".", type_name);
                     return Err(message.into());
                 }
             }
         })
+    }
+}
+
+fn parse_fixed_string(source: &str) -> Option<usize> {
+    if !source.starts_with("FixedString") {
+        return None;
+    }
+
+    let inner_size = &source[12..source.len() - 1];
+    match inner_size.parse::<usize>() {
+        Err(_) => None,
+        Ok(value) => Some(value),
     }
 }
 
@@ -63,5 +78,12 @@ mod test {
         assert_eq!(parse_nullable_type("Nullable(Int8)"), Some("Int8"));
         assert_eq!(parse_nullable_type("Int8"), None);
         assert_eq!(parse_nullable_type("Nullable(Nullable(Int8))"), None);
+    }
+
+    #[test]
+    fn test_parse_fixed_string() {
+        assert_eq!(parse_fixed_string("FixedString(8)"), Some(8_usize));
+        assert_eq!(parse_fixed_string("FixedString(zz)"), None);
+        assert_eq!(parse_fixed_string("Int8"), None);
     }
 }

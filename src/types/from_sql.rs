@@ -36,9 +36,21 @@ impl<'a> FromSql<'a> for &'a str {
     }
 }
 
+impl<'a> FromSql<'a> for &'a [u8] {
+    fn from_sql(value: ValueRef<'a>) -> FromSqlResult<&'a [u8]> {
+        value.as_bytes()
+    }
+}
+
 impl<'a> FromSql<'a> for String {
     fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
         value.as_str().map(str::to_string)
+    }
+}
+
+impl<'a> FromSql<'a> for Vec<u8> {
+    fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
+        value.as_bytes().map(|bs| bs.to_vec())
     }
 }
 

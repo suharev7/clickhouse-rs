@@ -46,7 +46,36 @@ impl<'a> ColumnFrom for Vec<&'a str> {
     }
 }
 
+impl ColumnFrom for Vec<Vec<u8>> {
+    fn column_from<W: ColumnWrapper>(data: Self) -> W::Wrapper {
+        W::wrap(StringColumnData { pool: data.into() })
+    }
+}
+
+impl<'a> ColumnFrom for Vec<&'a [u8]> {
+    fn column_from<W: ColumnWrapper>(data: Self) -> W::Wrapper {
+        W::wrap(StringColumnData { pool: data.into() })
+    }
+}
+
 impl ColumnFrom for Vec<Option<String>> {
+    fn column_from<W: ColumnWrapper>(source: Self) -> W::Wrapper {
+        let inner = Box::new(StringColumnData::with_capacity(source.len()));
+
+        let mut data = NullableColumnData {
+            inner,
+            nulls: Vec::with_capacity(source.len()),
+        };
+
+        for value in source {
+            data.push(value.into());
+        }
+
+        W::wrap(data)
+    }
+}
+
+impl ColumnFrom for Vec<Option<Vec<u8>>> {
     fn column_from<W: ColumnWrapper>(source: Self) -> W::Wrapper {
         let inner = Box::new(StringColumnData::with_capacity(source.len()));
 
@@ -97,9 +126,9 @@ impl ColumnData for StringColumnData {
     }
 
     fn push(&mut self, value: Value) {
-        let s: String = value.into();
+        let s: Vec<u8> = value.into();
         let mut b = self.pool.allocate(s.len());
-        b.write_all(s.as_bytes()).unwrap();
+        b.write_all(s.as_ref()).unwrap();
     }
 
     fn at(&self, index: usize) -> ValueRef {

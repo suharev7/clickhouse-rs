@@ -1,7 +1,6 @@
 use std::{
     cmp, fmt,
     io::{Cursor, Read},
-    sync::Arc,
 };
 
 use byteorder::{LittleEndian, WriteBytesExt};
@@ -13,13 +12,8 @@ use crate::{
     binary::{protocol, Encoder, ReadEx},
     errors::{Error, FromSqlError},
     types::{
-        ClickhouseResult,
-        FromSql,
-        SqlType,
-        column::{
-            {self, Column, ColumnFrom, ArcColumnWrapper},
-            fixed_string::{FixedStringAdapter, NullableFixedStringAdapter}
-        }
+        column::{self, ArcColumnWrapper, Column, ColumnFrom},
+        ClickhouseResult, FromSql,
     },
 };
 
@@ -200,8 +194,8 @@ impl Block {
 
 impl Block {
     pub(crate) fn cast_to(self, header: &Block) -> Result<Self, Error> {
-        let mut columns = self.columns;
         let info = self.info;
+        let mut columns = self.columns;
         columns.reverse();
 
         if header.column_count() != columns.len() {
@@ -209,54 +203,11 @@ impl Block {
         }
 
         let mut new_columns = Vec::with_capacity(columns.len());
-        for column in header.columns().iter() {
-            let old_column = columns.pop().unwrap();
+        for column in header.columns() {
             let dst_type = column.sql_type();
-            let src_type = old_column.sql_type();
-
-            if dst_type == src_type {
-                new_columns.push(old_column);
-                continue;
-            }
-
-            if let SqlType::FixedString(str_len) = dst_type {
-                if src_type == SqlType::String {
-                    let name = old_column.name().to_owned();
-                    let adapter = FixedStringAdapter {
-                        column: old_column,
-                        str_len,
-                    };
-                    new_columns.push(Column {
-                        name,
-                        data: Arc::new(adapter),
-                    });
-                    continue;
-                }
-            }
-
-            if let SqlType::Nullable(left_type) = dst_type {
-                if let SqlType::FixedString(str_len) = left_type {
-                    if let SqlType::Nullable(right_type) = src_type {
-                        if *right_type == SqlType::String {
-                            let name = old_column.name().to_owned();
-                            let adapter = NullableFixedStringAdapter {
-                                column: old_column,
-                                str_len: *str_len,
-                            };
-                            new_columns.push(Column {
-                                name,
-                                data: Arc::new(adapter),
-                            });
-                            continue;
-                        }
-                    }
-                }
-            }
-
-            return Err(Error::FromSql(FromSqlError::InvalidType {
-                src: src_type.to_string(),
-                dst: dst_type.to_string(),
-            }));
+            let old_column = columns.pop().unwrap();
+            let new_column = old_column.cast_to(dst_type)?;
+            new_columns.push(new_column);
         }
 
         Ok(Block {

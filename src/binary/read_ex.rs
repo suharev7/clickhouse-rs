@@ -5,8 +5,6 @@ use crate::{
     types::{column::StringPool, ClickhouseResult, StatBuffer, Unmarshal},
 };
 
-use std::str;
-
 pub(crate) trait ReadEx {
     fn read_bytes(&mut self, rv: &mut [u8]) -> ClickhouseResult<()>;
     fn read_scalar<V>(&mut self) -> ClickhouseResult<V>
@@ -81,7 +79,6 @@ where
         let str_len = self.read_uvarint()? as usize;
         let buffer = pool.allocate(str_len);
         self.read_bytes(buffer)?;
-        str::from_utf8(buffer)?;
         Ok(())
     }
 }

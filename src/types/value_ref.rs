@@ -1,4 +1,4 @@
-use std::{convert, fmt};
+use std::{convert, fmt, str};
 
 use chrono::prelude::*;
 use chrono_tz::Tz;
@@ -18,7 +18,7 @@ pub enum ValueRef<'a> {
     Int16(i16),
     Int32(i32),
     Int64(i64),
-    String(&'a str),
+    String(&'a [u8]),
     Float32(f32),
     Float64(f64),
     Date(Date<Tz>),
@@ -37,7 +37,10 @@ impl<'a> fmt::Display for ValueRef<'a> {
             ValueRef::Int16(v) => fmt::Display::fmt(v, f),
             ValueRef::Int32(v) => fmt::Display::fmt(v, f),
             ValueRef::Int64(v) => fmt::Display::fmt(v, f),
-            ValueRef::String(v) => fmt::Display::fmt(v, f),
+            ValueRef::String(v) => match str::from_utf8(v) {
+                Ok(s) => fmt::Display::fmt(s, f),
+                Err(_) => write!(f, "{:?}", *v),
+            },
             ValueRef::Float32(v) => fmt::Display::fmt(v, f),
             ValueRef::Float64(v) => fmt::Display::fmt(v, f),
             ValueRef::Date(v) if f.alternate() => fmt::Display::fmt(v, f),
@@ -79,12 +82,23 @@ impl<'a> convert::From<ValueRef<'a>> for SqlType {
 impl<'a> ValueRef<'a> {
     pub fn as_str(&self) -> ClickhouseResult<&'a str> {
         if let ValueRef::String(t) = self {
+            return Ok(str::from_utf8(t)?);
+        }
+        let from = SqlType::from(self.clone()).to_string();
+        Err(Error::FromSql(FromSqlError::InvalidType {
+            src: from,
+            dst: "&str".into(),
+        }))
+    }
+
+    pub fn as_bytes(&self) -> ClickhouseResult<&'a [u8]> {
+        if let ValueRef::String(t) = self {
             return Ok(t);
         }
         let from = SqlType::from(self.clone()).to_string();
         Err(Error::FromSql(FromSqlError::InvalidType {
             src: from,
-            dst: "String".into(),
+            dst: "&[u8]".into(),
         }))
     }
 }
@@ -100,7 +114,7 @@ impl<'a> From<ValueRef<'a>> for Value {
             ValueRef::Int16(v) => Value::Int16(v),
             ValueRef::Int32(v) => Value::Int32(v),
             ValueRef::Int64(v) => Value::Int64(v),
-            ValueRef::String(v) => Value::String(v.to_string()),
+            ValueRef::String(v) => Value::String(v.into()),
             ValueRef::Float32(v) => Value::Float32(v),
             ValueRef::Float64(v) => Value::Float64(v),
             ValueRef::Date(v) => Value::Date(v),
@@ -118,12 +132,18 @@ impl<'a> From<ValueRef<'a>> for Value {
 
 impl<'a> From<&'a str> for ValueRef<'a> {
     fn from(s: &str) -> ValueRef {
-        ValueRef::String(s)
+        ValueRef::String(s.as_bytes())
+    }
+}
+
+impl<'a> From<&'a [u8]> for ValueRef<'a> {
+    fn from(bs: &[u8]) -> ValueRef {
+        ValueRef::String(bs)
     }
 }
 
 macro_rules! from_number {
-    ( $($t:ident: $k:ident),* ) => {
+    ( $($t:ty: $k:ident),* ) => {
         $(
             impl<'a> From<$t> for ValueRef<'a> {
                 fn from(v: $t) -> ValueRef<'static> {
@@ -177,7 +197,7 @@ impl<'a> From<&'a Value> for ValueRef<'a> {
 }
 
 macro_rules! value_from {
-    ( $( $t:ident: $k:ident ),* ) => {
+    ( $( $t:ty: $k:ident ),* ) => {
         $(
             impl<'a> From<ValueRef<'a>> for $t {
                 fn from(value: ValueRef<'a>) -> Self {
@@ -206,4 +226,22 @@ value_from! {
 
     f32: Float32,
     f64: Float64
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_display() {
+        assert_eq!(
+            "[0, 159, 146, 150]".to_string(),
+            format!("{}", ValueRef::String(&[0, 159, 146, 150]))
+        );
+
+        assert_eq!(
+            "text".to_string(),
+            format!("{}", ValueRef::String(b"text"))
+        );
+    }
 }

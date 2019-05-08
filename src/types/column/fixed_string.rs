@@ -1,9 +1,9 @@
-use std::{cmp, str};
+use std::cmp;
 
 use crate::{
     binary::{Encoder, ReadEx},
     errors::Error,
-    types::{Column, SqlType, Value, ValueRef, from_sql::*},
+    types::{from_sql::*, Column, SqlType, Value, ValueRef},
 };
 
 use super::column_data::ColumnData;
@@ -74,7 +74,7 @@ impl ColumnData for FixedStringColumnData {
     fn at(&self, index: usize) -> ValueRef {
         let shift = index * self.str_len;
         let str_ref = &self.buffer[shift..shift + self.str_len];
-        ValueRef::String(unsafe { str::from_utf8_unchecked(str_ref) })
+        ValueRef::String(str_ref)
     }
 }
 
@@ -86,9 +86,9 @@ impl ColumnData for FixedStringAdapter {
     fn save(&self, encoder: &mut Encoder, start: usize, end: usize) {
         let mut buffer = Vec::with_capacity(self.str_len);
         for index in start..end {
-            let string_ref = self.column.at(index).as_str().unwrap();
+            let string_ref = self.column.at(index).as_bytes().unwrap();
             buffer.resize(0, 0);
-            buffer.extend(string_ref.as_bytes());
+            buffer.extend(string_ref);
             buffer.resize(self.str_len, 0);
             encoder.write_bytes(&buffer[..]);
         }
@@ -115,9 +115,9 @@ impl ColumnData for NullableFixedStringAdapter {
     fn save(&self, encoder: &mut Encoder, start: usize, end: usize) {
         let size = end - start;
         let mut nulls = vec![0; size];
-        let mut values: Vec<Option<&str>> = vec![None; size];
+        let mut values: Vec<Option<&[u8]>> = vec![None; size];
 
-        for (i, index) in (start .. end).enumerate() {
+        for (i, index) in (start..end).enumerate() {
             values[i] = Option::from_sql(self.at(index)).unwrap();
             if values[i].is_none() {
                 nulls[i] = 1;
@@ -130,7 +130,7 @@ impl ColumnData for NullableFixedStringAdapter {
         for value in values {
             buffer.resize(0, 0);
             if let Some(string_ref) = value {
-                buffer.extend(string_ref.as_bytes());
+                buffer.extend(string_ref);
             }
             buffer.resize(self.str_len, 0);
             encoder.write_bytes(buffer.as_ref());

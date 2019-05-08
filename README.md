@@ -71,8 +71,8 @@ pub fn main() {
         ) Engine=Memory";
 
     let block = Block::new()
-        .add_column("customer_id",  vec![1_u32,  3,  5,  7,     9])
-        .add_column("amount",       vec![2_u32,  4,  6,  8,    10])
+        .add_column("customer_id",  vec![1_u32,  3,  5,  7,  9])
+        .add_column("amount",       vec![2_u32,  4,  6,  8, 10])
         .add_column("account_name", vec![Some("foo"), None, None, None, Some("bar")]);
 
     let pool = Pool::new(database_url);

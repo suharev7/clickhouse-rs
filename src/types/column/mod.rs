@@ -14,6 +14,10 @@ pub use self::{
 };
 
 pub(crate) use self::string_pool::StringPool;
+use crate::{
+    errors::{Error, FromSqlError},
+    types::column::fixed_string::{FixedStringAdapter, NullableFixedStringAdapter},
+};
 
 mod chunk;
 mod column_data;
@@ -130,6 +134,46 @@ impl Column {
         Self {
             name: self.name.clone(),
             data: Arc::new(data),
+        }
+    }
+
+    pub fn cast_to(self, dst_type: SqlType) -> ClickhouseResult<Column> {
+        let src_type = self.sql_type();
+
+        if dst_type == src_type {
+            return Ok(self);
+        }
+
+        match (dst_type, src_type) {
+            (SqlType::FixedString(str_len), SqlType::String) => {
+                let name = self.name().to_owned();
+                let adapter = FixedStringAdapter {
+                    column: self,
+                    str_len,
+                };
+                Ok(Column {
+                    name,
+                    data: Arc::new(adapter),
+                })
+            }
+            (
+                SqlType::Nullable(SqlType::FixedString(str_len)),
+                SqlType::Nullable(SqlType::String),
+            ) => {
+                let name = self.name().to_owned();
+                let adapter = NullableFixedStringAdapter {
+                    column: self,
+                    str_len: *str_len,
+                };
+                Ok(Column {
+                    name,
+                    data: Arc::new(adapter),
+                })
+            }
+            _ => Err(Error::FromSql(FromSqlError::InvalidType {
+                src: src_type.to_string(),
+                dst: dst_type.to_string(),
+            })),
         }
     }
 }

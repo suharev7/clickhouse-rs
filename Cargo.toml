@@ -1,6 +1,6 @@
 [package]
 name = "clickhouse-rs"
-version = "0.1.11"
+version = "0.1.12"
 authors = ["Mikhail Sukharev <suharev7@gmail.com>"]
 license = "MIT"
 homepage = "https://github.com/suharev7/clickhouse-rs"
@@ -15,8 +15,8 @@ exclude = ["test/*"]
 
 [dependencies]
 log = "0.4.6"
-futures = "0.1.25"
-tokio = "0.1.13"
+futures = "0.1.26"
+tokio = "0.1.18"
 tokio-timer = "0.2.10"
 hostname = "^0.1"
 

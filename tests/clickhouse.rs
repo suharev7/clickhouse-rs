@@ -40,7 +40,7 @@ fn test_ping() {
 }
 
 #[test]
-fn fn_connection_by_wrong_address() {
+fn test_connection_by_wrong_address() {
     let pool = Pool::new("tcp://badaddr:9000");
     let done = pool.get_handle().and_then(ClientHandle::ping).map(|_| ());
 
@@ -516,7 +516,7 @@ fn test_generic_column() {
 #[test]
 fn test_fixed_string() {
     let ddl = "
-        CREATE TABLE clickhouse_test_fixed (
+        CREATE TABLE clickhouse_test_fixed_string (
             text     FixedString(4),
             opt_text Nullable(FixedString(4))
         ) Engine=Memory";
@@ -525,7 +525,7 @@ fn test_fixed_string() {
         SELECT
             text,
             opt_text
-        FROM clickhouse_test_fixed";
+        FROM clickhouse_test_fixed_string";
 
     let block = Block::new()
         .add_column("opt_text", vec![Some("text")])
@@ -534,9 +534,9 @@ fn test_fixed_string() {
     let pool = Pool::new(database_url());
     let done = pool
         .get_handle()
-        .and_then(|c| c.execute("DROP TABLE IF EXISTS clickhouse_test_fixed"))
+        .and_then(|c| c.execute("DROP TABLE IF EXISTS clickhouse_test_fixed_string"))
         .and_then(move |c| c.execute(ddl))
-        .and_then(move |c| c.insert("clickhouse_test_fixed", block))
+        .and_then(move |c| c.insert("clickhouse_test_fixed_string", block))
         .and_then(move |c| c.query(query).fetch_all())
         .and_then(move |(_, block)| {
             let text: &str = block.get(0, "text")?;
@@ -544,6 +544,67 @@ fn test_fixed_string() {
 
             assert_eq!(text, "text");
             assert_eq!(opt_text, Some("text"));
+
+            Ok(())
+        });
+
+    run(done).unwrap();
+}
+
+#[test]
+fn test_binary_string() {
+    let ddl = "
+        CREATE TABLE IF NOT EXISTS clickhouse_binary_string (
+            text        String,
+            fx_text     FixedString(4),
+            opt_text    Nullable(String),
+            fx_opt_text Nullable(FixedString(4))
+        ) Engine=Memory";
+
+    let query = "
+        SELECT
+            text,
+            fx_text,
+            opt_text,
+            fx_opt_text
+        FROM clickhouse_binary_string";
+
+    let block = Block::new()
+        .add_column(
+            "text",
+            vec![vec![0, 159, 146, 150]],
+        )
+        .add_column(
+            "fx_text",
+            vec![vec![0, 159, 146, 150]],
+        )
+        .add_column(
+            "opt_text",
+            vec![Some(vec![0, 159, 146, 150])]
+        )
+        .add_column(
+            "fx_opt_text",
+            vec![Some(vec![0, 159, 146, 150])]
+        );
+
+    let pool = Pool::new(database_url());
+    let done = pool
+        .get_handle()
+        .and_then(|c| c.execute("DROP TABLE IF EXISTS clickhouse_binary_string"))
+        .and_then(move |c| c.execute(ddl))
+        .and_then(move |c| c.insert("clickhouse_binary_string", block))
+        .and_then(move |c| c.query(query).fetch_all())
+        .and_then(move |(_, block)| {
+            let text: &[u8]                = block.get(0, "text")?;
+            let fx_text: &[u8]             = block.get(0, "fx_text")?;
+            let opt_text: Option<&[u8]>    = block.get(0, "opt_text")?;
+            let fx_opt_text: Option<&[u8]> = block.get(0, "fx_opt_text")?;
+
+            assert_eq!(1, block.row_count());
+            assert_eq!([0, 159, 146, 150].as_ref(), text);
+            assert_eq!([0, 159, 146, 150].as_ref(), fx_text);
+            assert_eq!(Some([0, 159, 146, 150].as_ref()), opt_text);
+            assert_eq!(Some([0, 159, 146, 150].as_ref()), fx_opt_text);
 
             Ok(())
         });

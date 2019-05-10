@@ -36,12 +36,15 @@ impl<'a> Iterator for StringIter<'a> {
     }
 }
 
-impl From<Vec<String>> for StringPool {
-    fn from(source: Vec<String>) -> Self {
+impl<T> From<Vec<T>> for StringPool
+where
+    T: AsRef<[u8]>,
+{
+    fn from(source: Vec<T>) -> Self {
         let mut pool = StringPool::with_capacity(source.len());
         for s in source.iter() {
-            let mut b = pool.allocate(s.len());
-            b.write_all(s.as_bytes()).unwrap();
+            let mut b = pool.allocate(s.as_ref().len());
+            b.write_all(s.as_ref()).unwrap();
         }
         pool
     }

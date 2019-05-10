@@ -1,4 +1,4 @@
-use std::{convert, fmt};
+use std::{convert, fmt, mem, str};
 
 use chrono::prelude::*;
 use chrono_tz::Tz;
@@ -19,7 +19,7 @@ pub enum Value {
     Int16(i16),
     Int32(i32),
     Int64(i64),
-    String(String),
+    String(Vec<u8>),
     Float32(f32),
     Float64(f64),
     Date(Date<Tz>),
@@ -38,11 +38,8 @@ impl Value {
             SqlType::Int16 => Value::Int16(0),
             SqlType::Int32 => Value::Int32(0),
             SqlType::Int64 => Value::Int64(0),
-            SqlType::String => Value::String(String::default()),
-            SqlType::FixedString(str_len) => {
-                let bytes = vec![0_u8; str_len];
-                Value::String(unsafe { String::from_utf8_unchecked(bytes) })
-            }
+            SqlType::String => Value::String(Vec::default()),
+            SqlType::FixedString(str_len) => Value::String(vec![0_u8; str_len]),
             SqlType::Float32 => Value::Float32(0.0),
             SqlType::Float64 => Value::Float64(0.0),
             SqlType::Date => 0_u16.to_date(Tz::Zulu).into(),
@@ -63,7 +60,10 @@ impl fmt::Display for Value {
             Value::Int16(ref v) => fmt::Display::fmt(v, f),
             Value::Int32(ref v) => fmt::Display::fmt(v, f),
             Value::Int64(ref v) => fmt::Display::fmt(v, f),
-            Value::String(ref v) => fmt::Display::fmt(v, f),
+            Value::String(ref v) => match str::from_utf8(v) {
+                Ok(s) => fmt::Display::fmt(s, f),
+                Err(_) => write!(f, "{:?}", v),
+            },
             Value::Float32(ref v) => fmt::Display::fmt(v, f),
             Value::Float64(ref v) => fmt::Display::fmt(v, f),
             Value::DateTime(ref time) if f.alternate() => write!(f, "{}", time.to_rfc2822()),
@@ -122,11 +122,11 @@ where
 }
 
 macro_rules! value_from {
-    ( $( $t:ident : $k:ident ),* ) => {
+    ( $( $t:ty : $k:ident ),* ) => {
         $(
             impl convert::From<$t> for Value {
                 fn from(v: $t) -> Value {
-                    Value::$k(v)
+                    Value::$k(v.into())
                 }
             }
         )*
@@ -148,29 +148,45 @@ value_from! {
     f32: Float32,
     f64: Float64,
 
-    String: String
+    &[u8]:   String,
+    String:  String,
+    Vec<u8>: String
 }
 
 impl<'a> convert::From<&'a str> for Value {
     fn from(v: &'a str) -> Self {
-        Value::String(v.to_string())
+        Value::String(v.as_bytes().into())
     }
 }
 
 impl convert::From<Value> for String {
+    fn from(mut v: Value) -> Self {
+        if let Value::String(ref mut x) = &mut v {
+            let mut tmp = Vec::new();
+            mem::swap(x, &mut tmp);
+            if let Ok(result) = String::from_utf8(tmp) {
+                return result;
+            }
+        }
+        let from = SqlType::from(v);
+        panic!("Can't convert Value::{} into String.", from);
+    }
+}
+
+impl convert::From<Value> for Vec<u8> {
     fn from(v: Value) -> Self {
         match v {
-            Value::String(x) => x,
+            Value::String(bs) => bs,
             _ => {
                 let from = SqlType::from(v);
-                panic!("Can't convert Value::{} into String.", from)
+                panic!("Can't convert Value::{} into Vec<u8>.", from)
             }
         }
     }
 }
 
 macro_rules! from_value {
-    ( $( $t:ident : $k:ident ),* ) => {
+    ( $( $t:ty : $k:ident ),* ) => {
         $(
             impl convert::From<Value> for $t {
                 fn from(v: Value) -> $t {
@@ -204,8 +220,10 @@ from_value! {
 mod test {
     use std::fmt;
 
-    use rand::distributions::{Distribution, Standard};
-    use rand::random;
+    use rand::{
+        random,
+        distributions::{Distribution, Standard}
+    };
 
     use super::*;
 
@@ -285,45 +303,57 @@ mod test {
 
     #[test]
     fn test_string_from() {
-        let v = Value::String("df47a455-bb3c-4bd6-b2f2-a24be3db36ab".to_string());
+        let v = Value::String(b"df47a455-bb3c-4bd6-b2f2-a24be3db36ab".to_vec());
         let u = String::from(v);
-        assert_eq!(u, "df47a455-bb3c-4bd6-b2f2-a24be3db36ab".to_string());
+        assert_eq!("df47a455-bb3c-4bd6-b2f2-a24be3db36ab".to_string(), u);
     }
 
     #[test]
     fn test_into_string() {
-        let v = Value::String("d2384838-dfe8-43ea-b1f7-63fb27b91088".to_string());
+        let v = Value::String(b"d2384838-dfe8-43ea-b1f7-63fb27b91088".to_vec());
         let u: String = v.into();
-        assert_eq!(u, "d2384838-dfe8-43ea-b1f7-63fb27b91088".to_string());
+        assert_eq!("d2384838-dfe8-43ea-b1f7-63fb27b91088".to_string(), u);
+    }
+
+    #[test]
+    fn test_into_vec() {
+        let v = Value::String(vec![1, 2, 3]);
+        let u: Vec<u8> = v.into();
+        assert_eq!(vec![1, 2, 3], u);
     }
 
     #[test]
     fn test_display() {
-        assert_eq!(format!("{}", Value::UInt8(42)), "42".to_string());
-        assert_eq!(format!("{}", Value::UInt16(42)), "42".to_string());
-        assert_eq!(format!("{}", Value::UInt32(42)), "42".to_string());
-        assert_eq!(format!("{}", Value::UInt64(42)), "42".to_string());
+        assert_eq!("42".to_string(), format!("{}", Value::UInt8(42)));
+        assert_eq!("42".to_string(), format!("{}", Value::UInt16(42)));
+        assert_eq!("42".to_string(), format!("{}", Value::UInt32(42)));
+        assert_eq!("42".to_string(), format!("{}", Value::UInt64(42)));
 
-        assert_eq!(format!("{}", Value::Int8(42)), "42".to_string());
-        assert_eq!(format!("{}", Value::Int16(42)), "42".to_string());
-        assert_eq!(format!("{}", Value::Int32(42)), "42".to_string());
-        assert_eq!(format!("{}", Value::Int64(42)), "42".to_string());
+        assert_eq!("42".to_string(), format!("{}", Value::Int8(42)));
+        assert_eq!("42".to_string(), format!("{}", Value::Int16(42)));
+        assert_eq!("42".to_string(), format!("{}", Value::Int32(42)));
+        assert_eq!("42".to_string(), format!("{}", Value::Int64(42)));
 
         assert_eq!(
-            format!("{}", Value::String("text".to_string())),
-            "text".to_string()
+            "text".to_string(),
+            format!("{}", Value::String(b"text".to_vec()))
         );
 
         assert_eq!(
-            format!("{}", Value::Nullable(Either::Left(SqlType::UInt8))),
-            "NULL".to_string()
+            "\u{1}\u{2}\u{3}".to_string(),
+            format!("{}", Value::String(vec![1, 2, 3]))
+        );
+
+        assert_eq!(
+            "NULL".to_string(),
+            format!("{}", Value::Nullable(Either::Left(SqlType::UInt8)))
         );
         assert_eq!(
+            "42".to_string(),
             format!(
                 "{}",
                 Value::Nullable(Either::Right(Box::new(Value::UInt8(42))))
-            ),
-            "42".to_string()
+            )
         );
     }
 

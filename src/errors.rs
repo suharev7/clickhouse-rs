@@ -1,4 +1,4 @@
-use std::{borrow::Cow, io, mem, string::FromUtf8Error};
+use std::{borrow::Cow, io, mem, string::FromUtf8Error, str::Utf8Error};
 
 use failure::*;
 use tokio::prelude::*;
@@ -7,7 +7,6 @@ use tokio_timer::Error as TimerError;
 use url::ParseError;
 
 use crate::types::Packet;
-use std::str::Utf8Error;
 
 /// This type enumerates library errors.
 #[derive(Debug, Fail)]

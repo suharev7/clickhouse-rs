@@ -5,8 +5,8 @@ use chrono_tz::Tz;
 
 use crate::types::{column::Either, DateConverter, SqlType};
 
-type AppDateTime = DateTime<Tz>;
-type AppDate = Date<Tz>;
+pub(crate) type AppDateTime = DateTime<Tz>;
+pub(crate) type AppDate = Date<Tz>;
 
 /// Client side representation of a value of Clickhouse column.
 #[derive(Clone, Debug, PartialEq)]
@@ -25,6 +25,7 @@ pub enum Value {
     Date(Date<Tz>),
     DateTime(DateTime<Tz>),
     Nullable(Either<SqlType, Box<Value>>),
+    Array(SqlType, Vec<Value>),
 }
 
 impl Value {
@@ -45,6 +46,7 @@ impl Value {
             SqlType::Date => 0_u16.to_date(Tz::Zulu).into(),
             SqlType::DateTime => 0_u32.to_date(Tz::Zulu).into(),
             SqlType::Nullable(inner) => Value::Nullable(Either::Left(*inner)),
+            SqlType::Array(inner) => Value::Array(*inner, Vec::default()),
         }
     }
 }
@@ -74,6 +76,10 @@ impl fmt::Display for Value {
                 Either::Left(_) => write!(f, "NULL"),
                 Either::Right(data) => data.fmt(f),
             },
+            Value::Array(_, vs) => {
+                let cells: Vec<String> = vs.iter().map(|v| format!("{}", v)).collect();
+                write!(f, "[{}]", cells.join(", "))
+            }
         }
     }
 }
@@ -101,6 +107,7 @@ impl convert::From<Value> for SqlType {
                     SqlType::Nullable(sql_type.into())
                 }
             },
+            Value::Array(t, _) => SqlType::Array(t.into()),
         }
     }
 }
@@ -135,6 +142,8 @@ macro_rules! value_from {
 
 value_from! {
     AppDateTime: DateTime,
+    AppDate: Date,
+
     u8: UInt8,
     u16: UInt16,
     u32: UInt32,
@@ -218,14 +227,14 @@ from_value! {
 
 #[cfg(test)]
 mod test {
+    use super::*;
+    use chrono_tz::Tz::{self, UTC};
     use std::fmt;
 
     use rand::{
+        distributions::{Distribution, Standard},
         random,
-        distributions::{Distribution, Standard}
     };
-
-    use super::*;
 
     fn test_into_t<T>(v: Value, x: &T)
     where
@@ -302,6 +311,18 @@ mod test {
     }
 
     #[test]
+    fn test_from_date() {
+        let date_value: Date<Tz> = UTC.ymd(2016, 10, 22);
+        let date_time_value: DateTime<Tz> = UTC.ymd(2014, 7, 8).and_hms(14, 0, 0);
+
+        let d: Value = Value::from(date_value);
+        let dt: Value = date_time_value.into();
+
+        assert_eq!(Value::Date(date_value), d);
+        assert_eq!(Value::DateTime(date_time_value), dt);
+    }
+
+    #[test]
     fn test_string_from() {
         let v = Value::String(b"df47a455-bb3c-4bd6-b2f2-a24be3db36ab".to_vec());
         let u = String::from(v);
@@ -353,6 +374,17 @@ mod test {
             format!(
                 "{}",
                 Value::Nullable(Either::Right(Box::new(Value::UInt8(42))))
+            )
+        );
+
+        assert_eq!(
+            "[1, 2, 3]".to_string(),
+            format!(
+                "{}",
+                Value::Array(
+                    SqlType::Int32,
+                    vec![Value::Int32(1), Value::Int32(2), Value::Int32(3)]
+                )
             )
         );
     }

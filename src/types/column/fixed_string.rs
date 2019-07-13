@@ -86,9 +86,23 @@ impl ColumnData for FixedStringAdapter {
     fn save(&self, encoder: &mut Encoder, start: usize, end: usize) {
         let mut buffer = Vec::with_capacity(self.str_len);
         for index in start..end {
-            let string_ref = self.column.at(index).as_bytes().unwrap();
             buffer.resize(0, 0);
-            buffer.extend(string_ref);
+            match self.column.at(index) {
+                ValueRef::String(_) => {
+                    let string_ref = self.column.at(index).as_bytes().unwrap();
+                    buffer.extend(string_ref.as_ref());
+                }
+                ValueRef::Array(SqlType::UInt8, vs) => {
+                    let mut string_val: Vec<u8> = Vec::with_capacity(vs.len());
+                    for v in vs {
+                        let byte: u8 = v.into();
+                        string_val.push(byte);
+                    }
+                    let string_ref: &[u8] = string_val.as_ref();
+                    buffer.extend(string_ref);
+                }
+                _ => unimplemented!(),
+            }
             buffer.resize(self.str_len, 0);
             encoder.write_bytes(&buffer[..]);
         }

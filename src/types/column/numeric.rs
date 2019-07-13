@@ -4,7 +4,9 @@ use crate::{
     binary::{Encoder, ReadEx},
     errors::Error,
     types::{
-        column::{nullable::NullableColumnData, BoxColumnWrapper, ColumnWrapper},
+        column::{
+            array::ArrayColumnData, nullable::NullableColumnData, BoxColumnWrapper, ColumnWrapper,
+        },
         Marshal, SqlType, StatBuffer, Unmarshal, Value, ValueRef,
     },
 };
@@ -77,6 +79,60 @@ where
 
         W::wrap(data)
     }
+}
+
+impl<T> ColumnFrom for Vec<Vec<T>>
+where
+    Value: convert::From<T>,
+    T: StatBuffer
+        + Unmarshal<T>
+        + Marshal
+        + Copy
+        + convert::Into<Value>
+        + convert::From<Value>
+        + Send
+        + Sync
+        + Default
+        + 'static,
+{
+    fn column_from<W: ColumnWrapper>(source: Self) -> W::Wrapper {
+        let fake: Vec<T> = Vec::with_capacity(source.len());
+        let inner = Vec::column_from::<BoxColumnWrapper>(fake);
+        let sql_type = inner.sql_type();
+
+        let mut data = ArrayColumnData {
+            inner,
+            offsets: List::with_capacity(source.len()),
+        };
+
+        for array in source {
+            data.push(to_array(sql_type, array));
+        }
+
+        W::wrap(data)
+    }
+}
+
+fn to_array<T>(sql_type: SqlType, vs: Vec<T>) -> Value
+where
+    Value: convert::From<T>,
+    T: StatBuffer
+        + Unmarshal<T>
+        + Marshal
+        + Copy
+        + convert::Into<Value>
+        + convert::From<Value>
+        + Send
+        + Sync
+        + Default
+        + 'static,
+{
+    let mut inner = Vec::with_capacity(vs.len());
+    for v in vs {
+        let value: Value = v.into();
+        inner.push(value)
+    }
+    Value::Array(sql_type, inner)
 }
 
 impl<T> VectorColumnData<T>

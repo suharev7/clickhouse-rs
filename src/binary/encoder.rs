@@ -22,9 +22,13 @@ impl Encoder {
     }
 
     pub fn string(&mut self, text: impl AsRef<str>) {
-        let str = text.as_ref().as_bytes();
-        self.uvarint(str.len() as u64);
-        self.write_bytes(str);
+        let bytes = text.as_ref().as_bytes();
+        self.byte_string(bytes);
+    }
+
+    pub fn byte_string(&mut self, source: impl AsRef<[u8]>) {
+        self.uvarint(source.as_ref().len() as u64);
+        self.write_bytes(source.as_ref());
     }
 
     pub fn write<T>(&mut self, value: T)

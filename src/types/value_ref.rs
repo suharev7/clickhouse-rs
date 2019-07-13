@@ -5,7 +5,11 @@ use chrono_tz::Tz;
 
 use crate::{
     errors::{Error, FromSqlError},
-    types::{column::Either, ClickhouseResult, SqlType, Value},
+    types::{
+        column::Either,
+        value::{AppDate, AppDateTime},
+        ClickhouseResult, SqlType, Value,
+    },
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -24,6 +28,7 @@ pub enum ValueRef<'a> {
     Date(Date<Tz>),
     DateTime(DateTime<Tz>),
     Nullable(Either<SqlType, Box<ValueRef<'a>>>),
+    Array(SqlType, Vec<ValueRef<'a>>),
 }
 
 impl<'a> fmt::Display for ValueRef<'a> {
@@ -51,6 +56,10 @@ impl<'a> fmt::Display for ValueRef<'a> {
                 Either::Left(_) => write!(f, "NULL"),
                 Either::Right(inner) => write!(f, "{}", inner),
             },
+            ValueRef::Array(_, vs) => {
+                let cells: Vec<String> = vs.iter().map(|v| format!("{}", v)).collect();
+                write!(f, "[{}]", cells.join(", "))
+            }
         }
     }
 }
@@ -75,6 +84,7 @@ impl<'a> convert::From<ValueRef<'a>> for SqlType {
                 Either::Left(sql_type) => sql_type,
                 Either::Right(value_ref) => SqlType::from(*value_ref),
             },
+            ValueRef::Array(t, _) => SqlType::Array(t.into()),
         }
     }
 }
@@ -89,6 +99,11 @@ impl<'a> ValueRef<'a> {
             src: from,
             dst: "&str".into(),
         }))
+    }
+
+    pub fn as_string(&self) -> ClickhouseResult<String> {
+        let tmp = self.as_str()?;
+        Ok(tmp.to_string())
     }
 
     pub fn as_bytes(&self) -> ClickhouseResult<&'a [u8]> {
@@ -126,6 +141,14 @@ impl<'a> From<ValueRef<'a>> for Value {
                     Value::Nullable(Either::Right(Box::new(value)))
                 }
             },
+            ValueRef::Array(t, vs) => {
+                let mut value_list: Vec<Value> = Vec::with_capacity(vs.len());
+                for v in vs {
+                    let value: Value = v.into();
+                    value_list.push(value);
+                }
+                Value::Array(t, value_list)
+            }
         }
     }
 }
@@ -192,6 +215,14 @@ impl<'a> From<&'a Value> for ValueRef<'a> {
                     ValueRef::Nullable(Either::Right(Box::new(value_ref)))
                 }
             },
+            Value::Array(t, vs) => {
+                let mut ref_vec = Vec::with_capacity(vs.len());
+                for v in vs {
+                    let value_ref: ValueRef<'a> = From::from(v);
+                    ref_vec.push(value_ref)
+                }
+                ValueRef::Array(*t, ref_vec)
+            }
         }
     }
 }
@@ -225,7 +256,10 @@ value_from! {
     i64: Int64,
 
     f32: Float32,
-    f64: Float64
+    f64: Float64,
+
+    AppDateTime: DateTime,
+    AppDate: Date
 }
 
 #[cfg(test)]
@@ -239,9 +273,6 @@ mod test {
             format!("{}", ValueRef::String(&[0, 159, 146, 150]))
         );
 
-        assert_eq!(
-            "text".to_string(),
-            format!("{}", ValueRef::String(b"text"))
-        );
+        assert_eq!("text".to_string(), format!("{}", ValueRef::String(b"text")));
     }
 }

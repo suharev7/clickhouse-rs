@@ -1,4 +1,4 @@
-use std::{borrow::Cow, io, mem, string::FromUtf8Error, str::Utf8Error};
+use std::{borrow::Cow, io, mem, str::Utf8Error, string::FromUtf8Error};
 
 use failure::*;
 use tokio::prelude::*;

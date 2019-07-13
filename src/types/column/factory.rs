@@ -6,9 +6,9 @@ use super::{
     column_data::ColumnData, date::DateColumnData, nullable::NullableColumnData,
     numeric::VectorColumnData, string::StringColumnData, ColumnWrapper,
 };
-use crate::types::column::fixed_string::FixedStringColumnData;
+use crate::types::column::{array::ArrayColumnData, fixed_string::FixedStringColumnData};
 
-impl ColumnData {
+impl dyn ColumnData {
     pub(crate) fn load_data<W: ColumnWrapper, T: ReadEx>(
         reader: &mut T,
         type_name: &str,
@@ -34,6 +34,8 @@ impl ColumnData {
                     W::wrap(NullableColumnData::load(reader, inner_type, size, tz)?)
                 } else if let Some(str_len) = parse_fixed_string(type_name) {
                     W::wrap(FixedStringColumnData::load(reader, size, str_len)?)
+                } else if let Some(inner_type) = parse_array_type(type_name) {
+                    W::wrap(ArrayColumnData::load(reader, inner_type, size, tz)?)
                 } else {
                     let message = format!("Unsupported column type \"{}\".", type_name);
                     return Err(message.into());
@@ -69,9 +71,23 @@ fn parse_nullable_type(source: &str) -> Option<&str> {
     Some(inner_type)
 }
 
+fn parse_array_type(source: &str) -> Option<&str> {
+    if !source.starts_with("Array") {
+        return None;
+    }
+
+    let inner_type = &source[6..source.len() - 1];
+    Some(inner_type)
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn test_parse_array_type() {
+        assert_eq!(parse_array_type("Array(UInt8)"), Some("UInt8"));
+    }
 
     #[test]
     fn test_parse_nullable_type() {

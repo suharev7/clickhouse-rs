@@ -48,10 +48,91 @@ impl<'a> FromSql<'a> for String {
     }
 }
 
+macro_rules! from_sql_vec_impl {
+    ( $( $t:ty: $k:ident => $f:expr ),* ) => {
+        $(
+            impl<'a> FromSql<'a> for Vec<$t> {
+                fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
+                    match value {
+                        ValueRef::Array(SqlType::$k, vs) => {
+                            let f: fn(ValueRef<'a>) -> FromSqlResult<$t> = $f;
+                            let mut result = Vec::with_capacity(vs.len());
+                            for v in vs {
+                                let value: $t = f(v)?;
+                                result.push(value);
+                            }
+                            Ok(result)
+                        }
+                        _ => {
+                            let from = SqlType::from(value.clone()).to_string();
+                            Err(Error::FromSql(FromSqlError::InvalidType {
+                                src: from,
+                                dst: format!("Vec<{}>", stringify!($t)).into(),
+                            }))
+                        }
+                    }
+                }
+            }
+        )*
+    };
+}
+
+from_sql_vec_impl! {
+    &'a str: String => |v| v.as_str(),
+    String: String => |v| v.as_string(),
+    Date<Tz>: Date => |z| Ok(z.into()),
+    DateTime<Tz>: DateTime => |z| Ok(z.into())
+}
+
 impl<'a> FromSql<'a> for Vec<u8> {
     fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
-        value.as_bytes().map(|bs| bs.to_vec())
+        match value {
+            ValueRef::Array(SqlType::UInt8, vs) => {
+                let mut result = Vec::with_capacity(vs.len());
+                for v in vs {
+                    result.push(v.into());
+                }
+                Ok(result)
+            }
+            _ => value.as_bytes().map(|bs| bs.to_vec()),
+        }
     }
+}
+
+macro_rules! from_sql_vec_impl {
+    ( $( $t:ident: $k:ident ),* ) => {
+        $(
+            impl<'a> FromSql<'a> for Vec<$t> {
+                fn from_sql(value: ValueRef<'a>) -> Result<Self, Error> {
+                    match value {
+                        ValueRef::Array(SqlType::$k, vs) => {
+                            let mut result = Vec::with_capacity(vs.len());
+                            for v in vs {
+                                let val: $t = v.into();
+                                result.push(val);
+                            }
+                            Ok(result)
+                        }
+                        _ => {
+                            let from = SqlType::from(value.clone()).to_string();
+                            Err(Error::FromSql(FromSqlError::InvalidType { src: from, dst: stringify!($t).into() }))
+                        }
+                    }
+                }
+            }
+        )*
+    };
+}
+
+from_sql_vec_impl! {
+    i8: Int8,
+    i16: Int16,
+    i32: Int32,
+    i64: Int64,
+
+    u16: UInt16,
+    u32: UInt32,
+    u64: UInt64
 }
 
 impl<'a, T> FromSql<'a> for Option<T>

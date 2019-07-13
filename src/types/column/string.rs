@@ -4,8 +4,11 @@ use crate::{
     binary::{Encoder, ReadEx},
     errors::Error,
     types::{
-        column::{nullable::NullableColumnData, ColumnWrapper, StringPool},
-        SqlType, Value, ValueRef,
+        column::{
+            array::ArrayColumnData, list::List, nullable::NullableColumnData, BoxColumnWrapper,
+            ColumnWrapper, StringPool,
+        },
+        Column, FromSql, SqlType, Value, ValueRef,
     },
 };
 
@@ -13,6 +16,10 @@ use super::{column_data::ColumnData, ColumnFrom};
 
 pub struct StringColumnData {
     pool: StringPool,
+}
+
+pub(crate) struct StringAdapter {
+    pub(crate) column: Column,
 }
 
 impl StringColumnData {
@@ -46,12 +53,6 @@ impl<'a> ColumnFrom for Vec<&'a str> {
     }
 }
 
-impl ColumnFrom for Vec<Vec<u8>> {
-    fn column_from<W: ColumnWrapper>(data: Self) -> W::Wrapper {
-        W::wrap(StringColumnData { pool: data.into() })
-    }
-}
-
 impl<'a> ColumnFrom for Vec<&'a [u8]> {
     fn column_from<W: ColumnWrapper>(data: Self) -> W::Wrapper {
         W::wrap(StringColumnData { pool: data.into() })
@@ -69,6 +70,54 @@ impl ColumnFrom for Vec<Option<String>> {
 
         for value in source {
             data.push(value.into());
+        }
+
+        W::wrap(data)
+    }
+}
+
+impl ColumnFrom for Vec<Vec<String>> {
+    fn column_from<W: ColumnWrapper>(source: Self) -> <W as ColumnWrapper>::Wrapper {
+        let fake: Vec<String> = Vec::with_capacity(source.len());
+        let inner = Vec::column_from::<BoxColumnWrapper>(fake);
+        let sql_type = inner.sql_type();
+
+        let mut data = ArrayColumnData {
+            inner,
+            offsets: List::with_capacity(source.len()),
+        };
+
+        for vs in source {
+            let mut inner = Vec::with_capacity(vs.len());
+            for v in vs {
+                let value: Value = v.into();
+                inner.push(value)
+            }
+            data.push(Value::Array(sql_type, inner));
+        }
+
+        W::wrap(data)
+    }
+}
+
+impl ColumnFrom for Vec<Vec<&str>> {
+    fn column_from<W: ColumnWrapper>(source: Self) -> <W as ColumnWrapper>::Wrapper {
+        let fake: Vec<&str> = Vec::with_capacity(source.len());
+        let inner = Vec::column_from::<BoxColumnWrapper>(fake);
+        let sql_type = inner.sql_type();
+
+        let mut data = ArrayColumnData {
+            inner,
+            offsets: List::with_capacity(source.len()),
+        };
+
+        for vs in source {
+            let mut inner = Vec::with_capacity(vs.len());
+            for v in vs {
+                let value: Value = v.into();
+                inner.push(value)
+            }
+            data.push(Value::Array(sql_type, inner));
         }
 
         W::wrap(data)
@@ -134,5 +183,30 @@ impl ColumnData for StringColumnData {
     fn at(&self, index: usize) -> ValueRef {
         let s = self.pool.get(index);
         ValueRef::from(s)
+    }
+}
+
+impl ColumnData for StringAdapter {
+    fn sql_type(&self) -> SqlType {
+        SqlType::String
+    }
+
+    fn save(&self, encoder: &mut Encoder, start: usize, end: usize) {
+        for index in start..end {
+            let buf: Vec<u8> = Vec::from_sql(self.column.at(index)).unwrap();
+            encoder.byte_string(buf);
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.column.len()
+    }
+
+    fn push(&mut self, _value: Value) {
+        unimplemented!()
+    }
+
+    fn at(&self, index: usize) -> ValueRef {
+        self.column.at(index)
     }
 }

@@ -16,9 +16,13 @@ pub use self::{
 pub(crate) use self::string_pool::StringPool;
 use crate::{
     errors::{Error, FromSqlError},
-    types::column::fixed_string::{FixedStringAdapter, NullableFixedStringAdapter},
+    types::column::{
+        fixed_string::{FixedStringAdapter, NullableFixedStringAdapter},
+        string::StringAdapter,
+    },
 };
 
+mod array;
 mod chunk;
 mod column_data;
 mod concat;
@@ -170,6 +174,18 @@ impl Column {
                     data: Arc::new(adapter),
                 })
             }
+            (SqlType::String, SqlType::Array(SqlType::UInt8)) => {
+                let name = self.name().to_owned();
+                let adapter = StringAdapter { column: self };
+                Ok(Column {
+                    name,
+                    data: Arc::new(adapter),
+                })
+            }
+            (SqlType::FixedString(n), SqlType::Array(SqlType::UInt8)) => {
+                let string_column = self.cast_to(SqlType::String)?;
+                string_column.cast_to(SqlType::FixedString(n))
+            }
             _ => Err(Error::FromSql(FromSqlError::InvalidType {
                 src: src_type.to_string(),
                 dst: dst_type.to_string(),
@@ -178,7 +194,7 @@ impl Column {
     }
 }
 
-pub fn new_column(name: &str, data: Arc<(ColumnData + Sync + Send + 'static)>) -> Column {
+pub fn new_column(name: &str, data: Arc<(dyn ColumnData + Sync + Send + 'static)>) -> Column {
     Column {
         name: name.to_string(),
         data,

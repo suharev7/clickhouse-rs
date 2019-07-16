@@ -11,7 +11,7 @@ use tokio::prelude::*;
 
 use clickhouse_rs::{errors::Error, types::Block, types::FromSql, ClientHandle, Pool};
 
-type BoxFuture<T> = Box<Future<Item = T, Error = Error> + Send>;
+type BoxFuture<T> = Box<dyn Future<Item = T, Error = Error> + Send>;
 
 fn database_url() -> String {
     env::var("DATABASE_URL").unwrap_or_else(|_| "tcp://localhost:9000?compression=lz4".into())
@@ -570,22 +570,10 @@ fn test_binary_string() {
         FROM clickhouse_binary_string";
 
     let block = Block::new()
-        .add_column(
-            "text",
-            vec![vec![0, 159, 146, 150]],
-        )
-        .add_column(
-            "fx_text",
-            vec![vec![0, 159, 146, 150]],
-        )
-        .add_column(
-            "opt_text",
-            vec![Some(vec![0, 159, 146, 150])]
-        )
-        .add_column(
-            "fx_opt_text",
-            vec![Some(vec![0, 159, 146, 150])]
-        );
+        .add_column("text", vec![vec![0_u8, 159, 146, 150]])
+        .add_column("fx_text", vec![vec![0_u8, 159, 146, 150]])
+        .add_column("opt_text", vec![Some(vec![0_u8, 159, 146, 150])])
+        .add_column("fx_opt_text", vec![Some(vec![0_u8, 159, 146, 150])]);
 
     let pool = Pool::new(database_url());
     let done = pool
@@ -595,9 +583,9 @@ fn test_binary_string() {
         .and_then(move |c| c.insert("clickhouse_binary_string", block))
         .and_then(move |c| c.query(query).fetch_all())
         .and_then(move |(_, block)| {
-            let text: &[u8]                = block.get(0, "text")?;
-            let fx_text: &[u8]             = block.get(0, "fx_text")?;
-            let opt_text: Option<&[u8]>    = block.get(0, "opt_text")?;
+            let text: &[u8] = block.get(0, "text")?;
+            let fx_text: &[u8] = block.get(0, "fx_text")?;
+            let opt_text: Option<&[u8]> = block.get(0, "opt_text")?;
             let fx_opt_text: Option<&[u8]> = block.get(0, "fx_opt_text")?;
 
             assert_eq!(1, block.row_count());
@@ -605,6 +593,60 @@ fn test_binary_string() {
             assert_eq!([0, 159, 146, 150].as_ref(), fx_text);
             assert_eq!(Some([0, 159, 146, 150].as_ref()), opt_text);
             assert_eq!(Some([0, 159, 146, 150].as_ref()), fx_opt_text);
+
+            Ok(())
+        });
+
+    run(done).unwrap();
+}
+
+#[test]
+fn test_array() {
+    let ddl = "
+        CREATE TABLE clickhouse_array (
+            u8    Array(UInt8),
+            u32   Array(UInt32),
+            text1 Array(String),
+            text2 Array(String),
+            date  Array(Date),
+            time  Array(DateTime)
+        ) Engine=Memory";
+
+    let query = "SELECT u8, u32, text1, text2, date, time FROM clickhouse_array";
+
+    let date_value: Date<Tz> = UTC.ymd(2016, 10, 22);
+    let date_time_value: DateTime<Tz> = UTC.ymd(2014, 7, 8).and_hms(14, 0, 0);
+
+    let block = Block::new()
+        .add_column("u8", vec![vec![41_u8]])
+        .add_column("u32", vec![vec![42_u32]])
+        .add_column("text1", vec![vec!["A"]])
+        .add_column("text2", vec![vec!["B".to_string()]])
+        .add_column("date", vec![vec![date_value]])
+        .add_column("time", vec![vec![date_time_value]]);
+
+    let pool = Pool::new(database_url());
+    let done = pool
+        .get_handle()
+        .and_then(|c| c.execute("DROP TABLE IF EXISTS clickhouse_array"))
+        .and_then(move |c| c.execute(ddl))
+        .and_then(move |c| c.insert("clickhouse_array", block))
+        .and_then(move |c| c.query(query).fetch_all())
+        .and_then(move |(_, block)| {
+            let a: Vec<u8> = block.get(0, "u8")?;
+            let b: Vec<u32> = block.get(0, "u32")?;
+            let c: Vec<&str> = block.get(0, "text1")?;
+            let d: Vec<String> = block.get(0, "text2")?;
+            let e: Vec<Date<Tz>> = block.get(0, "date")?;
+            let f: Vec<DateTime<Tz>> = block.get(0, "time")?;
+
+            assert_eq!(1, block.row_count());
+            assert_eq!(vec![41_u8], a);
+            assert_eq!(vec![42_u32], b);
+            assert_eq!(vec!["A"], c);
+            assert_eq!(vec!["B".to_string()], d);
+            assert_eq!(vec![date_value], e);
+            assert_eq!(vec![date_time_value], f);
 
             Ok(())
         });

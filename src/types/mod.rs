@@ -1,4 +1,4 @@
-use std::{borrow::Cow, fmt, collections::HashMap, sync::Mutex};
+use std::{borrow::Cow, collections::HashMap, fmt, sync::Mutex};
 
 use chrono_tz::Tz;
 use hostname::get_hostname;
@@ -8,8 +8,8 @@ use crate::errors::{Error, ServerError};
 pub use self::{
     block::{Block, Row, Rows},
     column::Column,
-    options::Options,
     from_sql::FromSql,
+    options::Options,
     query::Query,
     query_result::QueryResult,
 };
@@ -172,6 +172,7 @@ pub enum SqlType {
     Date,
     DateTime,
     Nullable(&'static SqlType),
+    Array(&'static SqlType),
 }
 
 lazy_static! {
@@ -225,6 +226,7 @@ impl SqlType {
             SqlType::Date => "Date".into(),
             SqlType::DateTime => "DateTime".into(),
             SqlType::Nullable(&nested) => format!("Nullable({})", nested).into(),
+            SqlType::Array(&nested) => format!("Array({})", nested).into(),
         }
     }
 }

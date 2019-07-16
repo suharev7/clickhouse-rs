@@ -7,7 +7,10 @@ use crate::{
     binary::{Encoder, ReadEx},
     errors::Error,
     types::{
-        column::{nullable::NullableColumnData, BoxColumnWrapper, ColumnWrapper, Either},
+        column::{
+            array::ArrayColumnData, nullable::NullableColumnData, BoxColumnWrapper, ColumnWrapper,
+            Either,
+        },
         DateConverter, Marshal, SqlType, StatBuffer, Unmarshal, Value, ValueRef,
     },
 };
@@ -77,6 +80,54 @@ impl ColumnFrom for Vec<Date<Tz>> {
 
         let column: DateColumnData<u16> = DateColumnData { data, tz: Tz::Zulu };
         W::wrap(column)
+    }
+}
+
+impl ColumnFrom for Vec<Vec<Date<Tz>>> {
+    fn column_from<W: ColumnWrapper>(source: Self) -> W::Wrapper {
+        let fake: Vec<Date<Tz>> = Vec::with_capacity(source.len());
+        let inner = Vec::column_from::<BoxColumnWrapper>(fake);
+        let sql_type = inner.sql_type();
+
+        let mut data = ArrayColumnData {
+            inner,
+            offsets: List::with_capacity(source.len()),
+        };
+
+        for vs in source {
+            let mut inner = Vec::with_capacity(vs.len());
+            for v in vs {
+                let value: Value = Value::Date(v);
+                inner.push(value);
+            }
+            data.push(Value::Array(sql_type, inner));
+        }
+
+        W::wrap(data)
+    }
+}
+
+impl ColumnFrom for Vec<Vec<DateTime<Tz>>> {
+    fn column_from<W: ColumnWrapper>(source: Self) -> W::Wrapper {
+        let fake: Vec<DateTime<Tz>> = Vec::with_capacity(source.len());
+        let inner = Vec::column_from::<BoxColumnWrapper>(fake);
+        let sql_type = inner.sql_type();
+
+        let mut data = ArrayColumnData {
+            inner,
+            offsets: List::with_capacity(source.len()),
+        };
+
+        for vs in source {
+            let mut inner = Vec::with_capacity(vs.len());
+            for v in vs {
+                let value: Value = Value::DateTime(v);
+                inner.push(value);
+            }
+            data.push(Value::Array(sql_type, inner));
+        }
+
+        W::wrap(data)
     }
 }
 

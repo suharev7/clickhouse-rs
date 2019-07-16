@@ -29,4 +29,3 @@ fn test_city_hash_128() {
     let actual = city_hash_128("abc");
     assert_eq!(expected, actual)
 }
-

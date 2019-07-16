@@ -8,6 +8,7 @@ use crate::errors::{Error, ServerError};
 pub use self::{
     block::{Block, Row, Rows},
     column::Column,
+    decimal::Decimal,
     from_sql::FromSql,
     options::Options,
     query::Query,
@@ -40,6 +41,7 @@ mod date_converter;
 mod query;
 mod query_result;
 
+mod decimal;
 mod options;
 
 #[derive(Copy, Clone, Debug, Default, PartialEq)]
@@ -173,6 +175,7 @@ pub enum SqlType {
     DateTime,
     Nullable(&'static SqlType),
     Array(&'static SqlType),
+    Decimal(u8, u8),
 }
 
 lazy_static! {
@@ -227,6 +230,9 @@ impl SqlType {
             SqlType::DateTime => "DateTime".into(),
             SqlType::Nullable(&nested) => format!("Nullable({})", nested).into(),
             SqlType::Array(&nested) => format!("Array({})", nested).into(),
+            SqlType::Decimal(precision, scale) => {
+                format!("Decimal({}, {})", precision, scale).into()
+            }
         }
     }
 }

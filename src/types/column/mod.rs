@@ -8,17 +8,18 @@ use chrono_tz::Tz;
 use std::fmt;
 
 use self::chunk::ChunkColumnData;
-pub use self::{
-    column_data::ColumnData, concat::ConcatColumnData, numeric::VectorColumnData,
-    string::StringColumnData,
-};
+pub use self::{column_data::ColumnData, concat::ConcatColumnData, numeric::VectorColumnData};
 
 pub(crate) use self::string_pool::StringPool;
 use crate::{
     errors::{Error, FromSqlError},
-    types::column::{
-        fixed_string::{FixedStringAdapter, NullableFixedStringAdapter},
-        string::StringAdapter,
+    types::{
+        column::{
+            decimal::{DecimalAdapter, NullableDecimalAdapter},
+            fixed_string::{FixedStringAdapter, NullableFixedStringAdapter},
+            string::StringAdapter,
+        },
+        decimal::NoBits,
     },
 };
 
@@ -27,6 +28,7 @@ mod chunk;
 mod column_data;
 mod concat;
 mod date;
+mod decimal;
 mod factory;
 pub(crate) mod fixed_string;
 mod list;
@@ -185,6 +187,37 @@ impl Column {
             (SqlType::FixedString(n), SqlType::Array(SqlType::UInt8)) => {
                 let string_column = self.cast_to(SqlType::String)?;
                 string_column.cast_to(SqlType::FixedString(n))
+            }
+            (SqlType::Decimal(dst_p, dst_s), SqlType::Decimal(_, _)) => {
+                let name = self.name().to_owned();
+                let nobits = NoBits::from_precision(dst_p).unwrap();
+                let adapter = DecimalAdapter {
+                    column: self,
+                    precision: dst_p,
+                    scale: dst_s,
+                    nobits,
+                };
+                Ok(Column {
+                    name,
+                    data: Arc::new(adapter),
+                })
+            }
+            (
+                SqlType::Nullable(SqlType::Decimal(dst_p, dst_s)),
+                SqlType::Nullable(SqlType::Decimal(_, _)),
+            ) => {
+                let name = self.name().to_owned();
+                let nobits = NoBits::from_precision(*dst_p).unwrap();
+                let adapter = NullableDecimalAdapter {
+                    column: self,
+                    precision: *dst_p,
+                    scale: *dst_s,
+                    nobits,
+                };
+                Ok(Column {
+                    name,
+                    data: Arc::new(adapter),
+                })
             }
             _ => Err(Error::FromSql(FromSqlError::InvalidType {
                 src: src_type.to_string(),

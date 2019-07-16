@@ -25,7 +25,7 @@ where
         + Default
         + 'static,
 {
-    data: List<T>,
+    pub(crate) data: List<T>,
 }
 
 impl<T> ColumnFrom for Vec<T>

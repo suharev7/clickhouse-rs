@@ -9,7 +9,7 @@ use chrono::prelude::*;
 use chrono_tz::Tz::{self, UTC};
 use tokio::prelude::*;
 
-use clickhouse_rs::{errors::Error, types::Block, types::FromSql, ClientHandle, Pool};
+use clickhouse_rs::{errors::Error, types::Block, types::FromSql, ClientHandle, Pool, types::Decimal};
 
 type BoxFuture<T> = Box<dyn Future<Item = T, Error = Error> + Send>;
 
@@ -647,6 +647,50 @@ fn test_array() {
             assert_eq!(vec!["B".to_string()], d);
             assert_eq!(vec![date_value], e);
             assert_eq!(vec![date_time_value], f);
+
+            Ok(())
+        });
+
+    run(done).unwrap();
+}
+
+#[test]
+#[allow(clippy::float_cmp)]
+fn test_decimal() {
+    let ddl = "
+        CREATE TABLE clickhouse_decimal (
+            x  Decimal(8, 3),
+            ox Nullable(Decimal(10, 2))
+        ) Engine=Memory";
+
+    let query = "SELECT x, ox FROM clickhouse_decimal";
+
+    let block = Block::new()
+        .add_column("x", vec![
+            Decimal::of(1.234, 3),
+            Decimal::of(5, 3),
+        ])
+        .add_column("ox", vec![
+            None,
+            Some(Decimal::of(1.23, 2)),
+        ]);
+
+    let pool = Pool::new(database_url());
+    let done = pool
+        .get_handle()
+        .and_then(|c| c.execute("DROP TABLE IF EXISTS clickhouse_decimal"))
+        .and_then(move |c| c.execute(ddl))
+        .and_then(move |c| c.insert("clickhouse_decimal", block))
+        .and_then(move |c| c.query(query).fetch_all())
+        .and_then(move |(_, block)| {
+            let x: Decimal = block.get(0, "x")?;
+            let ox: Option<Decimal> = block.get(1, "ox")?;
+            let ox0: Option<Decimal> = block.get(0, "ox")?;
+
+            assert_eq!(2, block.row_count());
+            assert_eq!(1.234, x.into());
+            assert_eq!(Some(1.23), ox.map(|v| v.into()));
+            assert_eq!(None, ox0);
 
             Ok(())
         });

@@ -7,6 +7,7 @@ use crate::{
     errors::{Error, FromSqlError},
     types::{
         column::Either,
+        decimal::Decimal,
         value::{AppDate, AppDateTime},
         ClickhouseResult, SqlType, Value,
     },
@@ -29,6 +30,7 @@ pub enum ValueRef<'a> {
     DateTime(DateTime<Tz>),
     Nullable(Either<SqlType, Box<ValueRef<'a>>>),
     Array(SqlType, Vec<ValueRef<'a>>),
+    Decimal(Decimal),
 }
 
 impl<'a> fmt::Display for ValueRef<'a> {
@@ -60,6 +62,7 @@ impl<'a> fmt::Display for ValueRef<'a> {
                 let cells: Vec<String> = vs.iter().map(|v| format!("{}", v)).collect();
                 write!(f, "[{}]", cells.join(", "))
             }
+            ValueRef::Decimal(v) => fmt::Display::fmt(v, f),
         }
     }
 }
@@ -85,6 +88,7 @@ impl<'a> convert::From<ValueRef<'a>> for SqlType {
                 Either::Right(value_ref) => SqlType::from(*value_ref),
             },
             ValueRef::Array(t, _) => SqlType::Array(t.into()),
+            ValueRef::Decimal(v) => SqlType::Decimal(v.precision, v.scale),
         }
     }
 }
@@ -149,6 +153,7 @@ impl<'a> From<ValueRef<'a>> for Value {
                 }
                 Value::Array(t, value_list)
             }
+            ValueRef::Decimal(v) => Value::Decimal(v),
         }
     }
 }
@@ -223,6 +228,7 @@ impl<'a> From<&'a Value> for ValueRef<'a> {
                 }
                 ValueRef::Array(*t, ref_vec)
             }
+            Value::Decimal(v) => ValueRef::Decimal(v.clone()),
         }
     }
 }
@@ -274,5 +280,11 @@ mod test {
         );
 
         assert_eq!("text".to_string(), format!("{}", ValueRef::String(b"text")));
+    }
+
+    #[test]
+    fn test_size_of() {
+        use std::mem;
+        assert_eq!(56, mem::size_of::<[ValueRef<'_>; 1]>());
     }
 }

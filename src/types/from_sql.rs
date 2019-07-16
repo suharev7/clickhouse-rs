@@ -3,7 +3,7 @@ use chrono_tz::Tz;
 
 use crate::{
     errors::{Error, FromSqlError},
-    types::{column::Either, SqlType, ValueRef},
+    types::{column::Either, Decimal, SqlType, ValueRef},
 };
 
 pub type FromSqlResult<T> = Result<T, Error>;
@@ -28,6 +28,21 @@ macro_rules! from_sql_impl {
             }
         )*
     };
+}
+
+impl<'a> FromSql<'a> for Decimal {
+    fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
+        match value {
+            ValueRef::Decimal(v) => Ok(v),
+            _ => {
+                let from = SqlType::from(value.clone()).to_string();
+                Err(Error::FromSql(FromSqlError::InvalidType {
+                    src: from,
+                    dst: "Decimal".into(),
+                }))
+            }
+        }
+    }
 }
 
 impl<'a> FromSql<'a> for &'a str {

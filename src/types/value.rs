@@ -3,7 +3,11 @@ use std::{convert, fmt, mem, str};
 use chrono::prelude::*;
 use chrono_tz::Tz;
 
-use crate::types::{column::Either, DateConverter, SqlType};
+use crate::types::{
+    column::Either,
+    decimal::{Decimal, NoBits},
+    DateConverter, SqlType,
+};
 
 pub(crate) type AppDateTime = DateTime<Tz>;
 pub(crate) type AppDate = Date<Tz>;
@@ -26,6 +30,7 @@ pub enum Value {
     DateTime(DateTime<Tz>),
     Nullable(Either<SqlType, Box<Value>>),
     Array(SqlType, Vec<Value>),
+    Decimal(Decimal),
 }
 
 impl Value {
@@ -47,6 +52,12 @@ impl Value {
             SqlType::DateTime => 0_u32.to_date(Tz::Zulu).into(),
             SqlType::Nullable(inner) => Value::Nullable(Either::Left(*inner)),
             SqlType::Array(inner) => Value::Array(*inner, Vec::default()),
+            SqlType::Decimal(precision, scale) => Value::Decimal(Decimal {
+                underlying: 0,
+                precision,
+                scale,
+                nobits: NoBits::N64,
+            }),
         }
     }
 }
@@ -80,6 +91,7 @@ impl fmt::Display for Value {
                 let cells: Vec<String> = vs.iter().map(|v| format!("{}", v)).collect();
                 write!(f, "[{}]", cells.join(", "))
             }
+            Value::Decimal(v) => fmt::Display::fmt(v, f),
         }
     }
 }
@@ -108,6 +120,7 @@ impl convert::From<Value> for SqlType {
                 }
             },
             Value::Array(t, _) => SqlType::Array(t.into()),
+            Value::Decimal(v) => SqlType::Decimal(v.precision, v.scale),
         }
     }
 }

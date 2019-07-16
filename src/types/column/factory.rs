@@ -6,7 +6,12 @@ use super::{
     column_data::ColumnData, date::DateColumnData, nullable::NullableColumnData,
     numeric::VectorColumnData, string::StringColumnData, ColumnWrapper,
 };
-use crate::types::column::{array::ArrayColumnData, fixed_string::FixedStringColumnData};
+use crate::types::{
+    column::{
+        array::ArrayColumnData, decimal::DecimalColumnData, fixed_string::FixedStringColumnData,
+    },
+    decimal::NoBits,
+};
 
 impl dyn ColumnData {
     pub(crate) fn load_data<W: ColumnWrapper, T: ReadEx>(
@@ -36,6 +41,10 @@ impl dyn ColumnData {
                     W::wrap(FixedStringColumnData::load(reader, size, str_len)?)
                 } else if let Some(inner_type) = parse_array_type(type_name) {
                     W::wrap(ArrayColumnData::load(reader, inner_type, size, tz)?)
+                } else if let Some((precision, scale, nobits)) = parse_decimal(type_name) {
+                    W::wrap(DecimalColumnData::load(
+                        reader, precision, scale, nobits, size, tz,
+                    )?)
                 } else {
                     let message = format!("Unsupported column type \"{}\".", type_name);
                     return Err(message.into());
@@ -80,9 +89,65 @@ fn parse_array_type(source: &str) -> Option<&str> {
     Some(inner_type)
 }
 
+fn parse_decimal(source: &str) -> Option<(u8, u8, NoBits)> {
+    if source.len() < 12 {
+        return None;
+    }
+
+    if !source.starts_with("Decimal") {
+        return None;
+    }
+
+    if source.chars().nth(7) != Some('(') {
+        return None;
+    }
+
+    if !source.ends_with(')') {
+        return None;
+    }
+
+    let mut params: Vec<u8> = Vec::with_capacity(2);
+    for cell in source[8..source.len() - 1].split(',').map(|s| s.trim()) {
+        if let Ok(value) = cell.parse() {
+            params.push(value)
+        } else {
+            return None;
+        }
+    }
+
+    if params.len() != 2 {
+        return None;
+    }
+
+    let precision = params[0];
+    let scale = params[1];
+
+    if scale > precision {
+        return None;
+    }
+
+    if let Some(nobits) = NoBits::from_precision(precision) {
+        return Some((precision, scale, nobits));
+    }
+
+    None
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn test_parse_decimal() {
+        assert_eq!(parse_decimal("Decimal(9, 4)"), Some((9, 4, NoBits::N32)));
+        assert_eq!(parse_decimal("Decimal(10, 4)"), Some((10, 4, NoBits::N64)));
+        assert_eq!(parse_decimal("Decimal(20, 4)"), None);
+        assert_eq!(parse_decimal("Decimal(2000, 4)"), None);
+        assert_eq!(parse_decimal("Decimal(3, 4)"), None);
+        assert_eq!(parse_decimal("Decimal(20, -4)"), None);
+        assert_eq!(parse_decimal("Decimal(0)"), None);
+        assert_eq!(parse_decimal("Decimal(1, 2, 3)"), None);
+    }
 
     #[test]
     fn test_parse_array_type() {

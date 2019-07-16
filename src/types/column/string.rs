@@ -14,7 +14,7 @@ use crate::{
 
 use super::{column_data::ColumnData, ColumnFrom};
 
-pub struct StringColumnData {
+pub(crate) struct StringColumnData {
     pool: StringPool,
 }
 

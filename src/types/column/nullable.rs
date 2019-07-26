@@ -51,7 +51,7 @@ impl ColumnData for NullableColumnData {
         if let Value::Nullable(e) = value {
             match e {
                 Either::Left(sql_type) => {
-                    let default_value = Value::default(sql_type);
+                    let default_value = Value::default(*sql_type);
                     self.inner.push(default_value);
                     self.nulls.push(true as u8);
                 }
@@ -69,7 +69,7 @@ impl ColumnData for NullableColumnData {
     fn at(&self, index: usize) -> ValueRef {
         if self.nulls[index] == 1 {
             let sql_type = self.inner.sql_type();
-            ValueRef::Nullable(Either::Left(sql_type))
+            ValueRef::Nullable(Either::Left(sql_type.into()))
         } else {
             let inner_value = self.inner.at(index);
             ValueRef::Nullable(Either::Right(Box::new(inner_value)))

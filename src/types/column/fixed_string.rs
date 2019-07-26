@@ -94,8 +94,8 @@ impl ColumnData for FixedStringAdapter {
                 }
                 ValueRef::Array(SqlType::UInt8, vs) => {
                     let mut string_val: Vec<u8> = Vec::with_capacity(vs.len());
-                    for v in vs {
-                        let byte: u8 = v.into();
+                    for v in vs.iter() {
+                        let byte: u8 = v.clone().into();
                         string_val.push(byte);
                     }
                     let string_ref: &[u8] = string_val.as_ref();

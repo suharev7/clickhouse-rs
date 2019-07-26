@@ -173,9 +173,9 @@ impl Default for Options {
     fn default() -> Self {
         Self {
             addr: Address::SocketAddr("127.0.0.1:9000".parse().unwrap()),
-            database: "default".to_string(),
-            username: "default".to_string(),
-            password: "".to_string(),
+            database: "default".into(),
+            username: "default".into(),
+            password: "".into(),
             compression: false,
             pool_min: DEFAULT_MIN_CONNS,
             pool_max: DEFAULT_MAX_CONNS,

@@ -1,4 +1,4 @@
-use std::{convert, mem};
+use std::{convert, mem, sync::Arc};
 
 use crate::{
     binary::{Encoder, ReadEx},
@@ -132,7 +132,7 @@ where
         let value: Value = v.into();
         inner.push(value)
     }
-    Value::Array(sql_type, inner)
+    Value::Array(sql_type.into(), Arc::new(inner))
 }
 
 impl<T> VectorColumnData<T>
@@ -183,10 +183,7 @@ where
     }
 
     fn save(&self, encoder: &mut Encoder, start: usize, end: usize) {
-        let start_index = start * mem::size_of::<T>();
-        let end_index = end * mem::size_of::<T>();
-        let data = self.data.as_ref();
-        encoder.write_bytes(&data[start_index..end_index]);
+        save_data::<T>(self.data.as_ref(), encoder, start, end);
     }
 
     fn len(&self) -> usize {
@@ -216,4 +213,10 @@ where
             _ => panic!("can't convert value to value_ref."),
         }
     }
+}
+
+pub(crate) fn save_data<T>(data: &[u8], encoder: &mut Encoder, start: usize, end: usize) {
+    let start_index = start * mem::size_of::<T>();
+    let end_index = end * mem::size_of::<T>();
+    encoder.write_bytes(&data[start_index..end_index]);
 }

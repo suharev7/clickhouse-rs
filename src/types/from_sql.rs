@@ -72,8 +72,8 @@ macro_rules! from_sql_vec_impl {
                         ValueRef::Array(SqlType::$k, vs) => {
                             let f: fn(ValueRef<'a>) -> FromSqlResult<$t> = $f;
                             let mut result = Vec::with_capacity(vs.len());
-                            for v in vs {
-                                let value: $t = f(v)?;
+                            for v in vs.iter() {
+                                let value: $t = f(v.clone())?;
                                 result.push(value);
                             }
                             Ok(result)
@@ -104,8 +104,8 @@ impl<'a> FromSql<'a> for Vec<u8> {
         match value {
             ValueRef::Array(SqlType::UInt8, vs) => {
                 let mut result = Vec::with_capacity(vs.len());
-                for v in vs {
-                    result.push(v.into());
+                for v in vs.iter() {
+                    result.push(v.clone().into());
                 }
                 Ok(result)
             }
@@ -122,8 +122,8 @@ macro_rules! from_sql_vec_impl {
                     match value {
                         ValueRef::Array(SqlType::$k, vs) => {
                             let mut result = Vec::with_capacity(vs.len());
-                            for v in vs {
-                                let val: $t = v.into();
+                            for v in vs.iter() {
+                                let val: $t = v.clone().into();
                                 result.push(val);
                             }
                             Ok(result)
@@ -177,7 +177,10 @@ where
 impl<'a> FromSql<'a> for Date<Tz> {
     fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
         match value {
-            ValueRef::Date(v) => Ok(v),
+            ValueRef::Date(v, tz) => {
+                let time = tz.timestamp(i64::from(v) * 24 * 3600, 0);
+                Ok(time.date())
+            }
             _ => {
                 let from = SqlType::from(value).to_string();
                 Err(Error::FromSql(FromSqlError::InvalidType {
@@ -192,7 +195,10 @@ impl<'a> FromSql<'a> for Date<Tz> {
 impl<'a> FromSql<'a> for DateTime<Tz> {
     fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
         match value {
-            ValueRef::DateTime(v) => Ok(v),
+            ValueRef::DateTime(v, tz) => {
+                let time = tz.timestamp(i64::from(v), 0);
+                Ok(time)
+            }
             _ => {
                 let from = SqlType::from(value).to_string();
                 Err(Error::FromSql(FromSqlError::InvalidType {

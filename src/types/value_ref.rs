@@ -1,4 +1,4 @@
-use std::{convert, fmt, str};
+use std::{convert, fmt, str, sync::Arc};
 
 use chrono::prelude::*;
 use chrono_tz::Tz;
@@ -13,7 +13,7 @@ use crate::{
     },
 };
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum ValueRef<'a> {
     UInt8(u8),
     UInt16(u16),
@@ -26,11 +26,43 @@ pub enum ValueRef<'a> {
     String(&'a [u8]),
     Float32(f32),
     Float64(f64),
-    Date(Date<Tz>),
-    DateTime(DateTime<Tz>),
-    Nullable(Either<SqlType, Box<ValueRef<'a>>>),
-    Array(SqlType, Vec<ValueRef<'a>>),
+    Date(u16, Tz),
+    DateTime(u32, Tz),
+    Nullable(Either<&'static SqlType, Box<ValueRef<'a>>>),
+    Array(&'static SqlType, Arc<Vec<ValueRef<'a>>>),
     Decimal(Decimal),
+}
+
+impl<'a> PartialEq for ValueRef<'a> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (ValueRef::UInt8(a), ValueRef::UInt8(b)) => *a == *b,
+            (ValueRef::UInt16(a), ValueRef::UInt16(b)) => *a == *b,
+            (ValueRef::UInt32(a), ValueRef::UInt32(b)) => *a == *b,
+            (ValueRef::UInt64(a), ValueRef::UInt64(b)) => *a == *b,
+            (ValueRef::Int8(a), ValueRef::Int8(b)) => *a == *b,
+            (ValueRef::Int16(a), ValueRef::Int16(b)) => *a == *b,
+            (ValueRef::Int32(a), ValueRef::Int32(b)) => *a == *b,
+            (ValueRef::Int64(a), ValueRef::Int64(b)) => *a == *b,
+            (ValueRef::String(a), ValueRef::String(b)) => *a == *b,
+            (ValueRef::Float32(a), ValueRef::Float32(b)) => *a == *b,
+            (ValueRef::Float64(a), ValueRef::Float64(b)) => *a == *b,
+            (ValueRef::Date(a, tz_a), ValueRef::Date(b, tz_b)) => {
+                let time_a = tz_a.timestamp(i64::from(*a) * 24 * 3600, 0);
+                let time_b = tz_b.timestamp(i64::from(*b) * 24 * 3600, 0);
+                time_a.date() == time_b.date()
+            }
+            (ValueRef::DateTime(a, tz_a), ValueRef::DateTime(b, tz_b)) => {
+                let time_a = tz_a.timestamp(i64::from(*a), 0);
+                let time_b = tz_b.timestamp(i64::from(*b), 0);
+                time_a == time_b
+            }
+            (ValueRef::Nullable(a), ValueRef::Nullable(b)) => *a == *b,
+            (ValueRef::Array(ta, a), ValueRef::Array(tb, b)) => *ta == *tb && *a == *b,
+            (ValueRef::Decimal(a), ValueRef::Decimal(b)) => *a == *b,
+            _ => false,
+        }
+    }
 }
 
 impl<'a> fmt::Display for ValueRef<'a> {
@@ -50,10 +82,24 @@ impl<'a> fmt::Display for ValueRef<'a> {
             },
             ValueRef::Float32(v) => fmt::Display::fmt(v, f),
             ValueRef::Float64(v) => fmt::Display::fmt(v, f),
-            ValueRef::Date(v) if f.alternate() => fmt::Display::fmt(v, f),
-            ValueRef::Date(v) => fmt::Display::fmt(&v.format("%Y-%m-%d"), f),
-            ValueRef::DateTime(ref time) if f.alternate() => write!(f, "{}", time.to_rfc2822()),
-            ValueRef::DateTime(v) => fmt::Display::fmt(v, f),
+            ValueRef::Date(v, tz) if f.alternate() => {
+                let time = tz.timestamp(i64::from(*v) * 24 * 3600, 0);
+                let date = time.date();
+                fmt::Display::fmt(&date, f)
+            }
+            ValueRef::Date(v, tz) => {
+                let time = tz.timestamp(i64::from(*v) * 24 * 3600, 0);
+                let date = time.date();
+                fmt::Display::fmt(&date.format("%Y-%m-%d"), f)
+            }
+            ValueRef::DateTime(u, tz) if f.alternate() => {
+                let time = tz.timestamp(i64::from(*u), 0);
+                write!(f, "{}", time.to_rfc2822())
+            }
+            ValueRef::DateTime(u, tz) => {
+                let time = tz.timestamp(i64::from(*u), 0);
+                fmt::Display::fmt(&time, f)
+            }
             ValueRef::Nullable(v) => match v {
                 Either::Left(_) => write!(f, "NULL"),
                 Either::Right(inner) => write!(f, "{}", inner),
@@ -81,13 +127,13 @@ impl<'a> convert::From<ValueRef<'a>> for SqlType {
             ValueRef::String(_) => SqlType::String,
             ValueRef::Float32(_) => SqlType::Float32,
             ValueRef::Float64(_) => SqlType::Float64,
-            ValueRef::Date(_) => SqlType::Date,
-            ValueRef::DateTime(_) => SqlType::DateTime,
+            ValueRef::Date(_, _) => SqlType::Date,
+            ValueRef::DateTime(_, _) => SqlType::DateTime,
             ValueRef::Nullable(u) => match u {
-                Either::Left(sql_type) => sql_type,
+                Either::Left(sql_type) => sql_type.to_owned(),
                 Either::Right(value_ref) => SqlType::from(*value_ref),
             },
-            ValueRef::Array(t, _) => SqlType::Array(t.into()),
+            ValueRef::Array(t, _) => SqlType::Array(t),
             ValueRef::Decimal(v) => SqlType::Decimal(v.precision, v.scale),
         }
     }
@@ -133,13 +179,13 @@ impl<'a> From<ValueRef<'a>> for Value {
             ValueRef::Int16(v) => Value::Int16(v),
             ValueRef::Int32(v) => Value::Int32(v),
             ValueRef::Int64(v) => Value::Int64(v),
-            ValueRef::String(v) => Value::String(v.into()),
+            ValueRef::String(v) => Value::String(Arc::new(v.into())),
             ValueRef::Float32(v) => Value::Float32(v),
             ValueRef::Float64(v) => Value::Float64(v),
-            ValueRef::Date(v) => Value::Date(v),
-            ValueRef::DateTime(v) => Value::DateTime(v),
+            ValueRef::Date(v, tz) => Value::Date(v, tz),
+            ValueRef::DateTime(v, tz) => Value::DateTime(v, tz),
             ValueRef::Nullable(u) => match u {
-                Either::Left(sql_type) => Value::Nullable(Either::Left(sql_type)),
+                Either::Left(sql_type) => Value::Nullable(Either::Left((*sql_type).into())),
                 Either::Right(v) => {
                     let value: Value = (*v).into();
                     Value::Nullable(Either::Right(Box::new(value)))
@@ -147,11 +193,11 @@ impl<'a> From<ValueRef<'a>> for Value {
             },
             ValueRef::Array(t, vs) => {
                 let mut value_list: Vec<Value> = Vec::with_capacity(vs.len());
-                for v in vs {
-                    let value: Value = v.into();
+                for v in vs.iter() {
+                    let value: Value = v.clone().into();
                     value_list.push(value);
                 }
-                Value::Array(t, value_list)
+                Value::Array(t, Arc::new(value_list))
             }
             ValueRef::Decimal(v) => Value::Decimal(v),
         }
@@ -211,10 +257,10 @@ impl<'a> From<&'a Value> for ValueRef<'a> {
             Value::String(v) => ValueRef::String(v),
             Value::Float32(v) => ValueRef::Float32(*v),
             Value::Float64(v) => ValueRef::Float64(*v),
-            Value::Date(v) => ValueRef::Date(*v),
-            Value::DateTime(v) => ValueRef::DateTime(*v),
+            Value::Date(v, tz) => ValueRef::Date(*v, *tz),
+            Value::DateTime(v, tz) => ValueRef::DateTime(*v, *tz),
             Value::Nullable(u) => match u {
-                Either::Left(sql_type) => ValueRef::Nullable(Either::Left(*sql_type)),
+                Either::Left(sql_type) => ValueRef::Nullable(Either::Left(sql_type.to_owned())),
                 Either::Right(v) => {
                     let value_ref = v.as_ref().into();
                     ValueRef::Nullable(Either::Right(Box::new(value_ref)))
@@ -222,11 +268,11 @@ impl<'a> From<&'a Value> for ValueRef<'a> {
             },
             Value::Array(t, vs) => {
                 let mut ref_vec = Vec::with_capacity(vs.len());
-                for v in vs {
+                for v in vs.iter() {
                     let value_ref: ValueRef<'a> = From::from(v);
                     ref_vec.push(value_ref)
                 }
-                ValueRef::Array(*t, ref_vec)
+                ValueRef::Array(*t, Arc::new(ref_vec))
             }
             Value::Decimal(v) => ValueRef::Decimal(v.clone()),
         }
@@ -250,6 +296,28 @@ macro_rules! value_from {
     };
 }
 
+impl<'a> From<ValueRef<'a>> for AppDate {
+    fn from(value: ValueRef<'a>) -> Self {
+        if let ValueRef::Date(v, tz) = value {
+            let time = tz.timestamp(i64::from(v) * 24 * 3600, 0);
+            return time.date();
+        }
+        let from = format!("{}", SqlType::from(value.clone()));
+        panic!("Can't convert ValueRef::{} into {}.", from, stringify!($t))
+    }
+}
+
+impl<'a> From<ValueRef<'a>> for AppDateTime {
+    fn from(value: ValueRef<'a>) -> Self {
+        if let ValueRef::DateTime(x, tz) = value {
+            let time = tz.timestamp(i64::from(x), 0);
+            return time;
+        }
+        let from = format!("{}", SqlType::from(value.clone()));
+        panic!("Can't convert ValueRef::{} into {}.", from, stringify!($t))
+    }
+}
+
 value_from! {
     u8: UInt8,
     u16: UInt16,
@@ -262,10 +330,7 @@ value_from! {
     i64: Int64,
 
     f32: Float32,
-    f64: Float64,
-
-    AppDateTime: DateTime,
-    AppDate: Date
+    f64: Float64
 }
 
 #[cfg(test)]
@@ -285,6 +350,6 @@ mod test {
     #[test]
     fn test_size_of() {
         use std::mem;
-        assert_eq!(56, mem::size_of::<[ValueRef<'_>; 1]>());
+        assert_eq!(24, mem::size_of::<[ValueRef<'_>; 1]>());
     }
 }

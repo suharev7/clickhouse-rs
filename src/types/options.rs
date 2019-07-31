@@ -8,12 +8,11 @@ use std::{
     vec,
 };
 
-use url::{percent_encoding::percent_decode, Url};
-
 use crate::{
     errors::{Error, UrlError},
     types::ClickhouseResult,
 };
+use url::Url;
 
 const DEFAULT_MIN_CONNS: usize = 10;
 
@@ -174,9 +173,9 @@ impl Default for Options {
     fn default() -> Self {
         Self {
             addr: Address::SocketAddr("127.0.0.1:9000".parse().unwrap()),
-            database: "default".to_string(),
-            username: "default".to_string(),
-            password: "".to_string(),
+            database: "default".into(),
+            username: "default".into(),
+            password: "".into(),
             compression: false,
             pool_min: DEFAULT_MIN_CONNS,
             pool_max: DEFAULT_MAX_CONNS,
@@ -317,11 +316,11 @@ fn from_url(url_str: &str) -> ClickhouseResult<Options> {
     let mut options = Options::default();
 
     if let Some(username) = get_username_from_url(&url)? {
-        options.username = username;
+        options.username = username.into();
     }
 
     if let Some(password) = get_password_from_url(&url)? {
-        options.password = password
+        options.password = password.into()
     }
 
     let host = url
@@ -332,7 +331,7 @@ fn from_url(url_str: &str) -> ClickhouseResult<Options> {
     options.addr = format!("{}:{}", host, port).into();
 
     if let Some(database) = get_database_from_url(&url)? {
-        options.database = database;
+        options.database = database.into();
     }
 
     set_params(&mut options, url.query_pairs())?;
@@ -384,32 +383,22 @@ where
     }
 }
 
-fn get_username_from_url(url: &Url) -> ClickhouseResult<Option<String>> {
+fn get_username_from_url(url: &Url) -> ClickhouseResult<Option<&str>> {
     let user = url.username();
     if user.is_empty() {
         return Ok(None);
     }
-    Ok(Some(
-        percent_decode(user.as_ref())
-            .decode_utf8()
-            .map_err(|_| Error::Url(UrlError::Invalid))?
-            .to_string(),
-    ))
+    Ok(Some(user))
 }
 
-fn get_password_from_url(url: &Url) -> ClickhouseResult<Option<String>> {
+fn get_password_from_url(url: &Url) -> ClickhouseResult<Option<&str>> {
     match url.password() {
         None => Ok(None),
-        Some(password) => Ok(Some(
-            percent_decode(password.as_ref())
-                .decode_utf8()
-                .map_err(|_| Error::Url(UrlError::Invalid))?
-                .to_string(),
-        )),
+        Some(password) => Ok(Some(password)),
     }
 }
 
-fn get_database_from_url(url: &Url) -> ClickhouseResult<Option<String>> {
+fn get_database_from_url(url: &Url) -> ClickhouseResult<Option<&str>> {
     match url.path_segments() {
         None => Ok(None),
         Some(mut segments) => {
@@ -420,12 +409,7 @@ fn get_database_from_url(url: &Url) -> ClickhouseResult<Option<String>> {
             }
 
             match head {
-                Some(database) if !database.is_empty() => Ok(Some(
-                    percent_decode(database.as_ref())
-                        .decode_utf8()
-                        .map_err(|_| Error::Url(UrlError::Invalid))?
-                        .to_string(),
-                )),
+                Some(database) if !database.is_empty() => Ok(Some(database)),
                 _ => Ok(None),
             }
         }

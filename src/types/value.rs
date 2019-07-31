@@ -1,4 +1,4 @@
-use std::{convert, fmt, mem, str};
+use std::{convert, fmt, mem, str, sync::Arc};
 
 use chrono::prelude::*;
 use chrono_tz::Tz;
@@ -13,7 +13,7 @@ pub(crate) type AppDateTime = DateTime<Tz>;
 pub(crate) type AppDate = Date<Tz>;
 
 /// Client side representation of a value of Clickhouse column.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum Value {
     UInt8(u8),
     UInt16(u16),
@@ -23,14 +23,46 @@ pub enum Value {
     Int16(i16),
     Int32(i32),
     Int64(i64),
-    String(Vec<u8>),
+    String(Arc<Vec<u8>>),
     Float32(f32),
     Float64(f64),
-    Date(Date<Tz>),
-    DateTime(DateTime<Tz>),
-    Nullable(Either<SqlType, Box<Value>>),
-    Array(SqlType, Vec<Value>),
+    Date(u16, Tz),
+    DateTime(u32, Tz),
+    Nullable(Either<&'static SqlType, Box<Value>>),
+    Array(&'static SqlType, Arc<Vec<Value>>),
     Decimal(Decimal),
+}
+
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Value::UInt8(a), Value::UInt8(b)) => *a == *b,
+            (Value::UInt16(a), Value::UInt16(b)) => *a == *b,
+            (Value::UInt32(a), Value::UInt32(b)) => *a == *b,
+            (Value::UInt64(a), Value::UInt64(b)) => *a == *b,
+            (Value::Int8(a), Value::Int8(b)) => *a == *b,
+            (Value::Int16(a), Value::Int16(b)) => *a == *b,
+            (Value::Int32(a), Value::Int32(b)) => *a == *b,
+            (Value::Int64(a), Value::Int64(b)) => *a == *b,
+            (Value::String(a), Value::String(b)) => *a == *b,
+            (Value::Float32(a), Value::Float32(b)) => *a == *b,
+            (Value::Float64(a), Value::Float64(b)) => *a == *b,
+            (Value::Date(a, tz_a), Value::Date(b, tz_b)) => {
+                let time_a = tz_a.timestamp(i64::from(*a) * 24 * 3600, 0);
+                let time_b = tz_b.timestamp(i64::from(*b) * 24 * 3600, 0);
+                time_a.date() == time_b.date()
+            }
+            (Value::DateTime(a, tz_a), Value::DateTime(b, tz_b)) => {
+                let time_a = tz_a.timestamp(i64::from(*a), 0);
+                let time_b = tz_b.timestamp(i64::from(*b), 0);
+                time_a == time_b
+            }
+            (Value::Nullable(a), Value::Nullable(b)) => *a == *b,
+            (Value::Array(ta, a), Value::Array(tb, b)) => *ta == *tb && *a == *b,
+            (Value::Decimal(a), Value::Decimal(b)) => *a == *b,
+            _ => false,
+        }
+    }
 }
 
 impl Value {
@@ -44,14 +76,14 @@ impl Value {
             SqlType::Int16 => Value::Int16(0),
             SqlType::Int32 => Value::Int32(0),
             SqlType::Int64 => Value::Int64(0),
-            SqlType::String => Value::String(Vec::default()),
-            SqlType::FixedString(str_len) => Value::String(vec![0_u8; str_len]),
+            SqlType::String => Value::String(Arc::new(Vec::default())),
+            SqlType::FixedString(str_len) => Value::String(Arc::new(vec![0_u8; str_len])),
             SqlType::Float32 => Value::Float32(0.0),
             SqlType::Float64 => Value::Float64(0.0),
             SqlType::Date => 0_u16.to_date(Tz::Zulu).into(),
             SqlType::DateTime => 0_u32.to_date(Tz::Zulu).into(),
-            SqlType::Nullable(inner) => Value::Nullable(Either::Left(*inner)),
-            SqlType::Array(inner) => Value::Array(*inner, Vec::default()),
+            SqlType::Nullable(inner) => Value::Nullable(Either::Left(inner)),
+            SqlType::Array(inner) => Value::Array(inner, Arc::new(Vec::default())),
             SqlType::Decimal(precision, scale) => Value::Decimal(Decimal {
                 underlying: 0,
                 precision,
@@ -79,10 +111,24 @@ impl fmt::Display for Value {
             },
             Value::Float32(ref v) => fmt::Display::fmt(v, f),
             Value::Float64(ref v) => fmt::Display::fmt(v, f),
-            Value::DateTime(ref time) if f.alternate() => write!(f, "{}", time.to_rfc2822()),
-            Value::DateTime(ref time) => write!(f, "{}", time),
-            Value::Date(v) if f.alternate() => fmt::Display::fmt(v, f),
-            Value::Date(v) => fmt::Display::fmt(&v.format("%Y-%m-%d"), f),
+            Value::DateTime(u, tz) if f.alternate() => {
+                let time = tz.timestamp(i64::from(*u), 0);
+                write!(f, "{}", time.to_rfc2822())
+            }
+            Value::DateTime(u, tz) => {
+                let time = tz.timestamp(i64::from(*u), 0);
+                fmt::Display::fmt(&time, f)
+            }
+            Value::Date(v, tz) if f.alternate() => {
+                let time = tz.timestamp(i64::from(*v) * 24 * 3600, 0);
+                let date = time.date();
+                fmt::Display::fmt(&date, f)
+            }
+            Value::Date(v, tz) => {
+                let time = tz.timestamp(i64::from(*v) * 24 * 3600, 0);
+                let date = time.date();
+                fmt::Display::fmt(&date.format("%Y-%m-%d"), f)
+            }
             Value::Nullable(v) => match v {
                 Either::Left(_) => write!(f, "NULL"),
                 Either::Right(data) => data.fmt(f),
@@ -110,16 +156,16 @@ impl convert::From<Value> for SqlType {
             Value::String(_) => SqlType::String,
             Value::Float32(_) => SqlType::Float32,
             Value::Float64(_) => SqlType::Float64,
-            Value::Date(_) => SqlType::Date,
-            Value::DateTime(_) => SqlType::DateTime,
+            Value::Date(_, _) => SqlType::Date,
+            Value::DateTime(_, _) => SqlType::DateTime,
             Value::Nullable(d) => match d {
-                Either::Left(t) => SqlType::Nullable(t.into()),
+                Either::Left(t) => SqlType::Nullable(t),
                 Either::Right(inner) => {
                     let sql_type = SqlType::from(inner.as_ref().to_owned());
                     SqlType::Nullable(sql_type.into())
                 }
             },
-            Value::Array(t, _) => SqlType::Array(t.into()),
+            Value::Array(t, _) => SqlType::Array(t),
             Value::Decimal(v) => SqlType::Decimal(v.precision, v.scale),
         }
     }
@@ -134,7 +180,8 @@ where
         match value {
             None => {
                 let default_value: Value = T::default().into();
-                Value::Nullable(Either::Left(default_value.into()))
+                let default_type: SqlType = default_value.into();
+                Value::Nullable(Either::Left(default_type.into()))
             }
             Some(inner) => Value::Nullable(Either::Right(Box::new(inner.into()))),
         }
@@ -153,10 +200,37 @@ macro_rules! value_from {
     };
 }
 
-value_from! {
-    AppDateTime: DateTime,
-    AppDate: Date,
+impl convert::From<AppDate> for Value {
+    fn from(v: AppDate) -> Value {
+        Value::Date(u16::get_days(v), v.timezone())
+    }
+}
 
+impl convert::From<AppDateTime> for Value {
+    fn from(v: AppDateTime) -> Value {
+        Value::DateTime(v.timestamp() as u32, v.timezone())
+    }
+}
+
+impl convert::From<String> for Value {
+    fn from(v: String) -> Value {
+        Value::String(Arc::new(v.into_bytes()))
+    }
+}
+
+impl convert::From<Vec<u8>> for Value {
+    fn from(v: Vec<u8>) -> Value {
+        Value::String(Arc::new(v))
+    }
+}
+
+impl convert::From<&[u8]> for Value {
+    fn from(v: &[u8]) -> Value {
+        Value::String(Arc::new(v.to_vec()))
+    }
+}
+
+value_from! {
     u8: UInt8,
     u16: UInt16,
     u32: UInt32,
@@ -168,26 +242,23 @@ value_from! {
     i64: Int64,
 
     f32: Float32,
-    f64: Float64,
-
-    &[u8]:   String,
-    String:  String,
-    Vec<u8>: String
+    f64: Float64
 }
 
 impl<'a> convert::From<&'a str> for Value {
     fn from(v: &'a str) -> Self {
-        Value::String(v.as_bytes().into())
+        let bytes: Vec<u8> = v.as_bytes().into();
+        Value::String(Arc::new(bytes))
     }
 }
 
 impl convert::From<Value> for String {
     fn from(mut v: Value) -> Self {
         if let Value::String(ref mut x) = &mut v {
-            let mut tmp = Vec::new();
+            let mut tmp = Arc::new(Vec::new());
             mem::swap(x, &mut tmp);
-            if let Ok(result) = String::from_utf8(tmp) {
-                return result;
+            if let Ok(result) = str::from_utf8(tmp.as_ref()) {
+                return result.into();
             }
         }
         let from = SqlType::from(v);
@@ -198,7 +269,7 @@ impl convert::From<Value> for String {
 impl convert::From<Value> for Vec<u8> {
     fn from(v: Value) -> Self {
         match v {
-            Value::String(bs) => bs,
+            Value::String(bs) => bs.to_vec(),
             _ => {
                 let from = SqlType::from(v);
                 panic!("Can't convert Value::{} into Vec<u8>.", from)
@@ -223,6 +294,28 @@ macro_rules! from_value {
     };
 }
 
+impl convert::From<Value> for AppDate {
+    fn from(v: Value) -> AppDate {
+        if let Value::Date(x, tz) = v {
+            let time = tz.timestamp(i64::from(x) * 24 * 3600, 0);
+            return time.date();
+        }
+        let from = SqlType::from(v);
+        panic!("Can't convert Value::{} into {}", from, "AppDate")
+    }
+}
+
+impl convert::From<Value> for AppDateTime {
+    fn from(v: Value) -> AppDateTime {
+        if let Value::DateTime(u, tz) = v {
+            let time = tz.timestamp(i64::from(u), 0);
+            return time;
+        }
+        let from = SqlType::from(v);
+        panic!("Can't convert Value::{} into {}", from, "AppDateTime")
+    }
+}
+
 from_value! {
     u8: UInt8,
     u16: UInt16,
@@ -233,9 +326,7 @@ from_value! {
     i32: Int32,
     i64: Int64,
     f32: Float32,
-    f64: Float64,
-    AppDate: Date,
-    AppDateTime: DateTime
+    f64: Float64
 }
 
 #[cfg(test)]
@@ -331,27 +422,36 @@ mod test {
         let d: Value = Value::from(date_value);
         let dt: Value = date_time_value.into();
 
-        assert_eq!(Value::Date(date_value), d);
-        assert_eq!(Value::DateTime(date_time_value), dt);
+        assert_eq!(
+            Value::Date(u16::get_days(date_value), date_value.timezone()),
+            d
+        );
+        assert_eq!(
+            Value::DateTime(
+                date_time_value.timestamp() as u32,
+                date_time_value.timezone()
+            ),
+            dt
+        );
     }
 
     #[test]
     fn test_string_from() {
-        let v = Value::String(b"df47a455-bb3c-4bd6-b2f2-a24be3db36ab".to_vec());
+        let v = Value::String(Arc::new(b"df47a455-bb3c-4bd6-b2f2-a24be3db36ab".to_vec()));
         let u = String::from(v);
         assert_eq!("df47a455-bb3c-4bd6-b2f2-a24be3db36ab".to_string(), u);
     }
 
     #[test]
     fn test_into_string() {
-        let v = Value::String(b"d2384838-dfe8-43ea-b1f7-63fb27b91088".to_vec());
+        let v = Value::String(Arc::new(b"d2384838-dfe8-43ea-b1f7-63fb27b91088".to_vec()));
         let u: String = v.into();
         assert_eq!("d2384838-dfe8-43ea-b1f7-63fb27b91088".to_string(), u);
     }
 
     #[test]
     fn test_into_vec() {
-        let v = Value::String(vec![1, 2, 3]);
+        let v = Value::String(Arc::new(vec![1, 2, 3]));
         let u: Vec<u8> = v.into();
         assert_eq!(vec![1, 2, 3], u);
     }
@@ -370,17 +470,17 @@ mod test {
 
         assert_eq!(
             "text".to_string(),
-            format!("{}", Value::String(b"text".to_vec()))
+            format!("{}", Value::String(Arc::new(b"text".to_vec())))
         );
 
         assert_eq!(
             "\u{1}\u{2}\u{3}".to_string(),
-            format!("{}", Value::String(vec![1, 2, 3]))
+            format!("{}", Value::String(Arc::new(vec![1, 2, 3])))
         );
 
         assert_eq!(
             "NULL".to_string(),
-            format!("{}", Value::Nullable(Either::Left(SqlType::UInt8)))
+            format!("{}", Value::Nullable(Either::Left(SqlType::UInt8.into())))
         );
         assert_eq!(
             "42".to_string(),
@@ -395,8 +495,8 @@ mod test {
             format!(
                 "{}",
                 Value::Array(
-                    SqlType::Int32,
-                    vec![Value::Int32(1), Value::Int32(2), Value::Int32(3)]
+                    SqlType::Int32.into(),
+                    Arc::new(vec![Value::Int32(1), Value::Int32(2), Value::Int32(3)])
                 )
             )
         );
@@ -412,5 +512,11 @@ mod test {
                 assert_eq!(*ch, 0_u8);
             }
         }
+    }
+
+    #[test]
+    fn test_size_of() {
+        use std::mem;
+        assert_eq!(24, mem::size_of::<[Value; 1]>());
     }
 }

@@ -265,7 +265,7 @@ impl ColumnData for NullableDecimalAdapter {
     fn at(&self, index: usize) -> ValueRef {
         let value: Option<Decimal> = Option::from_sql(self.column.at(index)).unwrap();
         match value {
-            None => ValueRef::Nullable(Either::Left(self.sql_type())),
+            None => ValueRef::Nullable(Either::Left(self.sql_type().into())),
             Some(mut v) => {
                 v = v.set_scale(self.scale);
                 v.precision = self.precision;

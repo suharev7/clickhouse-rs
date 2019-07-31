@@ -1,4 +1,4 @@
-use std::{io::Write, string::ToString};
+use std::{io::Write, string::ToString, sync::Arc};
 
 use crate::{
     binary::{Encoder, ReadEx},
@@ -6,7 +6,7 @@ use crate::{
     types::{
         column::{
             array::ArrayColumnData, list::List, nullable::NullableColumnData, BoxColumnWrapper,
-            ColumnWrapper, StringPool,
+            ColumnWrapper, Either, StringPool,
         },
         Column, FromSql, SqlType, Value, ValueRef,
     },
@@ -59,103 +59,101 @@ impl<'a> ColumnFrom for Vec<&'a [u8]> {
     }
 }
 
-impl ColumnFrom for Vec<Option<String>> {
-    fn column_from<W: ColumnWrapper>(source: Self) -> W::Wrapper {
-        let inner = Box::new(StringColumnData::with_capacity(source.len()));
+trait StringSource {
+    fn to_value(self) -> Value;
+}
 
-        let mut data = NullableColumnData {
-            inner,
-            nulls: Vec::with_capacity(source.len()),
-        };
+impl StringSource for String {
+    fn to_value(self) -> Value {
+        self.into()
+    }
+}
 
-        for value in source {
-            data.push(value.into());
-        }
+impl StringSource for &str {
+    fn to_value(self) -> Value {
+        self.into()
+    }
+}
 
-        W::wrap(data)
+impl StringSource for Vec<u8> {
+    fn to_value(self) -> Value {
+        Value::String(Arc::new(self))
     }
 }
 
 impl ColumnFrom for Vec<Vec<String>> {
     fn column_from<W: ColumnWrapper>(source: Self) -> <W as ColumnWrapper>::Wrapper {
-        let fake: Vec<String> = Vec::with_capacity(source.len());
-        let inner = Vec::column_from::<BoxColumnWrapper>(fake);
-        let sql_type = inner.sql_type();
-
-        let mut data = ArrayColumnData {
-            inner,
-            offsets: List::with_capacity(source.len()),
-        };
-
-        for vs in source {
-            let mut inner = Vec::with_capacity(vs.len());
-            for v in vs {
-                let value: Value = v.into();
-                inner.push(value)
-            }
-            data.push(Value::Array(sql_type, inner));
-        }
-
-        W::wrap(data)
+        make_array_of_array::<W, String>(source)
     }
 }
 
 impl ColumnFrom for Vec<Vec<&str>> {
     fn column_from<W: ColumnWrapper>(source: Self) -> <W as ColumnWrapper>::Wrapper {
-        let fake: Vec<&str> = Vec::with_capacity(source.len());
-        let inner = Vec::column_from::<BoxColumnWrapper>(fake);
-        let sql_type = inner.sql_type();
-
-        let mut data = ArrayColumnData {
-            inner,
-            offsets: List::with_capacity(source.len()),
-        };
-
-        for vs in source {
-            let mut inner = Vec::with_capacity(vs.len());
-            for v in vs {
-                let value: Value = v.into();
-                inner.push(value)
-            }
-            data.push(Value::Array(sql_type, inner));
-        }
-
-        W::wrap(data)
+        make_array_of_array::<W, &str>(source)
     }
+}
+
+fn make_array_of_array<W: ColumnWrapper, S: StringSource>(
+    source: Vec<Vec<S>>,
+) -> <W as ColumnWrapper>::Wrapper {
+    let fake: Vec<String> = Vec::with_capacity(source.len());
+    let inner = Vec::column_from::<BoxColumnWrapper>(fake);
+    let sql_type = inner.sql_type();
+
+    let mut data = ArrayColumnData {
+        inner,
+        offsets: List::with_capacity(source.len()),
+    };
+
+    for vs in source {
+        let mut inner = Vec::with_capacity(vs.len());
+        for v in vs {
+            let value: Value = v.to_value();
+            inner.push(value)
+        }
+        data.push(Value::Array(sql_type.into(), Arc::new(inner)));
+    }
+
+    W::wrap(data)
 }
 
 impl ColumnFrom for Vec<Option<Vec<u8>>> {
     fn column_from<W: ColumnWrapper>(source: Self) -> W::Wrapper {
-        let inner = Box::new(StringColumnData::with_capacity(source.len()));
-
-        let mut data = NullableColumnData {
-            inner,
-            nulls: Vec::with_capacity(source.len()),
-        };
-
-        for value in source {
-            data.push(value.into());
-        }
-
-        W::wrap(data)
+        make_opt_column::<W, Vec<u8>>(source)
     }
 }
 
 impl ColumnFrom for Vec<Option<&str>> {
     fn column_from<W: ColumnWrapper>(source: Self) -> W::Wrapper {
-        let inner = Box::new(StringColumnData::with_capacity(source.len()));
-
-        let mut data = NullableColumnData {
-            inner,
-            nulls: Vec::with_capacity(source.len()),
-        };
-
-        for value in source {
-            data.push(value.into());
-        }
-
-        W::wrap(data)
+        make_opt_column::<W, &str>(source)
     }
+}
+
+impl ColumnFrom for Vec<Option<String>> {
+    fn column_from<W: ColumnWrapper>(source: Self) -> W::Wrapper {
+        make_opt_column::<W, String>(source)
+    }
+}
+
+fn make_opt_column<W: ColumnWrapper, S: StringSource>(source: Vec<Option<S>>) -> W::Wrapper {
+    let inner = Box::new(StringColumnData::with_capacity(source.len()));
+
+    let mut data = NullableColumnData {
+        inner,
+        nulls: Vec::with_capacity(source.len()),
+    };
+
+    for value in source {
+        let item = if let Some(v) = value {
+            let inner = v.to_value();
+            Value::Nullable(Either::Right(Box::new(inner)))
+        } else {
+            Value::Nullable(Either::Left(SqlType::String.into()))
+        };
+        data.push(item);
+    }
+
+    W::wrap(data)
 }
 
 impl ColumnData for StringColumnData {

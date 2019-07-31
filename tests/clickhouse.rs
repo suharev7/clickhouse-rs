@@ -9,7 +9,9 @@ use chrono::prelude::*;
 use chrono_tz::Tz::{self, UTC};
 use tokio::prelude::*;
 
-use clickhouse_rs::{errors::Error, types::Block, types::FromSql, ClientHandle, Pool, types::Decimal};
+use clickhouse_rs::{
+    errors::Error, types::Block, types::Decimal, types::FromSql, ClientHandle, Pool,
+};
 
 type BoxFuture<T> = Box<dyn Future<Item = T, Error = Error> + Send>;
 
@@ -666,14 +668,8 @@ fn test_decimal() {
     let query = "SELECT x, ox FROM clickhouse_decimal";
 
     let block = Block::new()
-        .add_column("x", vec![
-            Decimal::of(1.234, 3),
-            Decimal::of(5, 3),
-        ])
-        .add_column("ox", vec![
-            None,
-            Some(Decimal::of(1.23, 2)),
-        ]);
+        .add_column("x", vec![Decimal::of(1.234, 3), Decimal::of(5, 3)])
+        .add_column("ox", vec![None, Some(Decimal::of(1.23, 2))]);
 
     let pool = Pool::new(database_url());
     let done = pool

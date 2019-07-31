@@ -7,6 +7,7 @@ use crate::{
     },
 };
 use chrono_tz::Tz;
+use std::sync::Arc;
 
 pub(crate) struct ArrayColumnData {
     pub(crate) inner: Box<dyn ColumnData + Send + Sync>,
@@ -65,8 +66,8 @@ impl ColumnData for ArrayColumnData {
             };
 
             self.offsets.push((prev + vs.len()) as u64);
-            for v in vs {
-                self.inner.push(v);
+            for v in vs.iter() {
+                self.inner.push(v.clone());
             }
         } else {
             panic!("value should be an array")
@@ -87,7 +88,7 @@ impl ColumnData for ArrayColumnData {
             let v = self.inner.at(i);
             vs.push(v);
         }
-        ValueRef::Array(sql_type, vs)
+        ValueRef::Array(sql_type.into(), Arc::new(vs))
     }
 }
 

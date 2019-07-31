@@ -1,4 +1,4 @@
-use std::{convert, fmt, mem};
+use std::{convert, fmt, sync::Arc};
 
 use chrono::{prelude::*, Date};
 use chrono_tz::Tz;
@@ -8,8 +8,8 @@ use crate::{
     errors::Error,
     types::{
         column::{
-            array::ArrayColumnData, nullable::NullableColumnData, BoxColumnWrapper, ColumnWrapper,
-            Either,
+            array::ArrayColumnData, nullable::NullableColumnData, numeric::save_data,
+            BoxColumnWrapper, ColumnWrapper, Either,
         },
         DateConverter, Marshal, SqlType, StatBuffer, Unmarshal, Value, ValueRef,
     },
@@ -97,10 +97,11 @@ impl ColumnFrom for Vec<Vec<Date<Tz>>> {
         for vs in source {
             let mut inner = Vec::with_capacity(vs.len());
             for v in vs {
-                let value: Value = Value::Date(v);
+                let days = u16::get_days(v);
+                let value: Value = Value::Date(days, v.timezone());
                 inner.push(value);
             }
-            data.push(Value::Array(sql_type, inner));
+            data.push(Value::Array(sql_type.into(), Arc::new(inner)));
         }
 
         W::wrap(data)
@@ -121,10 +122,10 @@ impl ColumnFrom for Vec<Vec<DateTime<Tz>>> {
         for vs in source {
             let mut inner = Vec::with_capacity(vs.len());
             for v in vs {
-                let value: Value = Value::DateTime(v);
+                let value: Value = Value::DateTime(v.timestamp() as u32, v.timezone());
                 inner.push(value);
             }
-            data.push(Value::Array(sql_type, inner));
+            data.push(Value::Array(sql_type.into(), Arc::new(inner)));
         }
 
         W::wrap(data)
@@ -143,9 +144,9 @@ impl ColumnFrom for Vec<Option<DateTime<Tz>>> {
 
         for value in source {
             match value {
-                None => data.push(Value::Nullable(Either::Left(SqlType::DateTime))),
+                None => data.push(Value::Nullable(Either::Left(SqlType::DateTime.into()))),
                 Some(d) => {
-                    let value = Value::DateTime(d);
+                    let value = Value::DateTime(d.timestamp() as u32, d.timezone());
                     data.push(Value::Nullable(Either::Right(Box::new(value))))
                 }
             }
@@ -167,9 +168,10 @@ impl ColumnFrom for Vec<Option<Date<Tz>>> {
 
         for value in source {
             match value {
-                None => data.push(Value::Nullable(Either::Left(SqlType::Date))),
+                None => data.push(Value::Nullable(Either::Left(SqlType::Date.into()))),
                 Some(d) => {
-                    let value = Value::Date(d);
+                    let days = u16::get_days(d);
+                    let value = Value::Date(days, d.timezone());
                     data.push(Value::Nullable(Either::Right(Box::new(value))))
                 }
             }
@@ -199,10 +201,7 @@ where
     }
 
     fn save(&self, encoder: &mut Encoder, start: usize, end: usize) {
-        let start_index = start * mem::size_of::<T>();
-        let end_index = end * mem::size_of::<T>();
-        let data = self.data.as_ref();
-        encoder.write_bytes(&data[start_index..end_index]);
+        save_data::<T>(self.data.as_ref(), encoder, start, end);
     }
 
     fn len(&self) -> usize {

@@ -2,11 +2,11 @@ use chrono::prelude::*;
 use chrono_tz::Tz;
 
 use crate::{
-    errors::{Error, FromSqlError},
+    errors::{Error, FromSqlError, Result},
     types::{column::Either, Decimal, SqlType, ValueRef},
 };
 
-pub type FromSqlResult<T> = Result<T, Error>;
+pub type FromSqlResult<T> = Result<T>;
 
 pub trait FromSql<'a>: Sized {
     fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self>;
@@ -118,7 +118,7 @@ macro_rules! from_sql_vec_impl {
     ( $( $t:ident: $k:ident ),* ) => {
         $(
             impl<'a> FromSql<'a> for Vec<$t> {
-                fn from_sql(value: ValueRef<'a>) -> Result<Self, Error> {
+                fn from_sql(value: ValueRef<'a>) -> Result<Self> {
                     match value {
                         ValueRef::Array(SqlType::$k, vs) => {
                             let mut result = Vec::with_capacity(vs.len());

@@ -2,7 +2,7 @@ use std::{io::Write, string::ToString, sync::Arc};
 
 use crate::{
     binary::{Encoder, ReadEx},
-    errors::Error,
+    errors::Result,
     types::{
         column::{
             array::ArrayColumnData, list::List, nullable::NullableColumnData, BoxColumnWrapper,
@@ -29,7 +29,7 @@ impl StringColumnData {
         }
     }
 
-    pub(crate) fn load<T: ReadEx>(reader: &mut T, size: usize) -> Result<Self, Error> {
+    pub(crate) fn load<T: ReadEx>(reader: &mut T, size: usize) -> Result<Self> {
         let mut data = Self::with_capacity(size);
 
         for _ in 0..size {

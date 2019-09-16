@@ -1,16 +1,20 @@
 use chrono_tz::Tz;
 
-use crate::{binary::ReadEx, errors::Error};
-
-use super::{
-    column_data::ColumnData, date::DateColumnData, nullable::NullableColumnData,
-    numeric::VectorColumnData, string::StringColumnData, ColumnWrapper,
-};
-use crate::types::{
-    column::{
-        array::ArrayColumnData, decimal::DecimalColumnData, fixed_string::FixedStringColumnData,
+use crate::{
+    binary::ReadEx,
+    types::decimal::NoBits,
+    types::column::{
+        column_data::ColumnData,
+        date::DateColumnData,
+        numeric::VectorColumnData,
+        string::StringColumnData,
+        ColumnWrapper,
+        nullable::NullableColumnData,
+        array::ArrayColumnData,
+        decimal::DecimalColumnData,
+        fixed_string::FixedStringColumnData
     },
-    decimal::NoBits,
+    errors::Result,
 };
 
 impl dyn ColumnData {
@@ -19,7 +23,7 @@ impl dyn ColumnData {
         type_name: &str,
         size: usize,
         tz: Tz,
-    ) -> Result<W::Wrapper, Error> {
+    ) -> Result<W::Wrapper> {
         Ok(match type_name {
             "UInt8" => W::wrap(VectorColumnData::<u8>::load(reader, size)?),
             "UInt16" => W::wrap(VectorColumnData::<u16>::load(reader, size)?),

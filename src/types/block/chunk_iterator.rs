@@ -29,7 +29,7 @@ impl<'a> Iterator for ChunkIterator<'a> {
         for column in self.block.columns().iter() {
             let range = self.position..self.position + size;
             let data = column.slice(range);
-            result = result.add_column(column.name(), data);
+            result = result.column(column.name(), data);
         }
 
         self.position += size;

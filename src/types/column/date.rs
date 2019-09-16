@@ -1,21 +1,24 @@
 use std::{convert, fmt, sync::Arc};
 
-use chrono::{prelude::*, Date};
+use chrono::{Date, prelude::*};
 use chrono_tz::Tz;
 
 use crate::{
     binary::{Encoder, ReadEx},
-    errors::Error,
-    types::{
-        column::{
-            array::ArrayColumnData, nullable::NullableColumnData, numeric::save_data,
-            BoxColumnWrapper, ColumnWrapper, Either,
-        },
-        DateConverter, Marshal, SqlType, StatBuffer, Unmarshal, Value, ValueRef,
+    errors::Result,
+    types::{DateConverter, Marshal, SqlType, StatBuffer, Unmarshal, Value, ValueRef},
+    types::column::{
+        array::ArrayColumnData,
+        BoxColumnWrapper,
+        column_data::ColumnData,
+        ColumnFrom,
+        ColumnWrapper,
+        Either,
+        list::List,
+        nullable::NullableColumnData,
+        numeric::save_data
     },
 };
-
-use super::{column_data::ColumnData, list::List, ColumnFrom};
 
 pub struct DateColumnData<T>
 where
@@ -51,7 +54,7 @@ where
         reader: &mut R,
         size: usize,
         tz: Tz,
-    ) -> Result<DateColumnData<T>, Error> {
+    ) -> Result<DateColumnData<T>> {
         let mut data = List::with_capacity(size);
         data.resize(size, T::default());
         reader.read_bytes(data.as_mut())?;
@@ -222,8 +225,9 @@ mod test {
     use chrono::TimeZone;
     use chrono_tz::Tz;
 
-    use super::*;
     use crate::types::column::ArcColumnWrapper;
+
+    use super::*;
 
     #[test]
     fn test_create_date() {

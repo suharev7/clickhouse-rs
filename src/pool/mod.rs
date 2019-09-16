@@ -1,24 +1,29 @@
 use std::{
-    fmt, mem,
+    fmt,
+    mem,
+    pin::Pin,
     sync::{Arc, Mutex, MutexGuard},
+    task::{Context, Poll, Waker},
 };
 
-use tokio::prelude::task::{self, Task};
+use futures_core::future::BoxFuture;
 use tokio::prelude::*;
 
 use crate::{
-    io::BoxFuture,
-    pool::futures::GetHandle,
-    types::{ClickhouseResult, IntoOptions, OptionsSource},
-    Client, ClientHandle,
+    Client,
+    ClientHandle,
+    errors::Result,
+    pool::futures::GetHandle, types::{IntoOptions, OptionsSource},
 };
+
+use log::error;
 
 mod futures;
 
 struct Inner {
-    new: Option<BoxFuture<ClientHandle>>,
+    new: Option<BoxFuture<'static, Result<ClientHandle>>>,
     idle: Vec<ClientHandle>,
-    tasks: Vec<Task>,
+    tasks: Vec<Waker>,
     ongoing: usize,
 }
 
@@ -177,48 +182,51 @@ impl Pool {
         fun(self.inner.lock().unwrap())
     }
 
-    fn poll(&mut self) -> ClickhouseResult<Async<ClientHandle>> {
-        self.handle_futures()?;
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<ClientHandle>> {
+        self.handle_futures(cx)?;
 
         match self.take_conn() {
-            Some(client) => Ok(Async::Ready(client)),
+            Some(client) => Poll::Ready(Ok(client)),
             None => {
                 let new_conn_created = self.with_inner(|mut inner| {
                     if inner.new.is_none() && inner.conn_count() < self.max {
-                        inner.new.replace(self.new_connection());
+                        let future: BoxFuture<'static, Result<ClientHandle>> =
+                            Box::pin(self.new_connection());
+                        inner.new.replace(future);
                         true
                     } else {
-                        inner.tasks.push(task::current());
+                        inner.tasks.push(cx.waker().clone());
                         false
                     }
                 });
                 if new_conn_created {
-                    self.poll()
+                    self.poll(cx)
                 } else {
-                    Ok(Async::NotReady)
+                    Poll::Pending
                 }
             }
         }
     }
 
-    fn new_connection(&self) -> BoxFuture<ClientHandle> {
-        Client::open(&self.options)
+    fn new_connection(&self) -> BoxFuture<'static, Result<ClientHandle>> {
+        let source = self.options.clone();
+        Box::pin(async move { Client::open(&source).await })
     }
 
-    fn handle_futures(&mut self) -> ClickhouseResult<()> {
+    fn handle_futures(&mut self, cx: &mut Context<'_>) -> Result<()> {
         self.with_inner(|mut inner| {
             let result = match inner.new {
                 None => return Ok(()),
-                Some(ref mut new) => new.poll(),
+                Some(ref mut new) => new.poll_unpin(cx),
             };
 
             match result {
-                Ok(Async::Ready(client)) => {
+                Poll::Ready(Ok(client)) => {
                     inner.new = None;
                     inner.idle.push(client);
                 }
-                Ok(Async::NotReady) => (),
-                Err(err) => {
+                Poll::Pending => (),
+                Poll::Ready(Err(err)) => {
                     inner.new = None;
                     return Err(err);
                 }
@@ -252,7 +260,7 @@ impl Pool {
             }
 
             while let Some(task) = inner.tasks.pop() {
-                task.notify()
+                task.wake()
             }
         })
     }
@@ -262,7 +270,7 @@ impl Pool {
             inner.ongoing -= 1;
 
             while let Some(task) = inner.tasks.pop() {
-                task.notify()
+                task.wake()
             }
         })
     }
@@ -294,82 +302,63 @@ mod test {
             atomic::{AtomicBool, Ordering},
             Arc,
         },
-        thread::spawn,
-        time::{Duration, Instant},
+        thread,
+        time::{Duration, Instant}
     };
 
-    use tokio::prelude::*;
+    use futures_util::future;
+    use tokio::runtime::current_thread::Runtime;
 
-    use crate::{errors::Error, io::BoxFuture, test_misc::DATABASE_URL, types::Options};
+    use crate::{errors::Result, Options, test_misc::DATABASE_URL};
 
     use super::Pool;
-    use crate::ClientHandle;
 
-    /// Same as `tokio::run`, but will panic if future panics and will return the result
-    /// of future execution.
-    fn run<F, T, U>(future: F) -> Result<T, U>
-    where
-        F: Future<Item = T, Error = U> + Send + 'static,
-        T: Send + 'static,
-        U: Send + 'static,
-    {
-        let mut runtime = tokio::runtime::Runtime::new().unwrap();
-        let result = runtime.block_on(future);
-        runtime.shutdown_on_idle().wait().unwrap();
-        result
-    }
-
-    #[test]
-    fn test_connect() {
+    #[tokio::test]
+    async fn test_connect() -> Result<()> {
         let options = Options::from_str(DATABASE_URL.as_str()).unwrap();
         let pool = Pool::new(options);
 
-        let done = pool
-            .get_handle()
-            .and_then(|c| c.ping().map(|_| ()))
-            .and_then(move |_| {
-                let info = pool.info();
-                assert_eq!(info.ongoing, 0);
-                assert_eq!(info.idle_len, 1);
-                Ok(())
-            });
+        let _ = pool.get_handle().await?.ping().await?;
 
-        run(done).unwrap();
+        let info = pool.info();
+        assert_eq!(info.ongoing, 0);
+        assert_eq!(info.idle_len, 1);
+        Ok(())
     }
 
-    #[test]
-    fn test_detach() {
-        let pool = Pool::new(DATABASE_URL.as_str());
+    #[tokio::test]
+    async fn test_detach() -> Result<()> {
 
-        let done = pool
-            .get_handle()
-            .and_then(ClientHandle::ping)
-            .and_then(|mut c| {
+        async fn done(pool: Pool) -> Result<()> {
+            let mut c = pool.clone()
+                .get_handle().await?
+                .ping().await?;
                 c.pool.detach();
-                Ok(())
-            });
+            Ok(())
+        }
 
-        run(done).unwrap();
+        let pool = Pool::new(DATABASE_URL.as_str());
+        done(pool.clone()).await?;
         assert_eq!(pool.info().idle_len, 0);
+
+        Ok(())
     }
 
-    #[test]
-    fn test_many_connection() {
+    #[tokio::test]
+    async fn test_many_connection() -> Result<()> {
         let options = Options::from_str(DATABASE_URL.as_str())
             .unwrap()
             .pool_min(6)
             .pool_max(12);
         let pool = Pool::new(options);
 
-        fn exec_query(pool: &Pool) -> BoxFuture<u32> {
-            Box::new(
-                pool.get_handle()
-                    .and_then(|c| c.query("SELECT toUInt32(1), sleep(1)").fetch_all())
-                    .and_then(|(_, block)| {
-                        let value: u32 = block.get(0, 0)?;
-                        Ok(value)
-                    }),
-            )
+        async fn exec_query(pool: &Pool) -> Result<u32> {
+            let (_, block) = pool
+                .get_handle().await?
+                .query("SELECT toUInt32(1), sleep(1)").fetch_all().await?;
+
+            let value: u32 = block.get(0, 0)?;
+            Ok(value)
         }
 
         let expected = 22_u32;
@@ -381,13 +370,13 @@ mod test {
             requests.push(exec_query(&pool))
         }
 
-        let done = future::join_all(requests).and_then(move |xs| {
-            let actual: u32 = xs.iter().sum();
-            assert_eq!(actual, expected);
-            Ok(())
-        });
+        let xs = future::join_all(requests).await;
+        let mut actual: u32 = 0;
 
-        run(done).unwrap();
+        for x in xs {
+            actual += x?;
+        }
+        assert_eq!(actual, expected);
 
         let spent = start.elapsed();
 
@@ -395,76 +384,68 @@ mod test {
         assert!(spent < Duration::from_millis(2500));
 
         assert_eq!(pool.info().idle_len, 6);
+        Ok(())
     }
 
-    #[test]
-    fn test_error_in_fold() {
+    #[tokio::test]
+    async fn test_error_in_fold() -> Result<()> {
         let pool = Pool::new(DATABASE_URL.as_str());
 
-        let done = pool.get_handle().and_then(|c| {
-            c.query("SELECT 1").fold((), |_, _| {
-                future::err("[test_error_in_fold] It's fine.".into())
-            })
-        });
+        let ret = pool
+            .get_handle().await?
+            .query("SELECT 1")
+            .try_fold((), |_, _| {
+                Box::pin(async move {
+                    Err("[test_error_in_fold] It's fine.".into())
+                })
+            }).await;
 
-        run(done).unwrap_err();
+        ret.unwrap_err();
 
         let info = pool.info();
         assert_eq!(info.ongoing, 0);
         assert_eq!(info.tasks_len, 0);
         assert_eq!(info.idle_len, 0);
+
+        Ok(())
     }
 
     #[test]
     fn test_race_condition() {
-        use futures::future::lazy;
-        use tokio::runtime::current_thread;
-
         let options = Options::from_str(DATABASE_URL.as_str())
             .unwrap()
             .pool_min(80)
             .pool_max(99);
+
+        let barrier = Arc::new(AtomicBool::new(true));
         let pool = Pool::new(options);
 
-        let done = future::lazy(move || {
-            let mut threads = Vec::new();
-            let barer = Arc::new(AtomicBool::new(true));
+        let runtime = Runtime::new().unwrap();
 
-            for _ in 0..100 {
-                let local_barer = barer.clone();
-                let mut local_pool = pool.clone();
+        let mut threads = Vec::new();
+        for _ in 0..100 {
+            let handle = runtime.handle();
+            let local_pool = pool.clone();
+            let local_barer = barrier.clone();
 
-                let thread = spawn(|| {
-                    current_thread::block_on_all(lazy(|| {
-                        current_thread::spawn(lazy(move || {
-                            while local_barer.load(Ordering::SeqCst) {}
+            let h = thread::spawn(move || {
+                handle.spawn(async move {
+                    while local_barer.load(Ordering::SeqCst) {
+                    }
 
-                            match local_pool.poll() {
-                                Ok(_) => Ok(()),
-                                Err(_) => Err(()),
-                            }
-                        }));
+                    let _ = local_pool.get_handle().await;
+                })
+            });
 
-                        Ok::<_, Error>(())
-                    }))
-                });
-                threads.push(thread);
+            threads.push(h);
+        }
+
+        barrier.store(false, Ordering::SeqCst);
+        for h in threads {
+            match h.join().unwrap() {
+                Ok(_) => {},
+                Err(e) => panic!(e)
             }
-
-            barer.store(false, Ordering::SeqCst);
-            Ok(threads)
-        })
-        .and_then(|threads| {
-            for thread in threads {
-                match thread.join() {
-                    Ok(_) => {}
-                    Err(_) => return Err(()),
-                }
-            }
-
-            Ok(())
-        });
-
-        run(done).unwrap();
+        }
     }
 }

@@ -1,6 +1,6 @@
 use crate::{
     binary::{Encoder, ReadEx},
-    errors::Error,
+    errors::Result,
     types::{
         column::{list::List, BoxColumnWrapper, ColumnData},
         SqlType, Value, ValueRef,
@@ -20,7 +20,7 @@ impl ArrayColumnData {
         type_name: &str,
         rows: usize,
         tz: Tz,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self> {
         let mut offsets = List::with_capacity(rows);
         offsets.resize(rows, 0_u64);
         reader.read_bytes(offsets.as_mut())?;
@@ -100,7 +100,7 @@ mod test {
 
     #[test]
     fn test_write_and_read() {
-        let block = Block::new().add_column(
+        let block = Block::new().column(
             "vals",
             vec![vec![7_u32, 8], vec![9, 1, 2], vec![3, 4, 5, 6]],
         );

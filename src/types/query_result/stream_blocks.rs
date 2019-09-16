@@ -1,11 +1,17 @@
-use futures::{Async, Poll, Stream};
+use std::{
+    pin::Pin,
+    task::{self, Poll},
+};
+
+use futures_core::Stream;
+use futures_util::StreamExt;
 
 use crate::{
-    errors::{DriverError, Error},
+    ClientHandle,
+    errors::{DriverError, Error, Result},
     io::transport::PacketStream,
     pool::PoolBinding,
     types::{Block, Context, Packet},
-    ClientHandle,
 };
 
 pub(crate) struct BlockStream {
@@ -27,23 +33,22 @@ impl BlockStream {
 }
 
 impl Stream for BlockStream {
-    type Item = Block;
-    type Error = Error;
+    type Item = Result<Block>;
 
-    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> Poll<Option<Self::Item>> {
         loop {
             if self.eof {
-                return Ok(Async::Ready(None));
+                return Poll::Ready(None);
             }
 
-            let packet = match self.inner.poll() {
-                Err(err) => return Err(err),
-                Ok(Async::NotReady) => return Ok(Async::NotReady),
-                Ok(Async::Ready(None)) => {
+            let packet = match self.inner.poll_next_unpin(cx) {
+                Poll::Ready(Some(Err(err))) => return Poll::Ready(Some(Err(err.into()))),
+                Poll::Pending => return Poll::Pending,
+                Poll::Ready(None) => {
                     self.eof = true;
                     continue;
                 }
-                Ok(Async::Ready(Some(packet))) => packet,
+                Poll::Ready(Some(Ok(packet))) => packet,
             };
 
             match packet {
@@ -60,14 +65,14 @@ impl Stream for BlockStream {
                     self.eof = true;
                 }
                 Packet::ProfileInfo(_) | Packet::Progress(_) => {}
-                Packet::Exception(exception) => return Err(Error::Server(exception)),
+                Packet::Exception(exception) => return Poll::Ready(Some(Err(Error::Server(exception)))),
                 Packet::Block(block) => {
                     self.block_index += 1;
                     if self.block_index > 1 && !block.is_empty() {
-                        return Ok(Async::Ready(Some(block)));
+                        return Poll::Ready(Some(Ok(block)));
                     }
                 }
-                _ => return Err(Error::Driver(DriverError::UnexpectedPacket)),
+                _ => return Poll::Ready(Some(Err(Error::Driver(DriverError::UnexpectedPacket)))),
             }
         }
     }

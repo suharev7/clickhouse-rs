@@ -4,12 +4,12 @@ use chrono::prelude::*;
 use chrono_tz::Tz;
 
 use crate::{
-    errors::{Error, FromSqlError},
+    errors::{Error, FromSqlError, Result},
     types::{
         column::Either,
         decimal::Decimal,
         value::{AppDate, AppDateTime},
-        ClickhouseResult, SqlType, Value,
+        SqlType, Value,
     },
 };
 
@@ -140,7 +140,7 @@ impl<'a> convert::From<ValueRef<'a>> for SqlType {
 }
 
 impl<'a> ValueRef<'a> {
-    pub fn as_str(&self) -> ClickhouseResult<&'a str> {
+    pub fn as_str(&self) -> Result<&'a str> {
         if let ValueRef::String(t) = self {
             return Ok(str::from_utf8(t)?);
         }
@@ -151,12 +151,12 @@ impl<'a> ValueRef<'a> {
         }))
     }
 
-    pub fn as_string(&self) -> ClickhouseResult<String> {
+    pub fn as_string(&self) -> Result<String> {
         let tmp = self.as_str()?;
         Ok(tmp.to_string())
     }
 
-    pub fn as_bytes(&self) -> ClickhouseResult<&'a [u8]> {
+    pub fn as_bytes(&self) -> Result<&'a [u8]> {
         if let ValueRef::String(t) = self {
             return Ok(t);
         }

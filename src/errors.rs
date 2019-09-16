@@ -1,12 +1,11 @@
-use std::{borrow::Cow, io, mem, str::Utf8Error, string::FromUtf8Error};
+use std::{borrow::Cow, io, str::Utf8Error, string::FromUtf8Error, result};
 
 use failure::*;
-use tokio::prelude::*;
-use tokio_timer::timeout::Error as TimeoutError;
-use tokio_timer::Error as TimerError;
 use url::ParseError;
+use tokio::timer::timeout::Elapsed;
 
-use crate::types::Packet;
+/// Result type alias for this library.
+pub type Result<T> = result::Result<T, Error>;
 
 /// This type enumerates library errors.
 #[derive(Debug, Fail)]
@@ -94,6 +93,17 @@ pub enum FromSqlError {
     OutOfRange,
 }
 
+impl Error {
+    pub(crate) fn is_would_block(&self) -> bool {
+        if let Error::Io(ref e) = self {
+            if e.kind() == io::ErrorKind::WouldBlock {
+                return true;
+            }
+        }
+        false
+    }
+}
+
 impl From<DriverError> for Error {
     fn from(err: DriverError) -> Self {
         Error::Driver(err)
@@ -136,9 +146,9 @@ impl From<FromUtf8Error> for Error {
     }
 }
 
-impl From<TimerError> for Error {
-    fn from(err: TimerError) -> Self {
-        Error::Other(failure::Context::new(err).into())
+impl From<Elapsed> for Error {
+    fn from(_err: Elapsed) -> Self {
+        Error::Driver(DriverError::Timeout)
     }
 }
 
@@ -148,12 +158,18 @@ impl From<ParseError> for Error {
     }
 }
 
-impl From<TimeoutError<Error>> for Error {
-    fn from(err: TimeoutError<Self>) -> Self {
-        match err.into_inner() {
-            None => Error::Driver(DriverError::Timeout),
-            Some(inner) => inner,
+impl From<Error> for io::Error {
+    fn from(err: Error) -> Self {
+        match err {
+            Error::Io(error) => error,
+            e => io::Error::new(io::ErrorKind::Other, e.to_string()),
         }
+    }
+}
+
+impl From<Error> for Box<dyn std::error::Error> {
+    fn from(err: Error) -> Self {
+        Box::<dyn std::error::Error>::from(err.to_string())
     }
 }
 
@@ -163,29 +179,21 @@ impl From<Utf8Error> for Error {
     }
 }
 
-impl<S> Into<Poll<Option<Packet<S>>, Error>> for Error {
-    fn into(self) -> Poll<Option<Packet<S>>, Error> {
-        let mut this = self;
+#[cfg(test)]
+mod tests {
+    use std::error::Error;
 
-        if let Error::Io(ref mut e) = &mut this {
-            if e.kind() == io::ErrorKind::WouldBlock {
-                return Ok(Async::NotReady);
-            }
-
-            let me = mem::replace(e, io::Error::from(io::ErrorKind::Other));
-            return Err(Error::Io(me));
-        }
-
-        warn!("ERROR: {:?}", this);
-        Err(this)
+    #[test]
+    fn to_std_error_without_recursion() {
+        let src_err: super::Error = From::from("Somth went wrong.");
+        let dst_err: Box<dyn std::error::Error> = src_err.into();
+        assert_eq!(dst_err.description(), "Other error: `Somth went wrong.`");
     }
-}
 
-impl From<Error> for io::Error {
-    fn from(err: Error) -> Self {
-        match err {
-            Error::Io(error) => error,
-            e => io::Error::new(io::ErrorKind::Other, e.to_string()),
-        }
+    #[test]
+    fn to_io_error_without_recursion() {
+        let src_err: super::Error = From::from("Somth went wrong.");
+        let dst_err: std::io::Error = src_err.into();
+        assert_eq!(dst_err.description(), "Other error: `Somth went wrong.`");
     }
 }

@@ -1,5 +1,6 @@
 use std::{
-    cmp, fmt,
+    cmp,
+    fmt,
     io::{Cursor, Read},
 };
 
@@ -10,10 +11,10 @@ use lz4::liblz4::{LZ4_compressBound, LZ4_compress_default};
 
 use crate::{
     binary::{protocol, Encoder, ReadEx},
-    errors::{Error, FromSqlError},
+    errors::{Error, FromSqlError, Result},
     types::{
         column::{self, ArcColumnWrapper, Column, ColumnFrom},
-        ClickhouseResult, FromSql,
+        FromSql,
     },
 };
 
@@ -32,7 +33,7 @@ mod row;
 const INSERT_BLOCK_SIZE: usize = 1_048_576;
 
 pub trait ColumnIdx {
-    fn get_index(&self, columns: &[Column]) -> ClickhouseResult<usize>;
+    fn get_index(&self, columns: &[Column]) -> Result<usize>;
 }
 
 /// Represents Clickhouse Block
@@ -74,13 +75,13 @@ impl AsRef<Block> for Block {
 }
 
 impl ColumnIdx for usize {
-    fn get_index(&self, _: &[Column]) -> ClickhouseResult<usize> {
+    fn get_index(&self, _: &[Column]) -> Result<usize> {
         Ok(*self)
     }
 }
 
 impl<'a> ColumnIdx for &'a str {
-    fn get_index(&self, columns: &[Column]) -> ClickhouseResult<usize> {
+    fn get_index(&self, columns: &[Column]) -> Result<usize> {
         match columns
             .iter()
             .enumerate()
@@ -98,7 +99,7 @@ impl Block {
         Self::default()
     }
 
-    pub(crate) fn load<R>(reader: &mut R, tz: Tz, compress: bool) -> ClickhouseResult<Self>
+    pub(crate) fn load<R>(reader: &mut R, tz: Tz, compress: bool) -> Result<Self>
     where
         R: Read + ReadEx,
     {
@@ -110,7 +111,7 @@ impl Block {
         }
     }
 
-    fn raw_load<R>(reader: &mut R, tz: Tz) -> ClickhouseResult<Self>
+    fn raw_load<R>(reader: &mut R, tz: Tz) -> Result<Self>
     where
         R: ReadEx,
     {
@@ -157,7 +158,7 @@ impl Block {
     }
 
     /// Get the value of a particular cell of the block.
-    pub fn get<'a, T, I>(&'a self, row: usize, col: I) -> ClickhouseResult<T>
+    pub fn get<'a, T, I>(&'a self, row: usize, col: I) -> Result<T>
     where
         T: FromSql<'a>,
         I: ColumnIdx + Copy,
@@ -167,9 +168,17 @@ impl Block {
     }
 
     /// Add new column into this block
-    pub fn add_column<S>(mut self, name: &str, values: S) -> Self
+    pub fn add_column<S>(self, name: &str, values: S) -> Self
     where
         S: ColumnFrom,
+    {
+        self.column(name, values)
+    }
+
+    /// Add new column into this block
+    pub fn column<S>(mut self, name: &str, values: S) -> Self
+        where
+            S: ColumnFrom,
     {
         let data = S::column_from::<ArcColumnWrapper>(values);
         let column = column::new_column(name, data);
@@ -193,7 +202,7 @@ impl Block {
 }
 
 impl Block {
-    pub(crate) fn cast_to(self, header: &Block) -> Result<Self, Error> {
+    pub(crate) fn cast_to(self, header: &Block) -> Result<Self> {
         let info = self.info;
         let mut columns = self.columns;
         columns.reverse();
@@ -296,8 +305,8 @@ impl Block {
 }
 
 impl fmt::Debug for Block {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        let titles: Vec<&str> = self.columns.iter().map(Column::name).collect();
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let titles: Vec<&str> = self.columns.iter().map(|column| column.name()).collect();
 
         let cells: Vec<_> = self.columns.iter().map(|col| text_cells(&col)).collect();
 
@@ -333,7 +342,7 @@ impl fmt::Debug for Block {
 }
 
 fn column_width(column: &[String]) -> usize {
-    column.iter().map(String::len).max().unwrap_or(0)
+    column.iter().map(|cell| cell.len()).max().unwrap_or(0)
 }
 
 fn print_line(
@@ -342,7 +351,7 @@ fn print_line(
     left: &str,
     center: char,
     right: &str,
-) -> Result<(), fmt::Error> {
+) -> fmt::Result {
     write!(f, "{}", left)?;
     for (i, len) in lens.iter().enumerate() {
         if i != 0 {
@@ -378,7 +387,7 @@ mod test {
             114, 105, 110, 103, 3, 97, 98, 99,
         ];
 
-        let block = Block::new().add_column("s", vec!["abc"]);
+        let block = Block::new().column("s", vec!["abc"]);
 
         let mut encoder = Encoder::new();
         block.write(&mut encoder, true);
@@ -389,7 +398,7 @@ mod test {
 
     #[test]
     fn test_decompress_block() {
-        let expected = Block::new().add_column("s", vec!["abc"]);
+        let expected = Block::new().column("s", vec!["abc"]);
 
         let source = vec![
             245_u8, 5, 222, 235, 225, 158, 59, 108, 225, 31, 65, 215, 66, 66, 36, 92, 130, 34, 0,
@@ -421,8 +430,8 @@ mod test {
     #[test]
     fn test_column_and_rows() {
         let block = Block::new()
-            .add_column("hello_id", vec![5_u32, 6_u32])
-            .add_column("value", vec!["lol", "zuz"]);
+            .column("hello_id", vec![5_u32, 6_u32])
+            .column("value", vec!["lol", "zuz"]);
 
         assert_eq!(block.column_count(), 2);
         assert_eq!(block.row_count(), 2);
@@ -456,7 +465,7 @@ mod test {
     }
 
     fn make_block() -> Block {
-        Block::new().add_column(
+        Block::new().column(
             "9b96ad8b-488a-4fef-8087-8a9ae4800f00",
             vec![
                 "5446d186-4e90-4dd8-8ec1-f9a436834613".to_string(),
@@ -467,11 +476,11 @@ mod test {
 
     #[test]
     fn test_chunks() {
-        let first = Block::new().add_column("A", vec![1, 2]);
-        let second = Block::new().add_column("A", vec![3, 4]);
-        let third = Block::new().add_column("A", vec![5]);
+        let first = Block::new().column("A", vec![1, 2]);
+        let second = Block::new().column("A", vec![3, 4]);
+        let third = Block::new().column("A", vec![5]);
 
-        let block = Block::new().add_column("A", vec![1, 2, 3, 4, 5]);
+        let block = Block::new().column("A", vec![1, 2, 3, 4, 5]);
         let mut iter = block.chunks(2);
 
         assert_eq!(Some(first), iter.next());
@@ -490,14 +499,14 @@ mod test {
     #[test]
     fn test_rows() {
         let expected = vec![1_u8, 2, 3];
-        let block = Block::new().add_column("A", vec![1_u8, 2, 3]);
+        let block = Block::new().column("A", vec![1_u8, 2, 3]);
         let actual: Vec<u8> = block.rows().map(|row| row.get("A").unwrap()).collect();
         assert_eq!(expected, actual);
     }
 
     #[test]
     fn test_write_and_read() {
-        let block = Block::new().add_column("y", vec![Some(1_u8), None]);
+        let block = Block::new().column("y", vec![Some(1_u8), None]);
 
         let mut encoder = Encoder::new();
         block.write(&mut encoder, false);

@@ -1,41 +1,49 @@
 use std::{
-    fmt,
+    future::Future,
     marker::PhantomData,
-    time::{Duration, Instant},
+    pin::Pin,
+    task::{Context, Poll},
+    time::Duration,
 };
 
-use tokio::prelude::*;
-use tokio_timer::{Delay, Error as TimerError};
+use tokio::timer::Interval;
 
-use crate::{errors::Error, io::BoxFuture};
+use pin_project::{pin_project, project};
 
-enum RetryState<H> {
-    Check(BoxFuture<H>),
-    Reconnect(BoxFuture<H>),
-    Sleep(Delay),
+use crate::errors::Result;
+
+#[pin_project]
+enum RetryState<CF, RF> {
+    Check(#[pin] CF),
+    Reconnect(#[pin] RF),
+    Sleep(Interval),
 }
 
 #[derive(Debug)]
-enum RetryPoll<H: fmt::Debug> {
-    Check(Poll<H, Error>),
-    Reconnect(Poll<H, Error>),
-    Sleep(Poll<(), TimerError>),
+enum RetryPoll<H> {
+    Check(Poll<Result<H>>),
+    Reconnect(Poll<Result<H>>),
+    Sleep(Poll<()>),
 }
 
-pub(crate) struct RetryGuard<H, C, R> {
+#[pin_project]
+pub(crate) struct RetryGuard<H, C, R, CF, RF> {
     check: C,
     reconnect: R,
-    state: RetryState<H>,
+    #[pin]
+    state: RetryState<CF, RF>,
     attempt: usize,
     max_attempt: usize,
     duration: Duration,
     phantom: PhantomData<H>,
 }
 
-impl<H, C, R> RetryGuard<H, C, R>
+impl<H, C, R, CF, RF> RetryGuard<H, C, R, CF, RF>
 where
-    C: Fn(H) -> BoxFuture<H>,
-    R: Fn() -> BoxFuture<H>,
+    C: Fn(H) -> CF,
+    R: Fn() -> RF,
+    CF: Future<Output = Result<H>>,
+    RF: Future<Output = Result<H>>,
 {
     pub(crate) fn new(
         handle: H,
@@ -43,8 +51,8 @@ where
         reconnect: R,
         max_attempt: usize,
         duration: Duration,
-    ) -> RetryGuard<H, C, R> {
-        Self {
+    ) -> RetryGuard<H, C, R, CF, RF> {
+        RetryGuard {
             state: RetryState::Check(check(handle)),
             check,
             reconnect,
@@ -56,76 +64,97 @@ where
     }
 }
 
-impl<T: fmt::Debug> RetryState<T> {
-    fn poll(&mut self) -> RetryPoll<T> {
-        match self {
-            RetryState::Check(ref mut inner) => RetryPoll::Check(inner.poll()),
-            RetryState::Reconnect(ref mut inner) => RetryPoll::Reconnect(inner.poll()),
-            RetryState::Sleep(delay) => RetryPoll::Sleep(delay.poll()),
+impl<H, CF, RF> RetryState<CF, RF>
+where
+    CF: Future<Output = Result<H>>,
+    RF: Future<Output = Result<H>>,
+{
+    #[project]
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> RetryPoll<H> {
+        #[project]
+        match self.project() {
+            RetryState::Check(inner) => RetryPoll::Check(inner.poll(cx)),
+            RetryState::Reconnect(inner) => RetryPoll::Reconnect(inner.poll(cx)),
+            RetryState::Sleep(ref mut inner) => {
+                RetryPoll::Sleep(match inner.poll_next(cx) {
+                    Poll::Ready(_) => Poll::Ready(()),
+                    Poll::Pending => Poll::Pending,
+                })
+            },
         }
     }
 }
 
-impl<H, C, R> Future for RetryGuard<H, C, R>
-where
-    C: Fn(H) -> BoxFuture<H>,
-    R: Fn() -> BoxFuture<H>,
-    H: fmt::Debug,
-{
-    type Item = H;
-    type Error = Error;
+impl<H, C, R, CF, RF> RetryGuard<H, C, R, CF, RF> {
+    fn set_state(self: Pin<&mut Self>, state: RetryState<CF, RF>, attempt_inc: usize) {
+        let this = unsafe { self.get_unchecked_mut() };
+        this.state = state;
+        this.attempt += attempt_inc;
+    }
+}
 
-    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-        match self.state.poll() {
-            RetryPoll::Check(Err(err)) => {
+impl<H, C, R, CF, RF> Future for RetryGuard<H, C, R, CF, RF>
+where
+    C: Fn(H) -> CF,
+    R: Fn() -> RF,
+    CF: Future<Output = Result<H>>,
+    RF: Future<Output = Result<H>>,
+{
+    type Output = Result<H>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        match self.project().state.poll(cx) {
+            RetryPoll::Check(Poll::Ready(Err(err))) => {
                 if self.attempt >= self.max_attempt {
-                    return Err(err);
+                    return Poll::Ready(Err(err));
                 }
                 let future = (self.reconnect)();
-                self.state = RetryState::Reconnect(future);
-                self.attempt += 1;
-                self.poll()
+                self.as_mut().set_state(RetryState::Reconnect(future), 1);
+                self.poll(cx)
             }
             RetryPoll::Check(result) => result,
-            RetryPoll::Reconnect(Err(err)) => {
+            RetryPoll::Reconnect(Poll::Ready(Err(err))) => {
                 if self.attempt >= self.max_attempt {
-                    return Err(err);
+                    return Poll::Ready(Err(err));
                 }
-                let deadline = Instant::now() + self.duration;
-                let future = Delay::new(deadline);
-                self.state = RetryState::Sleep(future);
-                self.attempt += 1;
-                self.poll()
+                let future =  Interval::new_interval(self.duration);
+
+                self.as_mut().set_state(RetryState::Sleep(future), 1);
+                self.poll(cx)
             }
-            RetryPoll::Reconnect(Ok(Async::NotReady)) | RetryPoll::Sleep(Ok(Async::NotReady)) => {
-                Ok(Async::NotReady)
-            }
-            RetryPoll::Reconnect(Ok(Async::Ready(handle))) => {
+            RetryPoll::Reconnect(Poll::Pending) => {
+                Poll::Pending
+            },
+            RetryPoll::Reconnect(Poll::Ready(Ok(handle))) => {
                 let future = (self.check)(handle);
-                self.state = RetryState::Check(future);
-                self.poll()
+
+                self.as_mut().set_state(RetryState::Check(future), 0);
+                self.poll(cx)
             }
-            RetryPoll::Sleep(Ok(Async::Ready(_))) => {
+            RetryPoll::Sleep(Poll::Ready(())) => {
                 let future = (self.reconnect)();
-                self.state = RetryState::Reconnect(future);
-                self.poll()
+
+                self.as_mut().set_state(RetryState::Reconnect(future), 0);
+                self.poll(cx)
             }
-            RetryPoll::Sleep(Err(err)) => Err(err.into()),
+            RetryPoll::Sleep(Poll::Pending) => Poll::Pending,
         }
     }
 }
 
 #[cfg(test)]
 mod test {
-    use std::sync::Mutex;
-    use std::time::{Duration, Instant};
+    use std::{
+        io,
+        sync::Mutex,
+        time::Instant,
+    };
 
-    use tokio::prelude::*;
+    use lazy_static::lazy_static;
 
     use crate::errors::Error;
-    use crate::io::BoxFuture;
 
-    use super::RetryGuard;
+    use super::*;
 
     lazy_static! {
         static ref MUTEX: Mutex<()> = Mutex::new(());
@@ -133,119 +162,121 @@ mod test {
 
     static mut RECONNECT_ATTEMPT: usize = 0;
 
-    fn check(h: u8) -> BoxFuture<u8> {
+    async fn check(h: u8) -> Result<u8> {
         if h == 1 {
-            let err: Error = "[check] it's fine".into();
-            Box::new(future::err(err))
+            let err = io::Error::new(io::ErrorKind::Other, "[check] it's fine");
+            Err(err.into())
         } else {
-            Box::new(future::ok(42))
+            Ok(42)
         }
     }
 
-    fn reconnect() -> BoxFuture<u8> {
+    async fn reconnect() -> Result<u8> {
         let attempt = unsafe {
             RECONNECT_ATTEMPT += 1;
             RECONNECT_ATTEMPT
         };
         if attempt > 2 {
-            Box::new(future::ok(2))
+            Ok(2)
         } else {
-            let err: Error = "[reconnect] it's fine".into();
-            Box::new(future::err(err))
+            let err: Error = From::from("[reconnect] it's fine");
+            Err(err)
         }
     }
 
-    fn bad_reconnect() -> BoxFuture<u8> {
+    async fn bad_reconnect() -> Result<u8> {
         unsafe { RECONNECT_ATTEMPT += 1 }
-        let err: Error = "[bar_reconnect] it's fine".into();
-        Box::new(future::err(err))
-    }
-
-    /// Same as `tokio::run`, but will panic if future panics and will return the result
-    /// of future execution.
-    fn run<F, T, U>(future: F) -> Result<T, U>
-    where
-        F: Future<Item = T, Error = U> + Send + 'static,
-        T: Send + 'static,
-        U: Send + 'static,
-    {
-        let mut runtime = tokio::runtime::Runtime::new().unwrap();
-        let result = runtime.block_on(future);
-        runtime.shutdown_on_idle().wait().unwrap();
-        result
+        let err = io::Error::new(io::ErrorKind::Other, "[bar_reconnect] it's fine");
+        Err(err.into())
     }
 
     #[test]
-    fn test_success_reconnection() {
+    fn test_success_reconnection() -> io::Result<()> {
         let _lock = MUTEX.lock().unwrap();
-        unsafe { RECONNECT_ATTEMPT = 0 }
+        let mut rt = tokio::runtime::current_thread::Runtime::new().unwrap();
+        rt.block_on(async {
+            unsafe { RECONNECT_ATTEMPT = 0 }
 
-        let start = Instant::now();
-        let duration = Duration::from_millis(100);
-        let max_attempt = 3_usize;
-        let done = Box::new(RetryGuard::new(
-            1_u8,
-            check,
-            reconnect,
-            max_attempt,
-            duration,
-        ));
-        let v = run(done).unwrap();
-        assert_eq!(v, 42);
+            let start = Instant::now();
+            let duration = Duration::from_millis(100);
+            let max_attempt = 3_usize;
+            let v = RetryGuard::new(
+                1_u8,
+                |h| Box::pin(check(h)),
+                || Box::pin(reconnect()),
+                max_attempt,
+                duration,
+            ).await?;
+            assert_eq!(v, 42);
 
-        let spent = start.elapsed();
-        assert!(spent >= Duration::from_millis(200));
+            let spent = start.elapsed();
+            assert!(spent >= Duration::from_millis(200));
 
-        let attempt = unsafe { RECONNECT_ATTEMPT };
-        assert_eq!(attempt, 3);
+            let attempt = unsafe { RECONNECT_ATTEMPT };
+            assert_eq!(attempt, 3);
+
+            Ok(())
+        })
     }
 
     #[test]
-    fn test_fail_reconnection() {
+    fn test_fail_reconnection() -> io::Result<()> {
         let _lock = MUTEX.lock().unwrap();
-        unsafe { RECONNECT_ATTEMPT = 0 }
+        let mut rt = tokio::runtime::current_thread::Runtime::new().unwrap();
+        rt.block_on(async {
+            unsafe { RECONNECT_ATTEMPT = 0 }
 
-        let start = Instant::now();
-        let duration = Duration::from_millis(100);
-        let max_attempt = 3_usize;
-        let done = Box::new(RetryGuard::new(
-            1_u8,
-            check,
-            bad_reconnect,
-            max_attempt,
-            duration,
-        ));
-        run(done).unwrap_err();
+            let start = Instant::now();
+            let duration = Duration::from_millis(100);
+            let max_attempt = 3_usize;
+            let ret = RetryGuard::new(
+                1_u8,
+                |h| Box::pin(check(h)),
+                || Box::pin(bad_reconnect()),
+                max_attempt,
+                duration,
+            ).await;
 
-        let spent = start.elapsed();
-        assert!(spent >= Duration::from_millis(200));
+            ret.unwrap_err();
 
-        let attempt = unsafe { RECONNECT_ATTEMPT };
-        assert_eq!(attempt, 3);
+            let spent = start.elapsed();
+            assert!(spent >= Duration::from_millis(200));
+
+            let attempt = unsafe { RECONNECT_ATTEMPT };
+            assert_eq!(attempt, 3);
+
+            Ok(())
+        })
     }
 
     #[test]
-    fn test_without_reconnection() {
+    fn test_without_reconnection() -> io::Result<()> {
         let _lock = MUTEX.lock().unwrap();
-        unsafe { RECONNECT_ATTEMPT = 0 }
 
-        let start = Instant::now();
-        let duration = Duration::from_millis(100);
-        let max_attempt = 3_usize;
-        let done = Box::new(RetryGuard::new(
-            0_u8,
-            check,
-            bad_reconnect,
-            max_attempt,
-            duration,
-        ));
-        let actual = run(done).unwrap();
-        assert_eq!(actual, 42);
+        let mut rt = tokio::runtime::current_thread::Runtime::new().unwrap();
+        rt.block_on(async {
+            unsafe { RECONNECT_ATTEMPT = 0 }
 
-        let spent = start.elapsed();
-        assert!(spent < Duration::from_millis(50));
+            let start = Instant::now();
+            let duration = Duration::from_millis(100);
+            let max_attempt = 3_usize;
 
-        let attempt = unsafe { RECONNECT_ATTEMPT };
-        assert_eq!(attempt, 0);
+            let actual = RetryGuard::new(
+                0_u8,
+                |h| Box::pin(check(h)),
+                || Box::pin(bad_reconnect()),
+                max_attempt,
+                duration,
+            ).await?;
+            assert_eq!(actual, 42);
+
+            let spent = start.elapsed();
+            assert!(spent < Duration::from_millis(50));
+
+            let attempt = unsafe { RECONNECT_ATTEMPT };
+            assert_eq!(attempt, 0);
+
+            Ok(())
+        })
     }
 }

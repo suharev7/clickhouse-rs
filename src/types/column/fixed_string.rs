@@ -2,7 +2,7 @@ use std::cmp;
 
 use crate::{
     binary::{Encoder, ReadEx},
-    errors::Error,
+    errors::Result,
     types::{from_sql::*, Column, SqlType, Value, ValueRef},
 };
 
@@ -35,7 +35,7 @@ impl FixedStringColumnData {
         reader: &mut T,
         size: usize,
         str_len: usize,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self> {
         let mut instance = Self::with_capacity(size, str_len);
 
         for _ in 0..size {

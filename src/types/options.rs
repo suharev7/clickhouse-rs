@@ -8,10 +8,7 @@ use std::{
     vec,
 };
 
-use crate::{
-    errors::{Error, UrlError},
-    types::ClickhouseResult,
-};
+use crate::errors::{Error, UrlError, Result};
 use url::Url;
 
 const DEFAULT_MIN_CONNS: usize = 10;
@@ -40,7 +37,7 @@ impl fmt::Debug for OptionsSource {
 }
 
 impl OptionsSource {
-    pub(crate) fn get(&self) -> ClickhouseResult<Cow<Options>> {
+    pub(crate) fn get(&self) -> Result<Cow<Options>> {
         let mut state = self.state.lock().unwrap();
         loop {
             let new_state;
@@ -122,7 +119,7 @@ impl From<&str> for Address {
 impl ToSocketAddrs for Address {
     type Iter = vec::IntoIter<SocketAddr>;
 
-    fn to_socket_addrs(&self) -> Result<Self::Iter, io::Error> {
+    fn to_socket_addrs(&self) -> io::Result<Self::Iter> {
         match self {
             Address::SocketAddr(addr) => Ok(vec![*addr].into_iter()),
             Address::Url(url) => url.to_socket_addrs(),
@@ -294,12 +291,12 @@ impl Options {
 impl FromStr for Options {
     type Err = Error;
 
-    fn from_str(url: &str) -> Result<Self, Error> {
+    fn from_str(url: &str) -> Result<Self> {
         from_url(url)
     }
 }
 
-fn from_url(url_str: &str) -> ClickhouseResult<Options> {
+fn from_url(url_str: &str) -> Result<Options> {
     let url = Url::parse(url_str)?;
 
     if url.scheme() != "tcp" {
@@ -383,7 +380,7 @@ where
     }
 }
 
-fn get_username_from_url(url: &Url) -> ClickhouseResult<Option<&str>> {
+fn get_username_from_url(url: &Url) -> Result<Option<&str>> {
     let user = url.username();
     if user.is_empty() {
         return Ok(None);
@@ -391,14 +388,14 @@ fn get_username_from_url(url: &Url) -> ClickhouseResult<Option<&str>> {
     Ok(Some(user))
 }
 
-fn get_password_from_url(url: &Url) -> ClickhouseResult<Option<&str>> {
+fn get_password_from_url(url: &Url) -> Result<Option<&str>> {
     match url.password() {
         None => Ok(None),
         Some(password) => Ok(Some(password)),
     }
 }
 
-fn get_database_from_url(url: &Url) -> ClickhouseResult<Option<&str>> {
+fn get_database_from_url(url: &Url) -> Result<Option<&str>> {
     match url.path_segments() {
         None => Ok(None),
         Some(mut segments) => {

@@ -1,9 +1,11 @@
-use std::{borrow::Cow, collections::HashMap, fmt, sync::Mutex};
+use std::{borrow::Cow, collections::HashMap, fmt, mem, sync::Mutex, pin::Pin};
 
 use chrono_tz::Tz;
 use hostname::get_hostname;
 
-use crate::errors::{Error, ServerError};
+use lazy_static::lazy_static;
+
+use crate::errors::ServerError;
 
 pub use self::{
     block::{Block, Row, Rows},
@@ -34,7 +36,7 @@ mod from_sql;
 mod value;
 mod value_ref;
 
-mod block;
+pub(crate) mod block;
 mod cmd;
 
 mod date_converter;
@@ -179,7 +181,7 @@ pub enum SqlType {
 }
 
 lazy_static! {
-    static ref TYPES_CACHE: Mutex<HashMap<SqlType, Box<SqlType>>> = Mutex::new(HashMap::new());
+    static ref TYPES_CACHE: Mutex<HashMap<SqlType, Pin<Box<SqlType>>>> = Mutex::new(HashMap::new());
 }
 
 impl From<SqlType> for &'static SqlType {
@@ -202,9 +204,9 @@ impl From<SqlType> for &'static SqlType {
                 let mut guard = TYPES_CACHE.lock().unwrap();
                 loop {
                     if let Some(value_ref) = guard.get(&value) {
-                        return unsafe { &*(value_ref.as_ref() as *const SqlType) };
+                        return unsafe { mem::transmute(value_ref.as_ref()) };
                     }
-                    guard.insert(value, Box::new(value));
+                    guard.insert(value, Box::pin(value));
                 }
             }
         }
@@ -256,6 +258,3 @@ fn test_to_string() {
     let actual = SqlType::Nullable(&SqlType::UInt8).to_string();
     assert_eq!(expected, actual)
 }
-
-/// Library generic result type.
-pub(crate) type ClickhouseResult<T> = Result<T, Error>;

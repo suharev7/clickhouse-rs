@@ -183,25 +183,24 @@ impl Decimal {
     ///
     /// example:
     /// ```rust
-    /// # extern crate clickhouse_rs;
-    /// # extern crate futures;
-    /// # use futures::Future;
-    /// # use clickhouse_rs::Pool;
     /// # use std::env;
-    /// # use clickhouse_rs::types::Decimal;
-    /// # let database_url = env::var("DATABASE_URL").unwrap_or("tcp://localhost:9000?compression=lz4".into());
-    /// # let pool = Pool::new(database_url);
-    /// # let done = pool.get_handle()
-    ///     .and_then(move |c| c.query("SELECT toDecimal32(2, 4) AS x").fetch_all())
-    ///     .and_then(move |(_, block)| {
-    ///         let x: Decimal = block.get(0, "x")?;
-    ///         let actual: i32 = x.internal();
-    ///         assert_eq!(20000, actual);
-    /// #        Ok(())
-    ///     })
-    /// #    .map(|_| ())
-    /// #    .map_err(|err| eprintln!("database error: {}", err));
-    /// # tokio::run(done)
+    /// # use clickhouse_rs::{Pool, types::Decimal, errors::Result};
+    /// # let rt = tokio::runtime::Runtime::new().unwrap();
+    /// # let ret: Result<()> = rt.block_on(async {
+    /// #     let database_url = env::var("DATABASE_URL")
+    /// #         .unwrap_or("tcp://localhost:9000?compression=lz4".into());
+    /// #     let pool = Pool::new(database_url);
+    ///       let (_, block) = pool
+    ///           .get_handle().await?
+    ///           .query("SELECT toDecimal32(2, 4) AS x")
+    ///           .fetch_all().await?;
+    ///
+    ///       let x: Decimal = block.get(0, "x")?;
+    ///       let actual: i32 = x.internal();
+    ///       assert_eq!(20000, actual);
+    /// #     Ok(())
+    /// # });
+    /// # ret.unwrap()
     /// ```
     pub fn internal<I: InternalResult>(&self) -> I {
         InternalResult::get(self.underlying)

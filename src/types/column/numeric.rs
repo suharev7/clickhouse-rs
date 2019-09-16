@@ -2,7 +2,7 @@ use std::{convert, mem, sync::Arc};
 
 use crate::{
     binary::{Encoder, ReadEx},
-    errors::Error,
+    errors::Result,
     types::{
         column::{
             array::ArrayColumnData, nullable::NullableColumnData, BoxColumnWrapper, ColumnWrapper,
@@ -157,7 +157,7 @@ where
     pub(crate) fn load<R: ReadEx>(
         reader: &mut R,
         size: usize,
-    ) -> Result<VectorColumnData<T>, Error> {
+    ) -> Result<VectorColumnData<T>> {
         let mut data = List::with_capacity(size);
         data.resize(size, T::default());
         reader.read_bytes(data.as_mut())?;

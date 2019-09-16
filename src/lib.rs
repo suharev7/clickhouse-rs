@@ -52,15 +52,12 @@
 //! ### Example
 //!
 //! ```rust
-//! extern crate clickhouse_rs;
-//! extern crate futures;
-//!
-//! use futures::Future;
-//! use clickhouse_rs::{Pool, types::Block};
 //! # use std::env;
+//! use clickhouse_rs::{Block, Pool, errors::Error};
 //!
-//! fn main() {
-//!     let ddl = "
+//! #[tokio::main]
+//! async fn main() -> Result<(), Error> {
+//!     let ddl = r"
 //!         CREATE TABLE IF NOT EXISTS payment (
 //!             customer_id  UInt32,
 //!             amount       UInt32,
@@ -68,68 +65,59 @@
 //!         ) Engine=Memory";
 //!
 //!     let block = Block::new()
-//!         .add_column("customer_id",  vec![1_u32,  3,  5,  7,  9])
-//!         .add_column("amount",       vec![2_u32,  4,  6,  8, 10])
-//!         .add_column("account_name", vec![Some("foo"), None, None, None, Some("bar")]);
+//!         .column("customer_id",  vec![1_u32,  3,  5,  7,  9])
+//!         .column("amount",       vec![2_u32,  4,  6,  8, 10])
+//!         .column("account_name", vec![Some("foo"), None, None, None, Some("bar")]);
 //!
 //!     # let database_url = env::var("DATABASE_URL").unwrap_or("tcp://localhost:9000?compression=lz4".into());
 //!     let pool = Pool::new(database_url);
 //!
-//!     let done = pool
-//!        .get_handle()
-//!        .and_then(move |c| c.execute(ddl))
-//!        .and_then(move |c| c.insert("payment", block))
-//!        .and_then(move |c| c.query("SELECT * FROM payment").fetch_all())
-//!        .and_then(move |(_, block)| {
-//!            for row in block.rows() {
-//!                let id: u32     = row.get("customer_id")?;
-//!                let amount: u32 = row.get("amount")?;
-//!                let name: Option<&str>  = row.get("account_name")?;
-//!                println!("Found payment {}: {} {:?}", id, amount, name);
-//!            }
-//!            Ok(())
-//!        })
-//!        .map_err(|err| eprintln!("database error: {}", err));
+//!     let (_, block) = pool
+//!         .get_handle().await?
+//!         .execute(ddl).await?
+//!         .insert("payment", block).await?
+//!         .query("SELECT * FROM payment").fetch_all().await?;
 //!
-//!     tokio::run(done)
+//!     for row in block.rows() {
+//!         let id: u32     = row.get("customer_id")?;
+//!         let amount: u32 = row.get("amount")?;
+//!         let name: Option<&str>  = row.get("account_name")?;
+//!         println!("Found payment {}: {} {:?}", id, amount, name);
+//!     }
+//!     Ok(())
 //! }
 //! ```
 
+
+#![feature(type_ascription, async_closure)]
 #![recursion_limit = "1024"]
 
-extern crate byteorder;
-extern crate chrono;
-extern crate chrono_tz;
-extern crate clickhouse_rs_cityhash_sys;
-extern crate core;
-extern crate failure;
-#[macro_use]
-extern crate futures;
-extern crate hostname;
-#[macro_use]
-extern crate lazy_static;
-#[macro_use]
-extern crate log;
-extern crate lz4;
-#[cfg(test)]
-extern crate rand;
-extern crate tokio;
-extern crate tokio_timer;
-extern crate url;
+use std::{fmt, future::Future, time::Duration};
 
-use std::fmt;
+use futures_core::{future::BoxFuture, Stream, stream::BoxStream};
+use futures_util::{future, FutureExt, stream, StreamExt};
+use log::{info, warn};
+use tokio::timer::Timeout;
 
-use futures::{Future, Stream};
-use tokio::prelude::*;
-
-pub use crate::pool::Pool;
+pub use crate::{
+    pool::Pool,
+    types::{block::Block, Options, SqlType},
+};
 use crate::{
     connecting_stream::ConnectingStream,
-    errors::{DriverError, Error},
-    io::{BoxFuture, BoxStream, ClickhouseTransport},
+    errors::{DriverError, Error, Result},
+    io::ClickhouseTransport,
     pool::PoolBinding,
     retry_guard::RetryGuard,
-    types::{Block, Cmd, Context, IntoOptions, Options, OptionsSource, Packet, Query, QueryResult},
+    types::{
+        Cmd,
+        Context,
+        IntoOptions,
+        OptionsSource,
+        Packet,
+        Query,
+        QueryResult,
+    },
 };
 
 mod binary;
@@ -147,7 +135,7 @@ macro_rules! try_opt {
     ($expr:expr) => {
         match $expr {
             Ok(val) => val,
-            Err(err) => return Box::new(future::err(err)),
+            Err(err) => return Err(err),
         }
     };
 }
@@ -173,12 +161,14 @@ impl fmt::Debug for ClientHandle {
 
 impl Client {
     #[deprecated(since = "0.1.4", note = "please use Pool to connect")]
-    pub fn connect(options: Options) -> BoxFuture<ClientHandle> {
-        Self::open(&options.into_options_src())
+    pub async fn connect(options: Options) -> Result<ClientHandle> {
+        let source = options.into_options_src();
+        Self::open(&source).await
     }
 
-    pub(crate) fn open(source: &OptionsSource) -> BoxFuture<ClientHandle> {
-        let options = try_opt!(source.get()).as_ref().to_owned();
+    pub(crate) async fn open(source: &OptionsSource) -> Result<ClientHandle> {
+        let options = try_opt!(source.get());
+
         let compress = options.compression;
         let timeout = options.connection_timeout;
 
@@ -187,89 +177,88 @@ impl Client {
             ..Context::default()
         };
 
-        Box::new(
-            ConnectingStream::new(&options.addr)
-                .and_then(move |stream| {
-                    stream.set_nodelay(options.nodelay)?;
-                    stream.set_keepalive(options.keepalive)?;
+        with_timeout(async move {
+            let stream = ConnectingStream::new(&options.addr).await?;
+            stream.set_nodelay(options.nodelay)?;
+            stream.set_keepalive(options.keepalive)?;
 
-                    let transport = ClickhouseTransport::new(stream, compress);
-                    Ok(ClientHandle {
-                        inner: Some(transport),
-                        context,
-                        pool: PoolBinding::None,
-                    })
-                })
-                .map_err(Into::into)
-                .and_then(ClientHandle::hello)
-                .timeout(timeout)
-                .map_err(Error::from),
-        )
+            let transport = ClickhouseTransport::new(stream, compress);
+            let handle = ClientHandle {
+                inner: Some(transport),
+                context,
+                pool: PoolBinding::None,
+            };
+            handle.hello().await
+        }, timeout).await
     }
 }
 
 impl ClientHandle {
-    fn hello(mut self) -> BoxFuture<Self> {
+    pub(crate) async fn hello(mut self) -> Result<ClientHandle> {
         let context = self.context.clone();
         let pool = self.pool.clone();
         info!("[hello] -> {:?}", &context);
-        Box::new(
-            self.inner
-                .take()
-                .unwrap()
-                .call(Cmd::Hello(context.clone()))
-                .fold(None, move |_, packet| match packet {
-                    Packet::Hello(inner, server_info) => {
-                        info!("[hello] <- {:?}", &server_info);
-                        let context = Context {
-                            server_info,
-                            ..context.clone()
-                        };
-                        let client = Self {
-                            inner: Some(inner),
-                            context,
-                            pool: pool.clone(),
-                        };
-                        future::ok::<_, Error>(Some(client))
-                    }
-                    Packet::Exception(e) => future::err::<_, Error>(Error::Server(e)),
-                    _ => future::err::<_, Error>(Error::Driver(DriverError::UnexpectedPacket)),
-                })
-                .map(Option::unwrap),
-        )
+
+        let mut h = None;
+        let mut stream = self
+            .inner
+            .take()
+            .unwrap()
+            .call(Cmd::Hello(context.clone()));
+
+        while let Some(packet) = stream.next().await {
+            match packet {
+                Ok(Packet::Hello(inner, server_info)) => {
+                    info!("[hello] <- {:?}", &server_info);
+                    let context = Context {
+                        server_info,
+                        ..context.clone()
+                    };
+                    h = Some(ClientHandle {
+                        inner: Some(inner),
+                        context,
+                        pool: pool.clone(),
+                    });
+                }
+                Ok(Packet::Exception(e)) => return Err(Error::Server(e)),
+                Err(e) => return Err(e.into()),
+                _ => return Err(Error::Driver(DriverError::UnexpectedPacket)),
+            }
+        }
+
+        Ok(h.unwrap())
     }
 
-    pub fn ping(mut self) -> BoxFuture<Self> {
+    pub async fn ping(mut self) -> Result<ClientHandle> {
         let context = self.context.clone();
-
         let timeout = try_opt!(self.context.options.get()).ping_timeout;
 
         let pool = self.pool.clone();
-        info!("[ping]");
-        Box::new(
-            self.inner
-                .take()
-                .unwrap()
-                .call(Cmd::Ping)
-                .fold(None, move |_, packet| match packet {
-                    Packet::Pong(inner) => {
-                        let client = Self {
+
+        with_timeout(async move {
+            info!("[ping]");
+
+            let mut h = None;
+            let mut stream = self.inner.take().unwrap().call(Cmd::Ping);
+
+            while let Some(packet) = stream.next().await {
+                match packet {
+                    Ok(Packet::Pong(inner)) => {
+                        h = Some(ClientHandle {
                             inner: Some(inner),
                             context: context.clone(),
                             pool: pool.clone(),
-                        };
+                        });
                         info!("[pong]");
-                        future::ok::<_, Error>(Some(client))
                     }
-                    Packet::Exception(exception) => {
-                        future::err::<_, Error>(Error::Server(exception))
-                    }
-                    _ => future::err::<_, Error>(Error::Driver(DriverError::UnexpectedPacket)),
-                })
-                .map(Option::unwrap)
-                .timeout(timeout)
-                .map_err(Error::from),
-        )
+                    Ok(Packet::Exception(e)) => return Err(Error::Server(e)),
+                    Err(e) => return Err(e.into()),
+                    _ => return Err(Error::Driver(DriverError::UnexpectedPacket)),
+                }
+            }
+
+            Ok(h.unwrap())
+        }, timeout).await
     }
 
     /// Executes Clickhouse `query` on Conn.
@@ -284,52 +273,47 @@ impl ClientHandle {
         }
     }
 
-    /// Fetch data from table. It returns a block that contains all rows.
-    #[deprecated(since = "0.1.7", note = "please use query(sql).fetch_all() instead")]
-    pub fn query_all<Q>(self, sql: Q) -> BoxFuture<(Self, Block)>
-    where
-        Query: From<Q>,
-    {
-        self.query(sql).fetch_all()
-    }
-
     /// Convenience method to prepare and execute a single SQL statement.
-    pub fn execute<Q>(self, sql: Q) -> BoxFuture<Self>
+    pub async fn execute<Q>(self, sql: Q) -> Result<ClientHandle>
     where
         Query: From<Q>,
     {
         let context = self.context.clone();
         let pool = self.pool.clone();
         let query = Query::from(sql);
-        self.wrap_future(|mut c| {
-            info!("[execute]    {}", query.get_sql());
-            c.inner
+
+        self.wrap_future(async move |mut c| {
+            info!("[execute query] {}", query.get_sql());
+
+            let mut h = None;
+            let mut stream = c
+                .inner
                 .take()
                 .unwrap()
-                .call(Cmd::SendQuery(query, context.clone()))
-                .fold(None, move |acc, packet| match packet {
-                    Packet::Eof(inner) => {
-                        let client = Self {
+                .call(Cmd::SendQuery(query, context.clone()));
+
+            while let Some(packet) = stream.next().await {
+                match packet {
+                    Ok(Packet::Eof(inner)) => {
+                        h = Some(Self {
                             inner: Some(inner),
                             context: context.clone(),
                             pool: pool.clone(),
-                        };
-                        future::ok::<_, Error>(Some(client))
+                        })
                     }
-                    Packet::Block(_) | Packet::ProfileInfo(_) | Packet::Progress(_) => {
-                        future::ok::<_, Error>(acc)
-                    }
-                    Packet::Exception(exception) => {
-                        future::err::<_, Error>(Error::Server(exception))
-                    }
-                    _ => future::err::<_, Error>(Error::Driver(DriverError::UnexpectedPacket)),
-                })
-                .map(Option::unwrap)
-        })
+                    Ok(Packet::Block(_)) | Ok(Packet::ProfileInfo(_)) | Ok(Packet::Progress(_)) => (),
+                    Ok(Packet::Exception(e)) => return Err(Error::Server(e)),
+                    Err(e) => return Err(e.into()),
+                    _ => return Err(Error::Driver(DriverError::UnexpectedPacket)),
+                }
+            }
+
+            Ok(h.unwrap())
+        }).await
     }
 
     /// Convenience method to insert block of data.
-    pub fn insert<Q>(self, table: Q, block: Block) -> BoxFuture<Self>
+    pub async fn insert<Q>(self, table: Q, block: Block) -> Result<ClientHandle>
     where
         Query: From<Q>,
     {
@@ -347,77 +331,84 @@ impl ClientHandle {
         let context = self.context.clone();
         let pool = self.pool.clone();
 
-        self.wrap_future(|mut c| {
+        self.wrap_future(async move |mut c| -> Result<ClientHandle> {
             info!("[insert]     {}", query.get_sql());
-            c.inner
+            let (mut c, b) = c.inner
                 .take()
                 .unwrap()
                 .call(Cmd::SendQuery(query, context.clone()))
                 .read_block(context.clone(), pool.clone())
-                .and_then(move |(mut c, b)| -> BoxFuture<Self> {
-                    let dst_block = b.unwrap();
+                .await?;
 
-                    let casted_block = match block.cast_to(&dst_block) {
-                        Ok(value) => value,
-                        Err(err) => return Box::new(future::err::<Self, Error>(err)),
-                    };
+            let dst_block = b.unwrap();
 
-                    let send_cmd = Cmd::Union(
-                        Box::new(Cmd::SendData(casted_block, context.clone())),
-                        Box::new(Cmd::SendData(Block::default(), context.clone())),
-                    );
+            let casted_block = match block.cast_to(&dst_block) {
+                Ok(value) => value,
+                Err(err) => return Err(err),
+            };
 
-                    Box::new(
-                        c.inner
-                            .take()
-                            .unwrap()
-                            .call(send_cmd)
-                            .read_block(context, pool)
-                            .map(|(c, _)| c),
-                    )
-                })
-        })
+            let send_cmd = Cmd::Union(
+                Box::new(Cmd::SendData(casted_block, context.clone())),
+                Box::new(Cmd::SendData(Block::default(), context.clone())),
+            );
+
+            let (c, _) = c.inner
+                .take()
+                .unwrap()
+                .call(send_cmd)
+                .read_block(context, pool)
+                .await?;
+
+            Ok(c)
+        }).await
     }
 
-    pub(crate) fn wrap_future<T, R, F>(self, f: F) -> BoxFuture<T>
+    pub(crate) async fn wrap_future<T, R, F>(self, f: F) -> Result<T>
     where
         F: FnOnce(Self) -> R + Send + 'static,
-        R: Future<Item = T, Error = Error> + Send + 'static,
-        T: Send + 'static,
+        R: Future<Output = Result<T>>,
+        T: 'static,
     {
         let ping_before_query = try_opt!(self.context.options.get()).ping_before_query;
 
         if ping_before_query {
-            Box::new(self.check_connection().and_then(move |c| Box::new(f(c))))
+            let c = self.check_connection().await?;
+            f(c).await
         } else {
-            Box::new(f(self))
+            f(self).await
         }
     }
 
-    pub(crate) fn wrap_stream<T, R, F>(self, f: F) -> BoxStream<T>
+    pub(crate) fn wrap_stream<T, R, F>(self, f: F) -> BoxStream<'static, Result<T>>
     where
         F: FnOnce(Self) -> R + Send + 'static,
-        R: Stream<Item = T, Error = Error> + Send + 'static,
+        R: Stream<Item = Result<T>> + Send + 'static,
         T: Send + 'static,
     {
         let ping_before_query = match self.context.options.get() {
             Ok(val) => val.ping_before_query,
-            Err(err) => return Box::new(stream::once(Err(err))),
+            Err(err) => return Box::pin(stream::once(future::err(err))),
         };
 
         if ping_before_query {
-            let fut = self
-                .check_connection()
-                .and_then(move |c| future::ok(Box::new(f(c))))
-                .flatten_stream();
-            Box::new(fut)
+            let fut: BoxFuture<'static, BoxStream<'static, Result<T>>> =
+                Box::pin(async move {
+                    let inner: BoxStream<'static, Result<T>> =
+                        match self.check_connection().await {
+                            Ok(c) => Box::pin(f(c)),
+                            Err(err) => Box::pin(stream::once(future::err(err))),
+                        };
+                    inner
+                });
+
+            Box::pin(fut.flatten_stream())
         } else {
-            Box::new(f(self))
+            Box::pin(f(self))
         }
     }
 
     /// Check connection and try to reconnect if necessary.
-    pub fn check_connection(mut self) -> BoxFuture<Self> {
+    pub async fn check_connection(mut self) -> Result<ClientHandle> {
         let pool: Option<Pool> = self.pool.clone().into();
         self.pool.detach();
 
@@ -428,30 +419,46 @@ impl ClientHandle {
             (options.send_retries, options.retry_timeout)
         };
 
-        let reconnect = move || -> BoxFuture<Self> {
-            warn!("[reconnect]");
-            match pool.clone() {
-                None => Client::open(&source),
-                Some(p) => Box::new(p.get_handle()),
+        let reconnect = move || {
+            let source = source.clone();
+            let pool = pool.clone();
+            async move {
+                warn!("[reconnect]");
+                match pool.clone() {
+                    None => Client::open(&source).await,
+                    Some(p) => Box::new(p.get_handle()).await,
+                }
             }
         };
 
-        Box::new(
-            RetryGuard::new(self, |c| c.ping(), reconnect, send_retries, retry_timeout).and_then(
-                |mut c| {
-                    if !c.pool.is_attached() && c.pool.is_some() {
-                        c.pool.attach();
-                    }
-                    Ok(c)
-                },
-            ),
-        )
+        let mut c = RetryGuard::new(self,
+                                    |c| c.ping(),
+                                    reconnect,
+                                    send_retries,
+                                    retry_timeout).await?;
+        if !c.pool.is_attached() && c.pool.is_some() {
+            c.pool.attach();
+        }
+        Ok(c)
+    }
+}
+
+async fn with_timeout<F>(future: F, timeout: Duration) -> F::Output
+where
+    F: Future<Output = Result<ClientHandle>>
+{
+    match Timeout::new(future, timeout).await {
+        Ok(Ok(c)) => Ok(c),
+        Ok(Err(err)) => Err(err),
+        Err(err) => Err(err.into()),
     }
 }
 
 #[cfg(test)]
-mod test_misc {
+pub(crate) mod test_misc {
     use std::env;
+
+    use lazy_static::lazy_static;
 
     lazy_static! {
         pub static ref DATABASE_URL: String = env::var("DATABASE_URL")

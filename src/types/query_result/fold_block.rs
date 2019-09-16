@@ -1,11 +1,11 @@
-use tokio::prelude::*;
+use std::{mem, pin::Pin, sync::Arc, future::Future, task::{Context, Poll}};
+
+use pin_project::pin_project;
 
 use crate::{
-    errors::Error,
+    errors::Result,
     types::block::{Block, BlockRef, Row, Rows},
 };
-
-use std::{mem, sync::Arc};
 
 enum State<T, Fut> {
     Empty,
@@ -13,14 +13,14 @@ enum State<T, Fut> {
     Run(Fut),
 }
 
+#[pin_project]
 pub(super) struct FoldBlock<T, F, Fut>
 where
     F: Fn(T, Row) -> Fut + Send + 'static,
-    Fut: IntoFuture<Item = T, Error = Error> + Send + 'static,
-    Fut::Future: Send,
+    Fut: Future<Output = Result<T>>,
     T: Send + 'static,
 {
-    state: State<T, Fut::Future>,
+    state: State<T, Fut>,
     f: Arc<F>,
     rows: Rows<'static>,
 }
@@ -28,8 +28,7 @@ where
 impl<T, F, Fut> FoldBlock<T, F, Fut>
 where
     F: Fn(T, Row) -> Fut + Send + 'static,
-    Fut: IntoFuture<Item = T, Error = Error> + Send + 'static,
-    Fut::Future: Send,
+    Fut: Future<Output = Result<T>>,
     T: Send + 'static,
 {
     pub(super) fn new(block: Block, init: T, f: Arc<F>) -> FoldBlock<T, F, Fut> {
@@ -45,14 +44,12 @@ where
 impl<T, F, Fut> Future for FoldBlock<T, F, Fut>
 where
     F: Fn(T, Row) -> Fut + Send + 'static,
-    Fut: IntoFuture<Item = T, Error = Error> + Send + 'static,
-    Fut::Future: Send,
+    Fut: Future<Output = Result<T>> + Unpin,
     T: Send + 'static,
 {
-    type Item = T;
-    type Error = Error;
+    type Output = Result<T>;
 
-    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let mut state;
         loop {
             state = mem::replace(&mut self.state, State::Empty);
@@ -60,21 +57,23 @@ where
             match state {
                 State::Empty => unreachable!(),
                 State::Ready(acc) => match self.rows.next() {
-                    None => return Ok(Async::Ready(acc)),
+                    None => return Poll::Ready(Ok(acc)),
                     Some(row) => {
-                        self.state = State::Run((self.f)(acc, row).into_future());
+                        self.state = State::Run((self.f)(acc, row));
                     }
                 },
-                State::Run(ref mut inner) => match inner.poll() {
-                    Ok(Async::Ready(item)) => self.state = State::Ready(item),
-                    Ok(Async::NotReady) => break,
-                    Err(e) => return Err(e),
-                },
+                State::Run(ref mut inner) => {
+                    match Pin::new(inner).poll(cx) {
+                        Poll::Ready(Ok(row)) => self.state = State::Ready(row),
+                        Poll::Ready(Err(err)) => return Poll::Ready(Err(err)),
+                        Poll::Pending => break,
+                    };
+                }
             }
         }
 
         self.state = state;
-        Ok(Async::NotReady)
+        Poll::Pending
     }
 }
 

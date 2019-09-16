@@ -2,24 +2,30 @@ use std::{
     collections::VecDeque,
     io::{self, Cursor},
     mem,
+    pin::Pin,
+    task::{self, Poll},
 };
 
 use chrono_tz::Tz;
-use futures::{Async, Poll, Stream};
+use log::trace;
 use tokio::{net::TcpStream, prelude::*};
+
+use pin_project::pin_project;
 
 use crate::{
     binary::Parser,
-    errors::{DriverError, Error},
-    io::BoxFuture,
-    pool::PoolBinding,
-    types::{Block, Cmd, Context, Packet},
     ClientHandle,
+    errors::{DriverError, Error, Result},
+    io::read_to_end::read_to_end,
+    pool::PoolBinding,
+    types::{self, Block, Cmd, Packet}
 };
 
 /// Line transport
+#[pin_project]
 pub(crate) struct ClickhouseTransport {
     // Inner socket
+    #[pin]
     inner: TcpStream,
     // Set to true when inner.read returns Ok(0);
     done: bool,
@@ -77,7 +83,7 @@ impl ClickhouseTransport {
         self.wr.position() as usize
     }
 
-    fn wr_flush(&mut self) -> io::Result<bool> {
+    fn wr_flush(&mut self, cx: &mut task::Context) -> io::Result<bool> {
         // Making the borrow checker happy
         let res = {
             let buf = {
@@ -88,27 +94,24 @@ impl ClickhouseTransport {
                 buf
             };
 
-            self.inner.write(buf)
+            Pin::new(&mut self.inner).poll_write(cx, buf)
         };
 
         match res {
-            Ok(mut n) => {
+            Poll::Ready(Ok(mut n)) => {
                 n += self.wr.position() as usize;
                 self.wr.set_position(n as u64);
                 Ok(true)
             }
-            Err(e) => {
-                if e.kind() == io::ErrorKind::WouldBlock {
-                    return Ok(false);
-                }
-
+            Poll::Ready(Err(e)) => {
                 trace!("transport flush error; err={:?}", e);
                 Err(e)
             }
+            Poll::Pending => Ok(false),
         }
     }
 
-    fn try_parse_msg(&mut self) -> Poll<Option<Packet<()>>, Error> {
+    fn try_parse_msg(mut self: Pin<&mut Self>) -> Poll<Option<io::Result<Packet<()>>>> {
         let pos;
         let ret = {
             let mut cursor = Cursor::new(&self.rd);
@@ -123,13 +126,19 @@ impl ClickhouseTransport {
             }
 
             match res {
-                Ok(val) => Ok(Async::Ready(Some(val))),
-                Err(e) => e.into(),
+                Ok(val) => Poll::Ready(Some(Ok(val))),
+                Err(e) => {
+                    if e.is_would_block() {
+                        Poll::Pending
+                    } else {
+                        Poll::Ready(Some(Err(e.into())))
+                    }
+                },
             }
         };
 
         match ret {
-            Ok(Async::NotReady) => (),
+            Poll::Pending => (),
             _ => {
                 // Data is consumed
                 let tail = self.rd.split_off(pos);
@@ -142,13 +151,11 @@ impl ClickhouseTransport {
 }
 
 impl ClickhouseTransport {
-    fn send(&mut self) -> Poll<(), Error> {
+    fn send(&mut self, cx: &mut task::Context) -> Poll<Result<()>> {
         loop {
             if self.wr_is_empty() {
                 match self.cmds.pop_front() {
-                    None => {
-                        return Ok(Async::Ready(()));
-                    }
+                    None => return Poll::Ready(Ok(())),
                     Some(cmd) => {
                         let bytes = cmd.get_packed_command()?;
                         self.wr = Cursor::new(bytes)
@@ -157,50 +164,46 @@ impl ClickhouseTransport {
             }
 
             // Try to write the remaining buffer
-            if !self.wr_flush()? {
-                return Ok(Async::NotReady);
+            if !self.wr_flush(cx)? {
+                return Poll::Pending;
             }
         }
     }
 }
 
 impl Stream for ClickhouseTransport {
-    type Item = Packet<()>;
-    type Error = Error;
+    type Item = io::Result<Packet<()>>;
 
     /// Read a message from the `Transport`
-    fn poll(&mut self) -> Poll<Option<Packet<()>>, Error> {
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut task::Context) -> Poll<Option<Self::Item>> {
         // Check whether our currently buffered data is enough for a packet
         // before reading any more data. This prevents the buffer from growing
         // indefinitely when the sender is faster than we can consume the data
         if !self.buf_is_incomplete && !self.rd.is_empty() {
-            if let ret @ Async::Ready(_) = self.try_parse_msg()? {
-                return Ok(ret);
+            if let Poll::Ready(ret) = self.as_mut().try_parse_msg()? {
+                // let i: Poll<Option<io::Result<Packet<()>>>> = ret;
+                return Poll::Ready(ret.map(Ok));
             }
         }
 
         // Fill the buffer!
         while !self.done {
-            match self.inner.read_to_end(&mut self.rd) {
-                Ok(0) => {
+            let mut this = self.project();
+            match read_to_end(this.inner, cx, &mut this.rd) {
+                Poll::Ready(Ok(0)) => {
                     self.done = true;
                     break;
                 }
-                Ok(_) => {}
-                Err(e) => {
-                    if e.kind() == io::ErrorKind::WouldBlock {
-                        break;
-                    }
-
-                    return Err(e.into());
-                }
+                Poll::Ready(Ok(_)) => {}
+                Poll::Ready(Err(e)) => return Poll::Ready(Some(Err(e))),
+                Poll::Pending => break,
             }
         }
 
         // Try to parse the new data!
-        let ret = self.try_parse_msg();
+        let ret = self.as_mut().try_parse_msg();
 
-        self.buf_is_incomplete = if let Ok(Async::NotReady) = ret {
+        self.buf_is_incomplete = if let Poll::Pending = ret {
             true
         } else {
             false
@@ -211,50 +214,74 @@ impl Stream for ClickhouseTransport {
 }
 
 impl PacketStream {
-    pub(crate) fn read_block(
+    pub(crate) async fn read_block(
         mut self,
-        context: Context,
+        context: types::Context,
         pool: PoolBinding,
-    ) -> BoxFuture<(ClientHandle, Option<Block>)> {
+    ) -> Result<(ClientHandle, Option<Block>)> {
         self.read_block = true;
 
-        Box::new(
-            self.fold((None, None), move |(c, b), package| match package {
-                Packet::Eof(inner) => {
+        let mut h = None;
+        let mut b = None;
+        while let Some(package) = self.next().await {
+            match package {
+                Ok(Packet::Eof(inner)) => {
                     let client = ClientHandle {
                         inner: Some(inner),
                         context: context.clone(),
                         pool: pool.clone(),
                     };
-                    future::ok::<_, Error>((Some(client), b))
+                    h = Some(client)
                 }
-                Packet::Block(block) => future::ok::<_, Error>((c, Some(block))),
-                Packet::Exception(e) => future::err(Error::Server(e)),
-                _ => future::err(Error::Driver(DriverError::UnexpectedPacket)),
-            })
-            .map(|(c, b)| (c.unwrap(), b)),
-        )
+                Ok(Packet::Block(block)) => b = Some(block),
+                Ok(Packet::Exception(e)) => return Err(Error::Server(e)),
+                Err(e) => return Err(e.into()),
+                _ => return Err(Error::Driver(DriverError::UnexpectedPacket)),
+            }
+        }
+
+        Ok((h.unwrap(), b))
     }
 }
 
 impl Stream for PacketStream {
-    type Item = Packet<ClickhouseTransport>;
-    type Error = Error;
+    type Item = io::Result<Packet<ClickhouseTransport>>;
 
-    fn poll(&mut self) -> Poll<Option<Packet<ClickhouseTransport>>, Self::Error> {
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut task::Context) -> Poll<Option<Self::Item>> {
         loop {
             self.state = match self.state {
                 PacketStreamState::Ask => match self.inner {
                     None => PacketStreamState::Done,
                     Some(ref mut inner) => {
-                        try_ready!(inner.send());
+                        match inner.send(cx) {
+                            Poll::Ready(Ok(t)) => t,
+                            Poll::Ready(Err(e)) => {
+                                if e.is_would_block() {
+                                    return Poll::Pending;
+                                }
+
+                                return Poll::Ready(Some(Err(e.into())));
+                            }
+                            Poll::Pending => return Poll::Pending,
+                        };
                         PacketStreamState::Receive
                     }
                 },
                 PacketStreamState::Receive => {
                     let ret = match self.inner {
                         None => None,
-                        Some(ref mut inner) => try_ready!(inner.poll()),
+                        Some(ref mut inner) => match Pin::new(inner).poll_next(cx) {
+                            Poll::Ready(Some(Ok(r))) => Some(r),
+                            Poll::Ready(Some(Err(e))) => {
+                                if e.kind() == io::ErrorKind::WouldBlock {
+                                    return Poll::Pending;
+                                }
+
+                                return Poll::Ready(Some(Err(e)));
+                            }
+                            Poll::Ready(None) => return Poll::Ready(None),
+                            Poll::Pending => return Poll::Pending,
+                        },
                     };
 
                     match ret {
@@ -268,8 +295,8 @@ impl Stream for PacketStream {
                 PacketStreamState::Yield(_) => PacketStreamState::Receive,
                 PacketStreamState::Done => {
                     return match self.inner.take() {
-                        Some(inner) => Ok(Async::Ready(Some(Packet::Eof(inner)))),
-                        _ => Ok(Async::Ready(None)),
+                        Some(inner) => Poll::Ready(Some(Ok(Packet::Eof(inner)))),
+                        _ => Poll::Ready(None),
                     };
                 }
             };
@@ -283,8 +310,8 @@ impl Stream for PacketStream {
                 self.state = PacketStreamState::Done;
             }
 
-            if package.is_some() {
-                return Ok(Async::Ready(package));
+            if let Some(pkg) = package {
+                return Poll::Ready(Some(Ok(pkg)));
             }
         }
     }

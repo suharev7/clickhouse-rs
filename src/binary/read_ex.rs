@@ -1,25 +1,25 @@
 use std::io;
 
 use crate::{
-    errors::{DriverError, Error},
-    types::{column::StringPool, ClickhouseResult, StatBuffer, Unmarshal},
+    errors::{DriverError, Error, Result},
+    types::{column::StringPool, StatBuffer, Unmarshal},
 };
 
 pub(crate) trait ReadEx {
-    fn read_bytes(&mut self, rv: &mut [u8]) -> ClickhouseResult<()>;
-    fn read_scalar<V>(&mut self) -> ClickhouseResult<V>
+    fn read_bytes(&mut self, rv: &mut [u8]) -> Result<()>;
+    fn read_scalar<V>(&mut self) -> Result<V>
     where
         V: Copy + Unmarshal<V> + StatBuffer;
-    fn read_string(&mut self) -> ClickhouseResult<String>;
-    fn read_uvarint(&mut self) -> ClickhouseResult<u64>;
-    fn read_str_into_buffer(&mut self, pool: &mut StringPool) -> ClickhouseResult<()>;
+    fn read_string(&mut self) -> Result<String>;
+    fn read_uvarint(&mut self) -> Result<u64>;
+    fn read_str_into_buffer(&mut self, pool: &mut StringPool) -> Result<()>;
 }
 
 impl<T> ReadEx for T
 where
     T: io::Read,
 {
-    fn read_bytes(&mut self, rv: &mut [u8]) -> ClickhouseResult<()> {
+    fn read_bytes(&mut self, rv: &mut [u8]) -> Result<()> {
         let mut i = 0;
         while i < rv.len() {
             let res_nread = {
@@ -38,7 +38,7 @@ where
         Ok(())
     }
 
-    fn read_scalar<V>(&mut self) -> ClickhouseResult<V>
+    fn read_scalar<V>(&mut self) -> Result<V>
     where
         V: Copy + Unmarshal<V> + StatBuffer,
     {
@@ -47,14 +47,14 @@ where
         Ok(V::unmarshal(buffer.as_ref()))
     }
 
-    fn read_string(&mut self) -> ClickhouseResult<String> {
+    fn read_string(&mut self) -> Result<String> {
         let str_len = self.read_uvarint()? as usize;
         let mut buffer = vec![0_u8; str_len];
         self.read_bytes(buffer.as_mut())?;
         Ok(String::from_utf8(buffer)?)
     }
 
-    fn read_uvarint(&mut self) -> ClickhouseResult<u64> {
+    fn read_uvarint(&mut self) -> Result<u64> {
         let mut x = 0_u64;
         let mut s = 0_u32;
         let mut i = 0_usize;
@@ -75,7 +75,7 @@ where
         }
     }
 
-    fn read_str_into_buffer(&mut self, pool: &mut StringPool) -> ClickhouseResult<()> {
+    fn read_str_into_buffer(&mut self, pool: &mut StringPool) -> Result<()> {
         let str_len = self.read_uvarint()? as usize;
         let buffer = pool.allocate(str_len);
         self.read_bytes(buffer)?;

@@ -1,7 +1,4 @@
-pub(crate) use self::{
-    io_future::{BoxFuture, BoxStream},
-    transport::ClickhouseTransport,
-};
+pub(crate) use self::transport::ClickhouseTransport;
 
-mod io_future;
+mod read_to_end;
 pub(crate) mod transport;

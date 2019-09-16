@@ -16,7 +16,7 @@ impl ConcatColumnData {
     pub fn concat(data: Vec<ArcColumnData>) -> Self {
         Self::check_columns(&data);
 
-        let index = build_index(data.iter().map(len_of_column_data));
+        let index = build_index(data.iter().map(|x| x.len()));
         Self { data, index }
     }
 
@@ -100,10 +100,6 @@ fn find_chunk(index: &[usize], ix: usize) -> usize {
     }
 
     0
-}
-
-fn len_of_column_data(x: &ArcColumnData) -> usize {
-    x.len()
 }
 
 #[cfg(test)]

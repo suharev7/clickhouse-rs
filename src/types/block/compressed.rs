@@ -2,14 +2,17 @@ use std::{
     io,
     io::Read,
     mem,
-    os::raw::{c_char, c_int},
+    os::raw::c_int,
 };
 
 use byteorder::{LittleEndian, WriteBytesExt};
 use clickhouse_rs_cityhash_sys::{city_hash_128, UInt128};
 use lz4::liblz4::LZ4_decompress_safe;
 
-use crate::{binary::ReadEx, errors::Error, types::ClickhouseResult};
+use crate::{
+    binary::ReadEx,
+    errors::{Error, Result}
+};
 
 const DBMS_MAX_COMPRESSED_SIZE: u32 = 0x4000_0000; // 1GB
 
@@ -35,7 +38,7 @@ where
         len == pos
     }
 
-    fn fill(&mut self) -> ClickhouseResult<()> {
+    fn fill(&mut self) -> Result<()> {
         let cursor = mem::replace(&mut self.cursor, io::Cursor::new(Vec::new()));
         let buffer = cursor.into_inner();
 
@@ -58,7 +61,7 @@ where
     }
 }
 
-fn decompress_buffer<R>(reader: &mut R, mut buffer: Vec<u8>) -> ClickhouseResult<Vec<u8>>
+fn decompress_buffer<R>(reader: &mut R, mut buffer: Vec<u8>) -> Result<Vec<u8>>
 where
     R: ReadEx,
 {
@@ -96,7 +99,7 @@ where
     let data = vec![0_u8; original as usize];
     let status = unsafe {
         LZ4_decompress_safe(
-            (buffer.as_mut_ptr() as *const c_char).add(9),
+            (buffer.as_mut_ptr() as *const i8).add(9),
             data.as_ptr() as *mut i8,
             (compressed - 9) as c_int,
             original as c_int,

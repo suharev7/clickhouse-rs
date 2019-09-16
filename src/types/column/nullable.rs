@@ -2,7 +2,7 @@ use crate::types::column::ColumnData;
 
 use crate::{
     binary::{Encoder, ReadEx},
-    errors::Error,
+    errors::Result,
     types::{column::Either, SqlType, Value, ValueRef},
 };
 
@@ -20,7 +20,7 @@ impl NullableColumnData {
         type_name: &str,
         size: usize,
         tz: Tz,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self> {
         let mut nulls = vec![0; size];
         reader.read_bytes(nulls.as_mut())?;
 

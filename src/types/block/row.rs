@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use crate::types::{block::ColumnIdx, Block, ClickhouseResult, Column, FromSql, SqlType};
+use crate::{
+    types::{block::ColumnIdx, Block, Column, FromSql, SqlType},
+    errors::Result
+};
 
 /// A row from Clickhouse
 pub struct Row<'a> {
@@ -10,7 +13,7 @@ pub struct Row<'a> {
 
 impl<'a> Row<'a> {
     /// Get the value of a particular cell of the row.
-    pub fn get<T, I>(&'a self, col: I) -> ClickhouseResult<T>
+    pub fn get<T, I>(&'a self, col: I) -> Result<T>
     where
         T: FromSql<'a>,
         I: ColumnIdx + Copy,
@@ -29,12 +32,12 @@ impl<'a> Row<'a> {
     }
 
     /// Get the name of a particular cell of the row.
-    pub fn name<I: ColumnIdx + Copy>(&self, col: I) -> ClickhouseResult<&str> {
+    pub fn name<I: ColumnIdx + Copy>(&self, col: I) -> Result<&str> {
         Ok(self.block_ref.get_column(col)?.name())
     }
 
     /// Get the type of a particular cell of the row.
-    pub fn sql_type<I: ColumnIdx + Copy>(&self, col: I) -> ClickhouseResult<SqlType> {
+    pub fn sql_type<I: ColumnIdx + Copy>(&self, col: I) -> Result<SqlType> {
         Ok(self.block_ref.get_column(col)?.sql_type())
     }
 }
@@ -60,7 +63,7 @@ impl<'a> BlockRef<'a> {
         }
     }
 
-    fn get<'s, T, I>(&'s self, row: usize, col: I) -> ClickhouseResult<T>
+    fn get<'s, T, I>(&'s self, row: usize, col: I) -> Result<T>
     where
         T: FromSql<'s>,
         I: ColumnIdx + Copy,
@@ -71,7 +74,7 @@ impl<'a> BlockRef<'a> {
         }
     }
 
-    fn get_column<I: ColumnIdx + Copy>(&self, col: I) -> ClickhouseResult<&Column> {
+    fn get_column<I: ColumnIdx + Copy>(&self, col: I) -> Result<&Column> {
         match self {
             BlockRef::Borrowed(block) => {
                 let column_index = col.get_index(block.columns())?;

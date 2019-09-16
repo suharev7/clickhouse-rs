@@ -1,8 +1,14 @@
-use tokio::prelude::*;
+use std::{future::Future, pin::Pin};
 
-use crate::{errors::Error, pool::Pool, ClientHandle};
+use futures_core::{Poll, task::Context};
 
+use pin_project::pin_project;
+
+use crate::{ClientHandle, errors::Result, pool::Pool};
+
+#[pin_project]
 pub struct GetHandle {
+    #[pin]
     pool: Pool,
 }
 
@@ -13,10 +19,13 @@ impl GetHandle {
 }
 
 impl Future for GetHandle {
-    type Item = ClientHandle;
-    type Error = Error;
+    type Output = Result<ClientHandle>;
 
-    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-        self.pool.poll()
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        match self.project().pool.poll(cx) {
+            Poll::Ready(Ok(h)) => Poll::Ready(Ok(h)),
+            Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
+            Poll::Pending => Poll::Pending,
+        }
     }
 }

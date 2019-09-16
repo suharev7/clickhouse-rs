@@ -1,6 +1,6 @@
 use crate::{
     binary::{Encoder, ReadEx},
-    errors::Error,
+    errors::Result,
     types::{
         column::{
             list::List, nullable::NullableColumnData, BoxColumnWrapper, ColumnFrom, ColumnWrapper,
@@ -44,7 +44,7 @@ impl DecimalColumnData {
         nobits: NoBits,
         size: usize,
         tz: Tz,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self> {
         let type_name = match nobits {
             NoBits::N32 => "Int32",
             NoBits::N64 => "Int64",

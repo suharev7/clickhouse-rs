@@ -1,18 +1,14 @@
 use std::{ops, sync::Arc};
+use std::fmt;
+
+use chrono_tz::Tz;
 
 use crate::{
     binary::{Encoder, ReadEx},
-    types::{ClickhouseResult, SqlType, ValueRef},
+    types::{SqlType, ValueRef},
 };
-use chrono_tz::Tz;
-use std::fmt;
-
-use self::chunk::ChunkColumnData;
-pub use self::{column_data::ColumnData, concat::ConcatColumnData, numeric::VectorColumnData};
-
-pub(crate) use self::string_pool::StringPool;
 use crate::{
-    errors::{Error, FromSqlError},
+    errors::{Error, FromSqlError, Result},
     types::{
         column::{
             decimal::{DecimalAdapter, NullableDecimalAdapter},
@@ -22,6 +18,14 @@ use crate::{
         decimal::NoBits,
     },
 };
+
+pub use self::{
+    column_data::ColumnData,
+    concat::ConcatColumnData,
+    numeric::VectorColumnData,
+};
+use self::chunk::ChunkColumnData;
+pub(crate) use self::string_pool::StringPool;
 
 mod array;
 mod chunk;
@@ -85,7 +89,7 @@ impl Clone for Column {
 }
 
 impl Column {
-    pub(crate) fn read<R: ReadEx>(reader: &mut R, size: usize, tz: Tz) -> ClickhouseResult<Column> {
+    pub(crate) fn read<R: ReadEx>(reader: &mut R, size: usize, tz: Tz) -> Result<Column> {
         let name = reader.read_string()?;
         let type_name = reader.read_string()?;
         let data = ColumnData::load_data::<ArcColumnWrapper, _>(reader, &type_name, size, tz)?;
@@ -143,7 +147,7 @@ impl Column {
         }
     }
 
-    pub fn cast_to(self, dst_type: SqlType) -> ClickhouseResult<Column> {
+    pub fn cast_to(self, dst_type: SqlType) -> Result<Column> {
         let src_type = self.sql_type();
 
         if dst_type == src_type {

@@ -76,17 +76,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .column("account_name", vec![Some("foo"), None, None, None, Some("bar")]);
 
     let pool = Pool::new(database_url);
-    let (_, block) = pool
-        .get_handle().await?
-        .execute(ddl).await?
-        .insert("payment", block).await?
-        .query("SELECT * FROM payment").fetch_all().await?;
+
+    let mut client = pool.get_handle().await?;
+    client.execute(ddl).await?;
+    client.insert("payment", block).await?;
+    let block = client.query("SELECT * FROM payment").fetch_all().await?;
 
     for row in block.rows() {
-        let id: u32     = row.get("customer_id")?;
-        let amount: u32 = row.get("amount")?;
-        let name: &str  = row.get("account_name")?;
-        println!("Found payment {}: {} {}", id, amount, name);
+        let id: u32             = row.get("customer_id")?;
+        let amount: u32         = row.get("amount")?;
+        let name: Option<&str>  = row.get("account_name")?;
+        println!("Found payment {}: {} {:?}", id, amount, name);
     }
 
     Ok(())

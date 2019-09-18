@@ -5,9 +5,6 @@ use chrono_tz::Tz;
 
 use crate::{
     binary::{Encoder, ReadEx},
-    types::{SqlType, ValueRef},
-};
-use crate::{
     errors::{Error, FromSqlError, Result},
     types::{
         column::{
@@ -15,7 +12,7 @@ use crate::{
             fixed_string::{FixedStringAdapter, NullableFixedStringAdapter},
             string::StringAdapter,
         },
-        decimal::NoBits,
+        decimal::NoBits, SqlType, ValueRef
     },
 };
 
@@ -255,7 +252,9 @@ pub trait ColumnWrapper {
     fn wrap_arc(data: ArcColumnData) -> Self::Wrapper;
 }
 
-pub(crate) struct ArcColumnWrapper {}
+pub(crate) struct ArcColumnWrapper {
+    _private: (),
+}
 
 impl ColumnWrapper for ArcColumnWrapper {
     type Wrapper = Arc<dyn ColumnData + Send + Sync>;
@@ -269,7 +268,9 @@ impl ColumnWrapper for ArcColumnWrapper {
     }
 }
 
-pub(crate) struct BoxColumnWrapper {}
+pub(crate) struct BoxColumnWrapper {
+    _private: (),
+}
 
 impl ColumnWrapper for BoxColumnWrapper {
     type Wrapper = Box<dyn ColumnData + Send + Sync>;

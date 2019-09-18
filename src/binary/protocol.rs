@@ -3,6 +3,7 @@ pub const DBMS_MIN_REVISION_WITH_QUOTA_KEY_IN_CLIENT_INFO: u64 = 54060;
 pub const CLIENT_HELLO: u64 = 0;
 pub const CLIENT_QUERY: u64 = 1;
 pub const CLIENT_DATA: u64 = 2;
+pub const CLIENT_CANCEL: u64 = 3;
 pub const CLIENT_PING: u64 = 4;
 
 pub const COMPRESS_ENABLE: u64 = 1;

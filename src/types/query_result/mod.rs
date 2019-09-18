@@ -23,75 +23,45 @@ use crate::{
     },
 };
 
-use self::fold_block::FoldBlock;
-
-mod fold_block;
-mod stream_blocks;
+pub(crate) mod stream_blocks;
 
 /// Result of a query or statement execution.
-pub struct QueryResult {
-    pub(crate) client: ClientHandle,
+pub struct QueryResult<'a> {
+    pub(crate) client: &'a mut ClientHandle,
     pub(crate) query: Query,
 }
 
-impl QueryResult {
-    /// Method that applies a function to each row, producing a single, final value.
-    ///
-    /// example:
-    /// ```rust
-    /// # use std::env;
-    /// # use clickhouse_rs::{Pool, errors::Result};
-    /// # use futures_util::future;
-    /// # let rt = tokio::runtime::Runtime::new().unwrap();
-    /// # let ret: Result<()> = rt.block_on(async {
-    /// #     let database_url = env::var("DATABASE_URL")
-    /// #         .unwrap_or("tcp://localhost:9000?compression=lz4".into());
-    /// #     let pool = Pool::new(database_url);
-    ///       pool.get_handle().await?
-    ///           .query("SELECT number FROM system.numbers LIMIT 10000000")
-    ///           .try_fold(0, |acc, row| {
-    ///                let number: u64 = row.get("number").unwrap();
-    ///                future::ready(Ok(acc + number))
-    ///           }).await?;
-    /// #     Ok(())
-    /// # });
-    /// # ret.unwrap()
-    /// ```
-    pub async fn try_fold<F, T, Fut>(self, init: T, f: F) -> Result<(ClientHandle, T)>
-    where
-        F: Fn(T, Row) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = Result<T>> + Unpin,
-        T: Send + 'static,
-    {
-        let func_ptr = Arc::new(f);
-
-        let (c, r) = self.try_fold_blocks(init, move  |acc, block| {
-            FoldBlock::new(block, acc, func_ptr.clone())
-        }).await?;
-
-        Ok((c, r))
-    }
-
+impl<'a> QueryResult<'a> {
     /// Fetch data from table. It returns a block that contains all rows.
-    pub async fn fetch_all(self) -> Result<(ClientHandle, Block)> {
-        let (h, blocks) = self.try_fold_blocks(Vec::new(), |mut blocks, block| {
+    pub async fn fetch_all(self) -> Result<Block> {
+        let blocks = self.try_fold_blocks(Vec::new(), |mut blocks, block| {
             if !block.is_empty() {
                 blocks.push(block);
             }
             future::ready(Ok(blocks))
         }).await?;
-        Ok((h, Block::concat(blocks.as_slice())))
+        Ok(Block::concat(blocks.as_slice()))
     }
 
     /// Method that applies a function to each block, producing a single, final value.
-    pub async fn try_fold_blocks<F, T, Fut>(self, init: T, f: F) -> Result<(ClientHandle, T)>
+    pub(crate) async fn try_fold_blocks<F, T, Fut>(mut self, init: T, f: F) -> Result<T>
+        where
+            F: (Fn(T, Block) -> Fut) + Send + 'static,
+            Fut: Future<Output = Result<T>> + Unpin,
+            T: Send + 'static,
+    {
+        let (transport, result) = self.fold_blocks_(init, f).await?;
+        self.client.inner = Some(transport);
+        self.client.pool.attach();
+        Ok(result)
+    }
+
+    async fn fold_blocks_<F, T, Fut>(&mut self, init: T, f: F) -> Result<(ClickhouseTransport, T)>
     where
         F: (Fn(T, Block) -> Fut) + Send + 'static,
         Fut: Future<Output = Result<T>> + Unpin,
         T: Send + 'static,
     {
-        let context = self.client.context.clone();
-        let pool = self.client.pool.clone();
         let release_pool = self.client.pool.clone();
 
         let acc = (None, init, f);
@@ -110,13 +80,7 @@ impl QueryResult {
 
         match ret {
             Ok((transport, t, _)) => {
-                let client = ClientHandle {
-                    inner: Some(transport.unwrap()),
-                    context: context.clone(),
-                    pool: pool.clone(),
-                };
-
-                Ok((client, t))
+                Ok((transport.unwrap(), t))
             }
             Err(err) => {
                 release_pool.release_conn();
@@ -125,16 +89,16 @@ impl QueryResult {
         }
     }
 
-    async fn try_fold_packets<F, T, Fut>(self, init: T, f: F) -> Result<T>
+    async fn try_fold_packets<F, T, Fut>(&mut self, init: T, f: F) -> Result<T>
     where
         F: (Fn(T, Packet<ClickhouseTransport>) -> Fut) + Send + 'static,
         Fut: Future<Output = Result<T>>,
         T: Send + 'static,
     {
         let context = self.client.context.clone();
-        let query = self.query;
+        let query = self.query.clone();
 
-        self.client.wrap_future(async move |mut c| {
+        self.client.wrap_future(move |c| {
             info!("[send query] {}", query.get_sql());
             c.pool.detach();
 
@@ -143,12 +107,15 @@ impl QueryResult {
                 .unwrap()
                 .call(Cmd::SendQuery(query, context.clone()));
 
-            let mut acc = init;
-            while let Some(packet) = stream.next().await {
-                acc = f(acc, packet?).await?;
-            }
+            async move {
+                let mut acc = init;
 
-            Ok(acc)
+                while let Some(packet) = stream.next().await {
+                    acc = f(acc, packet?).await?;
+                }
+
+                Ok(acc)
+            }
         }).await
     }
 
@@ -170,8 +137,8 @@ impl QueryResult {
     /// #     let sql_query = "SELECT number FROM system.numbers LIMIT 100000";
     /// #     let pool = Pool::new(database_url);
     /// #
-    ///       pool.get_handle().await?
-    ///           .query(sql_query)
+    ///       let mut c = pool.get_handle().await?;
+    ///       let mut result = c.query(sql_query)
     ///           .stream_blocks()
     ///           .try_for_each(|block| {
     ///               println!("{:?}\nblock counts: {} rows", block, block.row_count());
@@ -181,32 +148,29 @@ impl QueryResult {
     /// # });
     /// # ret.unwrap()
     /// ```
-    pub fn stream_blocks(self) -> BoxStream<'static, Result<Block>> {
-        let query = self.query;
+    pub fn stream_blocks(self) -> BoxStream<'a, Result<Block>> {
+        let query = self.query.clone();
 
-        self.client.wrap_stream(move |mut c| {
+        self.client.wrap_stream::<'a, _>(move |c: &'a mut ClientHandle| {
             info!("[send query] {}", query.get_sql());
             c.pool.detach();
 
             let context = c.context.clone();
-            let pool = c.pool.clone();
 
-            BlockStream::new(
-                c.inner
-                    .take()
-                    .unwrap()
-                    .call(Cmd::SendQuery(query, context.clone())),
-                context,
-                pool,
-            )
+            let inner = c.inner
+                .take()
+                .unwrap()
+                .call(Cmd::SendQuery(query, context.clone()));
+
+            BlockStream::<'a>::new(c, inner)
         })
     }
 
     /// Method that produces a stream of rows
-    pub fn stream(self) -> BoxStream<'static, Result<Row<'static>>> {
+    pub fn stream(self) -> BoxStream<'a, Result<Row<'a>>> {
         Box::pin(self.stream_blocks()
             .map(|block_ret| {
-                let result: BoxStream<'static, Result<Row<'static>>> =
+                let result: BoxStream<'a, Result<Row<'a>>> =
                     match block_ret {
                         Ok(block) => {
                             let block = Arc::new(block);

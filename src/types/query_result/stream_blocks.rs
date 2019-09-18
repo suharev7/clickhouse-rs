@@ -10,29 +10,39 @@ use crate::{
     ClientHandle,
     errors::{DriverError, Error, Result},
     io::transport::PacketStream,
-    pool::PoolBinding,
-    types::{Block, Context, Packet},
+    types::{Block, Packet},
 };
 
-pub(crate) struct BlockStream {
+pub(crate) struct BlockStream<'a> {
+    client: &'a mut ClientHandle,
     inner: PacketStream,
-    rest: Option<(Context, PoolBinding)>,
     eof: bool,
     block_index: usize,
 }
 
-impl BlockStream {
-    pub(crate) fn new(inner: PacketStream, context: Context, pool: PoolBinding) -> BlockStream {
+impl<'a> Drop for BlockStream<'a> {
+    fn drop(&mut self) {
+        if self.client.inner.is_none() {
+            if let Some(mut transport) = self.inner.take_transport() {
+                transport.inconsistent = true;
+                self.client.inner = Some(transport);
+            }
+        }
+    }
+}
+
+impl<'a> BlockStream<'a> {
+    pub(crate) fn new(client: &mut ClientHandle, inner: PacketStream) -> BlockStream {
         BlockStream {
+            client,
             inner,
-            rest: Some((context, pool)),
             eof: false,
             block_index: 0,
         }
     }
 }
 
-impl Stream for BlockStream {
+impl<'a> Stream for BlockStream<'a> {
     type Item = Result<Block>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> Poll<Option<Self::Item>> {
@@ -53,14 +63,9 @@ impl Stream for BlockStream {
 
             match packet {
                 Packet::Eof(inner) => {
-                    let (context, pool) = self.rest.take().unwrap();
-                    let mut client = ClientHandle {
-                        inner: Some(inner),
-                        context,
-                        pool,
-                    };
-                    if !client.pool.is_attached() {
-                        client.pool.attach();
+                    self.client.inner = Some(inner);
+                    if !self.client.pool.is_attached() {
+                        self.client.pool.attach();
                     }
                     self.eof = true;
                 }

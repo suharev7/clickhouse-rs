@@ -14,11 +14,9 @@ use pin_project::pin_project;
 
 use crate::{
     binary::Parser,
-    ClientHandle,
     errors::{DriverError, Error, Result},
     io::read_to_end::read_to_end,
-    pool::PoolBinding,
-    types::{self, Block, Cmd, Packet}
+    types::{Block, Cmd, Packet}
 };
 
 /// Line transport
@@ -40,6 +38,8 @@ pub(crate) struct ClickhouseTransport {
     // Server time zone
     timezone: Option<Tz>,
     compress: bool,
+    // Whether there are unread packets
+    pub(crate) inconsistent: bool,
 }
 
 enum PacketStreamState {
@@ -66,7 +66,35 @@ impl ClickhouseTransport {
             cmds: VecDeque::new(),
             timezone: None,
             compress,
+            inconsistent: false,
         }
+    }
+
+    pub(crate) async fn clear(self) -> Result<ClickhouseTransport> {
+        if !self.inconsistent {
+            return Ok(self);
+        }
+
+        let mut h = None;
+        let mut stream = self.call(Cmd::Cancel);
+
+        while let Some(packet) = stream.next().await {
+            match packet {
+                Ok(Packet::Pong(inner)) => {
+                    h = Some(inner);
+                }
+                Ok(Packet::Eof(inner)) => {
+                    h = Some(inner)
+                }
+                Ok(Packet::Exception(e)) => return Err(Error::Server(e)),
+                Err(e) => return Err(e.into()),
+                _ => {},
+            }
+        }
+
+        let mut transport = h.unwrap();
+        transport.inconsistent = false;
+        Ok(transport)
     }
 }
 
@@ -181,7 +209,6 @@ impl Stream for ClickhouseTransport {
         // indefinitely when the sender is faster than we can consume the data
         if !self.buf_is_incomplete && !self.rd.is_empty() {
             if let Poll::Ready(ret) = self.as_mut().try_parse_msg()? {
-                // let i: Poll<Option<io::Result<Packet<()>>>> = ret;
                 return Poll::Ready(ret.map(Ok));
             }
         }
@@ -214,25 +241,14 @@ impl Stream for ClickhouseTransport {
 }
 
 impl PacketStream {
-    pub(crate) async fn read_block(
-        mut self,
-        context: types::Context,
-        pool: PoolBinding,
-    ) -> Result<(ClientHandle, Option<Block>)> {
+    pub(crate) async fn read_block(mut self) -> Result<(ClickhouseTransport, Option<Block>)> {
         self.read_block = true;
 
         let mut h = None;
         let mut b = None;
         while let Some(package) = self.next().await {
             match package {
-                Ok(Packet::Eof(inner)) => {
-                    let client = ClientHandle {
-                        inner: Some(inner),
-                        context: context.clone(),
-                        pool: pool.clone(),
-                    };
-                    h = Some(client)
-                }
+                Ok(Packet::Eof(inner)) => h = Some(inner),
                 Ok(Packet::Block(block)) => b = Some(block),
                 Ok(Packet::Exception(e)) => return Err(Error::Server(e)),
                 Err(e) => return Err(e.into()),
@@ -241,6 +257,10 @@ impl PacketStream {
         }
 
         Ok((h.unwrap(), b))
+    }
+
+    pub(crate) fn take_transport(&mut self) -> Option<ClickhouseTransport> {
+        self.inner.take()
     }
 }
 

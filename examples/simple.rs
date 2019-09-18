@@ -1,7 +1,8 @@
-use std::env;
+use std::{env, error::Error};
 
-use clickhouse_rs::{types::Block, Pool};
-use std::error::Error;
+use futures_util::StreamExt;
+
+use clickhouse_rs::{Pool, types::Block};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -27,17 +28,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .unwrap_or_else(|_| "tcp://localhost:9000?compression=lz4".into());
     let pool = Pool::new(database_url);
 
-    let (_, block) = pool
-        .get_handle().await?
-        .execute(ddl).await?
-        .insert("payment", block).await?
-        .query("SELECT * FROM payment").fetch_all().await?;
+    let mut client = pool.get_handle().await?;
+    client.execute(ddl).await?;
+    client.insert("payment", block).await?;
+    let mut stream = client.query("SELECT * FROM payment").stream();
 
-    for row in block.rows() {
+    while let Some(row) = stream.next().await {
+        let row = row?;
         let id: u32 = row.get("customer_id")?;
         let amount: u32 = row.get("amount")?;
         let name: Option<&str> = row.get("account_name")?;
         println!("Found payment {}: {} {:?}", id, amount, name);
     }
+
     Ok(())
 }

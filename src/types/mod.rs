@@ -41,7 +41,7 @@ mod cmd;
 
 mod date_converter;
 mod query;
-mod query_result;
+pub(crate) mod query_result;
 
 mod decimal;
 mod options;

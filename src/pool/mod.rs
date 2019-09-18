@@ -317,8 +317,10 @@ mod test {
     async fn test_connect() -> Result<()> {
         let options = Options::from_str(DATABASE_URL.as_str()).unwrap();
         let pool = Pool::new(options);
-
-        let _ = pool.get_handle().await?.ping().await?;
+        {
+            let mut c = pool.get_handle().await?;
+            c.ping().await?;
+        }
 
         let info = pool.info();
         assert_eq!(info.ongoing, 0);
@@ -330,10 +332,10 @@ mod test {
     async fn test_detach() -> Result<()> {
 
         async fn done(pool: Pool) -> Result<()> {
-            let mut c = pool.clone()
-                .get_handle().await?
-                .ping().await?;
-                c.pool.detach();
+            let p = pool.clone();
+            let mut c = p.get_handle().await?;
+            c.ping().await?;
+            c.pool.detach();
             Ok(())
         }
 
@@ -353,9 +355,8 @@ mod test {
         let pool = Pool::new(options);
 
         async fn exec_query(pool: &Pool) -> Result<u32> {
-            let (_, block) = pool
-                .get_handle().await?
-                .query("SELECT toUInt32(1), sleep(1)").fetch_all().await?;
+            let mut c = pool.get_handle().await?;
+            let block = c.query("SELECT toUInt32(1), sleep(1)").fetch_all().await?;
 
             let value: u32 = block.get(0, 0)?;
             Ok(value)
@@ -384,29 +385,6 @@ mod test {
         assert!(spent < Duration::from_millis(2500));
 
         assert_eq!(pool.info().idle_len, 6);
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_error_in_fold() -> Result<()> {
-        let pool = Pool::new(DATABASE_URL.as_str());
-
-        let ret = pool
-            .get_handle().await?
-            .query("SELECT 1")
-            .try_fold((), |_, _| {
-                Box::pin(async move {
-                    Err("[test_error_in_fold] It's fine.".into())
-                })
-            }).await;
-
-        ret.unwrap_err();
-
-        let info = pool.info();
-        assert_eq!(info.ongoing, 0);
-        assert_eq!(info.tasks_len, 0);
-        assert_eq!(info.idle_len, 0);
-
         Ok(())
     }
 

@@ -11,7 +11,7 @@ readme = "README.md"
 keywords = ["tokio", "database", "clickhouse"]
 categories = ["database"]
 edition = "2018"
-exclude = ["test/*"]
+exclude = ["tests/*", "examples/*"]
 
 [dependencies]
 futures-core-preview = "=0.3.0-alpha.18"

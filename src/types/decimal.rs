@@ -190,10 +190,8 @@ impl Decimal {
     /// #     let database_url = env::var("DATABASE_URL")
     /// #         .unwrap_or("tcp://localhost:9000?compression=lz4".into());
     /// #     let pool = Pool::new(database_url);
-    ///       let (_, block) = pool
-    ///           .get_handle().await?
-    ///           .query("SELECT toDecimal32(2, 4) AS x")
-    ///           .fetch_all().await?;
+    ///       let mut c = pool.get_handle().await?;
+    ///       let block = c.query("SELECT toDecimal32(2, 4) AS x").fetch_all().await?;
     ///
     ///       let x: Decimal = block.get(0, "x")?;
     ///       let actual: i32 = x.internal();

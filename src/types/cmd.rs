@@ -8,13 +8,14 @@ use crate::{
     types::{Context, Query},
 };
 
-/// Represents clickhouse commands.
+/// Represents Clickhouse commands.
 pub(crate) enum Cmd {
     Hello(Context),
     Ping,
     SendQuery(Query, Context),
     SendData(Block, Context),
     Union(Box<Cmd>, Box<Cmd>),
+    Cancel,
 }
 
 impl Cmd {
@@ -32,6 +33,7 @@ fn encode_command(cmd: &Cmd) -> Result<Vec<u8>> {
         Cmd::SendQuery(query, context) => encode_query(query, context),
         Cmd::SendData(block, context) => encode_data(&block, context),
         Cmd::Union(first, second) => encode_union(first.as_ref(), second.as_ref()),
+        Cmd::Cancel => encode_cancel(),
     }
 }
 
@@ -56,6 +58,14 @@ fn encode_ping() -> Result<Vec<u8>> {
 
     let mut encoder = Encoder::new();
     encoder.uvarint(protocol::CLIENT_PING);
+    Ok(encoder.get_buffer())
+}
+
+fn encode_cancel() -> Result<Vec<u8>> {
+    trace!("[cancel]");
+
+    let mut encoder = Encoder::new();
+    encoder.uvarint(protocol::CLIENT_CANCEL);
     Ok(encoder.get_buffer())
 }
 

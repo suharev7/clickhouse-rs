@@ -72,15 +72,14 @@
 //!     # let database_url = env::var("DATABASE_URL").unwrap_or("tcp://localhost:9000?compression=lz4".into());
 //!     let pool = Pool::new(database_url);
 //!
-//!     let (_, block) = pool
-//!         .get_handle().await?
-//!         .execute(ddl).await?
-//!         .insert("payment", block).await?
-//!         .query("SELECT * FROM payment").fetch_all().await?;
+//!     let mut client = pool.get_handle().await?;
+//!     client.execute(ddl).await?;
+//!     client.insert("payment", block).await?;
+//!     let block = client.query("SELECT * FROM payment").fetch_all().await?;
 //!
 //!     for row in block.rows() {
-//!         let id: u32     = row.get("customer_id")?;
-//!         let amount: u32 = row.get("amount")?;
+//!         let id: u32             = row.get("customer_id")?;
+//!         let amount: u32         = row.get("amount")?;
 //!         let name: Option<&str>  = row.get("account_name")?;
 //!         println!("Found payment {}: {} {:?}", id, amount, name);
 //!     }
@@ -88,15 +87,14 @@
 //! }
 //! ```
 
-
 #![feature(type_ascription, async_closure)]
 #![recursion_limit = "1024"]
 
 use std::{fmt, future::Future, time::Duration};
 
-use futures_core::{future::BoxFuture, Stream, stream::BoxStream};
-use futures_util::{future, FutureExt, stream, StreamExt};
-use log::{info, warn};
+use futures_core::{future::BoxFuture, stream::BoxStream};
+use futures_util::{future, stream, StreamExt, future::FutureExt};
+use log::info;
 use tokio::timer::Timeout;
 
 pub use crate::{
@@ -108,7 +106,7 @@ use crate::{
     errors::{DriverError, Error, Result},
     io::ClickhouseTransport,
     pool::PoolBinding,
-    retry_guard::RetryGuard,
+    retry_guard::retry_guard,
     types::{
         Cmd,
         Context,
@@ -116,7 +114,8 @@ use crate::{
         OptionsSource,
         Packet,
         Query,
-        QueryResult,
+        query_result::stream_blocks::BlockStream,
+        QueryResult
     },
 };
 
@@ -183,23 +182,25 @@ impl Client {
             stream.set_keepalive(options.keepalive)?;
 
             let transport = ClickhouseTransport::new(stream, compress);
-            let handle = ClientHandle {
+            let mut handle = ClientHandle {
                 inner: Some(transport),
                 context,
                 pool: PoolBinding::None,
             };
-            handle.hello().await
+
+            handle.hello().await?;
+            Ok(handle)
         }, timeout).await
     }
 }
 
 impl ClientHandle {
-    pub(crate) async fn hello(mut self) -> Result<ClientHandle> {
+    pub(crate) async fn hello(&mut self) -> Result<()> {
         let context = self.context.clone();
-        let pool = self.pool.clone();
         info!("[hello] -> {:?}", &context);
 
         let mut h = None;
+        let mut info = None;
         let mut stream = self
             .inner
             .take()
@@ -210,15 +211,8 @@ impl ClientHandle {
             match packet {
                 Ok(Packet::Hello(inner, server_info)) => {
                     info!("[hello] <- {:?}", &server_info);
-                    let context = Context {
-                        server_info,
-                        ..context.clone()
-                    };
-                    h = Some(ClientHandle {
-                        inner: Some(inner),
-                        context,
-                        pool: pool.clone(),
-                    });
+                    h = Some(inner);
+                    info = Some(server_info);
                 }
                 Ok(Packet::Exception(e)) => return Err(Error::Server(e)),
                 Err(e) => return Err(e.into()),
@@ -226,30 +220,27 @@ impl ClientHandle {
             }
         }
 
-        Ok(h.unwrap())
+        self.inner = h;
+        self.context.server_info = info.unwrap();
+        Ok(())
     }
 
-    pub async fn ping(mut self) -> Result<ClientHandle> {
-        let context = self.context.clone();
+    pub async fn ping(&mut self) -> Result<()> {
         let timeout = try_opt!(self.context.options.get()).ping_timeout;
-
-        let pool = self.pool.clone();
 
         with_timeout(async move {
             info!("[ping]");
 
             let mut h = None;
-            let mut stream = self.inner.take().unwrap().call(Cmd::Ping);
+
+            let transport = self.inner.take().unwrap().clear().await?;
+            let mut stream = transport.call(Cmd::Ping);
 
             while let Some(packet) = stream.next().await {
                 match packet {
                     Ok(Packet::Pong(inner)) => {
-                        h = Some(ClientHandle {
-                            inner: Some(inner),
-                            context: context.clone(),
-                            pool: pool.clone(),
-                        });
                         info!("[pong]");
+                        h = Some(inner);
                     }
                     Ok(Packet::Exception(e)) => return Err(Error::Server(e)),
                     Err(e) => return Err(e.into()),
@@ -257,13 +248,14 @@ impl ClientHandle {
                 }
             }
 
-            Ok(h.unwrap())
+            self.inner = h;
+            Ok(())
         }, timeout).await
     }
 
     /// Executes Clickhouse `query` on Conn.
-    pub fn query<Q>(self, sql: Q) -> QueryResult
-    where
+    pub fn query<Q>(&mut self, sql: Q) -> QueryResult
+        where
         Query: From<Q>,
     {
         let query = Query::from(sql);
@@ -274,46 +266,61 @@ impl ClientHandle {
     }
 
     /// Convenience method to prepare and execute a single SQL statement.
-    pub async fn execute<Q>(self, sql: Q) -> Result<ClientHandle>
+    pub async fn execute<Q>(&mut self, sql: Q) -> Result<()>
+        where
+            Query: From<Q>,
+    {
+        let transport = self.execute_(sql).await?;
+        self.inner = Some(transport);
+        Ok(())
+    }
+
+    async fn execute_<Q>(&mut self, sql: Q) -> Result<ClickhouseTransport>
     where
         Query: From<Q>,
     {
         let context = self.context.clone();
-        let pool = self.pool.clone();
         let query = Query::from(sql);
 
-        self.wrap_future(async move |mut c| {
+        self.wrap_future(move |c| {
             info!("[execute query] {}", query.get_sql());
 
-            let mut h = None;
-            let mut stream = c
-                .inner
-                .take()
-                .unwrap()
-                .call(Cmd::SendQuery(query, context.clone()));
+            let transport = c.inner.take().unwrap();
 
-            while let Some(packet) = stream.next().await {
-                match packet {
-                    Ok(Packet::Eof(inner)) => {
-                        h = Some(Self {
-                            inner: Some(inner),
-                            context: context.clone(),
-                            pool: pool.clone(),
-                        })
+            async move {
+                let mut h = None;
+
+                let transport = transport.clear().await?;
+                let mut stream = transport.call(Cmd::SendQuery(query, context.clone()));
+
+                while let Some(packet) = stream.next().await {
+                    match packet {
+                        Ok(Packet::Eof(inner)) => {
+                            h = Some(inner)
+                        }
+                        Ok(Packet::Block(_)) | Ok(Packet::ProfileInfo(_)) | Ok(Packet::Progress(_)) => (),
+                        Ok(Packet::Exception(e)) => return Err(Error::Server(e)),
+                        Err(e) => return Err(e.into()),
+                        _ => return Err(Error::Driver(DriverError::UnexpectedPacket)),
                     }
-                    Ok(Packet::Block(_)) | Ok(Packet::ProfileInfo(_)) | Ok(Packet::Progress(_)) => (),
-                    Ok(Packet::Exception(e)) => return Err(Error::Server(e)),
-                    Err(e) => return Err(e.into()),
-                    _ => return Err(Error::Driver(DriverError::UnexpectedPacket)),
                 }
-            }
 
-            Ok(h.unwrap())
+                Ok(h.unwrap())
+            }
         }).await
     }
 
     /// Convenience method to insert block of data.
-    pub async fn insert<Q>(self, table: Q, block: Block) -> Result<ClientHandle>
+    pub async fn insert<Q>(&mut self, table: Q, block: Block) -> Result<()>
+    where
+        Query: From<Q>,
+    {
+        let transport = self.insert_(table, block).await?;
+        self.inner = Some(transport);
+        Ok(())
+    }
+
+    async fn insert_<Q>(&mut self, table: Q, block: Block) -> Result<ClickhouseTransport>
     where
         Query: From<Q>,
     {
@@ -329,61 +336,51 @@ impl ClientHandle {
             .map_sql(|table| format!("INSERT INTO {} ({}) VALUES", table, fields));
 
         let context = self.context.clone();
-        let pool = self.pool.clone();
 
-        self.wrap_future(async move |mut c| -> Result<ClientHandle> {
+        self.wrap_future(move |c| {
             info!("[insert]     {}", query.get_sql());
-            let (mut c, b) = c.inner
-                .take()
-                .unwrap()
-                .call(Cmd::SendQuery(query, context.clone()))
-                .read_block(context.clone(), pool.clone())
-                .await?;
+            let transport = c.inner.take().unwrap();
 
-            let dst_block = b.unwrap();
+            async move {
+                let transport = transport.clear().await?;
+                let stream = transport.call(Cmd::SendQuery(query, context.clone()));
 
-            let casted_block = match block.cast_to(&dst_block) {
-                Ok(value) => value,
-                Err(err) => return Err(err),
-            };
+                let (transport, b) = stream.read_block().await?;
+                let dst_block = b.unwrap();
 
-            let send_cmd = Cmd::Union(
-                Box::new(Cmd::SendData(casted_block, context.clone())),
-                Box::new(Cmd::SendData(Block::default(), context.clone())),
-            );
+                let casted_block = match block.cast_to(&dst_block) {
+                    Ok(value) => value,
+                    Err(err) => return Err(err),
+                };
 
-            let (c, _) = c.inner
-                .take()
-                .unwrap()
-                .call(send_cmd)
-                .read_block(context, pool)
-                .await?;
+                let send_cmd = Cmd::Union(
+                    Box::new(Cmd::SendData(casted_block, context.clone())),
+                    Box::new(Cmd::SendData(Block::default(), context.clone())),
+                );
 
-            Ok(c)
+                let (transport, _) = transport.call(send_cmd).read_block().await?;
+                Ok(transport)
+            }
         }).await
     }
 
-    pub(crate) async fn wrap_future<T, R, F>(self, f: F) -> Result<T>
+    pub(crate) async fn wrap_future<T, R, F>(&mut self, f: F) -> Result<T>
     where
-        F: FnOnce(Self) -> R + Send + 'static,
+        F: FnOnce(&mut Self) -> R + Send + 'static,
         R: Future<Output = Result<T>>,
         T: 'static,
     {
         let ping_before_query = try_opt!(self.context.options.get()).ping_before_query;
 
         if ping_before_query {
-            let c = self.check_connection().await?;
-            f(c).await
-        } else {
-            f(self).await
+            self.check_connection().await?;
         }
+        f(self).await
     }
 
-    pub(crate) fn wrap_stream<T, R, F>(self, f: F) -> BoxStream<'static, Result<T>>
+    pub(crate) fn wrap_stream<'a, F>(&'a mut self, f: F) -> BoxStream<'a, Result<Block>>
     where
-        F: FnOnce(Self) -> R + Send + 'static,
-        R: Stream<Item = Result<T>> + Send + 'static,
-        T: Send + 'static,
+        F: (FnOnce(&'a mut Self) -> BlockStream<'a>) + Send + 'static,
     {
         let ping_before_query = match self.context.options.get() {
             Ok(val) => val.ping_before_query,
@@ -391,11 +388,11 @@ impl ClientHandle {
         };
 
         if ping_before_query {
-            let fut: BoxFuture<'static, BoxStream<'static, Result<T>>> =
+            let fut: BoxFuture<'a, BoxStream<'a, Result<Block>>> =
                 Box::pin(async move {
-                    let inner: BoxStream<'static, Result<T>> =
+                    let inner: BoxStream<'a, Result<Block>> =
                         match self.check_connection().await {
-                            Ok(c) => Box::pin(f(c)),
+                            Ok(_) => Box::pin(f(self)),
                             Err(err) => Box::pin(stream::once(future::err(err))),
                         };
                     inner
@@ -408,8 +405,7 @@ impl ClientHandle {
     }
 
     /// Check connection and try to reconnect if necessary.
-    pub async fn check_connection(mut self) -> Result<ClientHandle> {
-        let pool: Option<Pool> = self.pool.clone().into();
+    pub async fn check_connection(&mut self) -> Result<()> {
         self.pool.detach();
 
         let source = self.context.options.clone();
@@ -419,33 +415,19 @@ impl ClientHandle {
             (options.send_retries, options.retry_timeout)
         };
 
-        let reconnect = move || {
-            let source = source.clone();
-            let pool = pool.clone();
-            async move {
-                warn!("[reconnect]");
-                match pool.clone() {
-                    None => Client::open(&source).await,
-                    Some(p) => Box::new(p.get_handle()).await,
-                }
-            }
-        };
+        retry_guard(self, &source, send_retries,retry_timeout).await?;
 
-        let mut c = RetryGuard::new(self,
-                                    |c| c.ping(),
-                                    reconnect,
-                                    send_retries,
-                                    retry_timeout).await?;
-        if !c.pool.is_attached() && c.pool.is_some() {
-            c.pool.attach();
+        if !self.pool.is_attached() && self.pool.is_some() {
+            self.pool.attach();
         }
-        Ok(c)
+
+        Ok(())
     }
 }
 
-async fn with_timeout<F>(future: F, timeout: Duration) -> F::Output
+async fn with_timeout<F, T>(future: F, timeout: Duration) -> F::Output
 where
-    F: Future<Output = Result<ClientHandle>>
+    F: Future<Output = Result<T>>
 {
     match Timeout::new(future, timeout).await {
         Ok(Ok(c)) => Ok(c),

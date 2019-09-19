@@ -20,7 +20,7 @@ enum State {
 
 impl State {
     #[project]
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<TcpStream, io::Error>> {
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<TcpStream>> {
         #[project]
         match self.project() {
             State::Wait(ref mut inner) => match inner.poll_unpin(cx) {
@@ -48,14 +48,9 @@ impl ConnectingStream {
     {
         match addr.to_socket_addrs() {
             Ok(addresses) => {
-                let streams: Vec<BoxFuture<'static, io::Result<TcpStream>>> = addresses
-                    .map(|address| {
-                        let ft: BoxFuture<'static, io::Result<TcpStream>> =
-                            Box::pin(async move {
-                                let tcp = TcpStream::connect(&address).await?;
-                                Ok(tcp)
-                            });
-                        ft
+                let streams: Vec<_> = addresses
+                    .map(|address| -> BoxFuture<'static, io::Result<TcpStream>> {
+                        Box::pin(TcpStream::connect(address))
                     })
                     .collect();
 
@@ -68,10 +63,8 @@ impl ConnectingStream {
                         state: State::Fail(Some(err)),
                     }
                 } else {
-                    let future = select_ok(streams);
-                    let state = State::Wait(future);
                     Self {
-                        state,
+                        state: State::Wait(select_ok(streams)),
                     }
                 }
             }

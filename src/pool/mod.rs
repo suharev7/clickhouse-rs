@@ -60,12 +60,6 @@ impl PoolBinding {
         }
     }
 
-    pub(crate) fn release_conn(self) {
-        if let Some(mut pool) = self.into() {
-            Pool::release_conn(&mut pool);
-        }
-    }
-
     pub(crate) fn is_attached(&self) -> bool {
         match self {
             PoolBinding::Attached(_) => true,
@@ -258,16 +252,6 @@ impl Pool {
             } else {
                 client.pool = PoolBinding::None;
             }
-
-            while let Some(task) = inner.tasks.pop() {
-                task.wake()
-            }
-        })
-    }
-
-    fn release_conn(&mut self) {
-        self.with_inner(|mut inner| {
-            inner.ongoing -= 1;
 
             while let Some(task) = inner.tasks.pop() {
                 task.wake()

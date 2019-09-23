@@ -242,7 +242,9 @@ value_from! {
     i64: Int64,
 
     f32: Float32,
-    f64: Float64
+    f64: Float64,
+
+    Decimal: Decimal
 }
 
 impl<'a> convert::From<&'a str> for Value {
@@ -351,8 +353,7 @@ mod test {
 
     fn test_from_rnd<T>()
     where
-        Value: convert::Into<T>,
-        Value: convert::From<T>,
+        Value: convert::Into<T> + convert::From<T>,
         T: PartialEq + fmt::Debug + Clone,
         Standard: Distribution<T>,
     {
@@ -364,8 +365,7 @@ mod test {
 
     fn test_from_t<T>(value: &T)
     where
-        Value: convert::Into<T>,
-        Value: convert::From<T>,
+        Value: convert::Into<T> + convert::From<T>,
         T: PartialEq + fmt::Debug + Clone,
     {
         test_into_t::<T>(Value::from(value.clone()), &value);

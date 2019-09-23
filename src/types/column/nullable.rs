@@ -3,7 +3,7 @@ use crate::types::column::ColumnData;
 use crate::{
     binary::{Encoder, ReadEx},
     errors::Error,
-    types::{column::Either, SqlType, Value, ValueRef},
+    types::{column::{Either, column_data::BoxColumnData}, SqlType, Value, ValueRef},
 };
 
 use crate::types::column::BoxColumnWrapper;
@@ -74,5 +74,12 @@ impl ColumnData for NullableColumnData {
             let inner_value = self.inner.at(index);
             ValueRef::Nullable(Either::Right(Box::new(inner_value)))
         }
+    }
+
+    fn clone_instance(&self) -> BoxColumnData {
+        Box::new(Self {
+            inner: self.inner.clone_instance(),
+            nulls: self.nulls.clone(),
+        })
     }
 }

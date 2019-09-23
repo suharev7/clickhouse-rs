@@ -22,12 +22,14 @@ pub(crate) use self::row::BlockRef;
 pub use self::{
     block_info::BlockInfo,
     row::{Row, Rows},
+    builder::{RowBuilder, RCons, RNil},
 };
 
 mod block_info;
 mod chunk_iterator;
 mod compressed;
 mod row;
+mod builder;
 
 const INSERT_BLOCK_SIZE: usize = 1_048_576;
 
@@ -74,6 +76,7 @@ impl AsRef<Block> for Block {
 }
 
 impl ColumnIdx for usize {
+    #[inline(always)]
     fn get_index(&self, _: &[Column]) -> ClickhouseResult<usize> {
         Ok(*self)
     }
@@ -89,6 +92,12 @@ impl<'a> ColumnIdx for &'a str {
             None => Err(Error::FromSql(FromSqlError::OutOfRange)),
             Some((index, _)) => Ok(index),
         }
+    }
+}
+
+impl ColumnIdx for String {
+    fn get_index(&self, columns: &[Column]) -> Result<usize, Error> {
+        self.as_str().get_index(columns)
     }
 }
 
@@ -189,6 +198,11 @@ impl Block {
             row: 0,
             block_ref: BlockRef::Borrowed(&self),
         }
+    }
+
+    /// This method is a convenient way to pass row into a block.
+    pub fn push<B: RowBuilder>(&mut self, row: B) -> Result<(), Error> {
+        row.apply(self)
     }
 }
 

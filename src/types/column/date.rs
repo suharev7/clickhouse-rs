@@ -1,21 +1,24 @@
 use std::{convert, fmt, sync::Arc};
 
-use chrono::{prelude::*, Date};
+use chrono::{Date, prelude::*};
 use chrono_tz::Tz;
 
 use crate::{
     binary::{Encoder, ReadEx},
     errors::Error,
-    types::{
-        column::{
-            array::ArrayColumnData, nullable::NullableColumnData, numeric::save_data,
-            BoxColumnWrapper, ColumnWrapper, Either,
-        },
-        DateConverter, Marshal, SqlType, StatBuffer, Unmarshal, Value, ValueRef,
+    types::{DateConverter, Marshal, SqlType, StatBuffer, Unmarshal, Value, ValueRef},
+    types::column::{
+        array::ArrayColumnData,
+        BoxColumnWrapper,
+        column_data::{BoxColumnData, ColumnData},
+        ColumnFrom,
+        ColumnWrapper,
+        Either,
+        list::List,
+        nullable::NullableColumnData,
+        numeric::save_data
     },
 };
-
-use super::{column_data::ColumnData, list::List, ColumnFrom};
 
 pub struct DateColumnData<T>
 where
@@ -47,6 +50,13 @@ where
         + Default
         + 'static,
 {
+    pub(crate) fn with_capacity(capacity: usize, timezone: Tz) -> DateColumnData<T> {
+        DateColumnData {
+            data: List::with_capacity(capacity),
+            tz: timezone,
+        }
+    }
+
     pub(crate) fn load<R: ReadEx>(
         reader: &mut R,
         size: usize,
@@ -215,6 +225,13 @@ where
     fn at(&self, index: usize) -> ValueRef {
         self.data.at(index).to_date(self.tz)
     }
+
+    fn clone_instance(&self) -> BoxColumnData {
+        Box::new(Self{
+            data: self.data.clone(),
+            tz: self.tz,
+        })
+    }
 }
 
 #[cfg(test)]
@@ -222,8 +239,9 @@ mod test {
     use chrono::TimeZone;
     use chrono_tz::Tz;
 
-    use super::*;
     use crate::types::column::ArcColumnWrapper;
+
+    use super::*;
 
     #[test]
     fn test_create_date() {

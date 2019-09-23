@@ -1,25 +1,24 @@
+use chrono_tz::Tz;
+
 use crate::{
     binary::{Encoder, ReadEx},
     errors::Error,
     types::{
         column::{
-            list::List, nullable::NullableColumnData, BoxColumnWrapper, ColumnFrom, ColumnWrapper,
-            Either, VectorColumnData,
+            BoxColumnWrapper, column_data::BoxColumnData, ColumnFrom, ColumnWrapper, Either,
+            list::List, nullable::NullableColumnData, VectorColumnData, column_data::ColumnData
         },
+        Column,
         decimal::{Decimal, NoBits},
-        from_sql::FromSql,
-        Column, SqlType, Value, ValueRef,
+        from_sql::FromSql, SqlType, Value, ValueRef,
     },
 };
-use chrono_tz::Tz;
-
-use super::column_data::ColumnData;
 
 pub(crate) struct DecimalColumnData {
-    inner: Box<dyn ColumnData + Send + Sync>,
-    precision: u8,
-    scale: u8,
-    nobits: NoBits,
+    pub(crate) inner: Box<dyn ColumnData + Send + Sync>,
+    pub(crate) precision: u8,
+    pub(crate) scale: u8,
+    pub(crate) nobits: NoBits,
 }
 
 pub(crate) struct DecimalAdapter {
@@ -175,6 +174,15 @@ impl ColumnData for DecimalColumnData {
             nobits: self.nobits,
         })
     }
+
+    fn clone_instance(&self) -> BoxColumnData {
+        Box::new(Self {
+            inner: self.inner.clone_instance(),
+            precision: self.precision,
+            scale: self.scale,
+            nobits: self.nobits
+        })
+    }
 }
 
 impl ColumnData for DecimalAdapter {
@@ -218,6 +226,10 @@ impl ColumnData for DecimalAdapter {
         } else {
             panic!("should be decimal");
         }
+    }
+
+    fn clone_instance(&self) -> BoxColumnData {
+        unimplemented!()
     }
 }
 
@@ -274,5 +286,9 @@ impl ColumnData for NullableDecimalAdapter {
                 ValueRef::Nullable(Either::Right(Box::new(inner)))
             }
         }
+    }
+
+    fn clone_instance(&self) -> BoxColumnData {
+        unimplemented!()
     }
 }

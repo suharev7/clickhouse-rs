@@ -1,27 +1,25 @@
-use std::{ops, sync::Arc};
+use std::{fmt, ops, sync::Arc};
+
+use chrono_tz::Tz;
 
 use crate::{
     binary::{Encoder, ReadEx},
-    types::{ClickhouseResult, SqlType, ValueRef},
-};
-use chrono_tz::Tz;
-use std::fmt;
-
-use self::chunk::ChunkColumnData;
-pub use self::{column_data::ColumnData, concat::ConcatColumnData, numeric::VectorColumnData};
-
-pub(crate) use self::string_pool::StringPool;
-use crate::{
     errors::{Error, FromSqlError},
     types::{
-        column::{
+        ClickhouseResult, column::{
+            column_data::ArcColumnData,
             decimal::{DecimalAdapter, NullableDecimalAdapter},
-            fixed_string::{FixedStringAdapter, NullableFixedStringAdapter},
-            string::StringAdapter,
-        },
-        decimal::NoBits,
+            fixed_string::{FixedStringAdapter, NullableFixedStringAdapter}, string::StringAdapter
+        }, decimal::NoBits,
+        SqlType,
+        Value,
+        ValueRef
     },
 };
+
+pub use self::{column_data::ColumnData, concat::ConcatColumnData, numeric::VectorColumnData};
+use self::chunk::ChunkColumnData;
+pub(crate) use self::string_pool::StringPool;
 
 mod array;
 mod chunk;
@@ -36,8 +34,6 @@ mod nullable;
 mod numeric;
 mod string;
 mod string_pool;
-
-pub type ArcColumnData = Arc<dyn ColumnData + Send + Sync>;
 
 /// Represents Clickhouse Column
 pub struct Column {
@@ -225,9 +221,24 @@ impl Column {
             })),
         }
     }
+
+    pub(crate) fn push(&mut self, value: Value) {
+        loop {
+            match Arc::get_mut(&mut self.data) {
+                None => {
+                    self.data = Arc::from(self.data.clone_instance());
+                },
+                Some(data) => {
+                    data.push(value);
+                    break;
+                },
+            }
+        }
+    }
+
 }
 
-pub fn new_column(name: &str, data: Arc<(dyn ColumnData + Sync + Send + 'static)>) -> Column {
+pub(crate) fn new_column(name: &str, data: Arc<(dyn ColumnData + Sync + Send + 'static)>) -> Column {
     Column {
         name: name.to_string(),
         data,

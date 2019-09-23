@@ -12,7 +12,7 @@ use crate::{
     },
 };
 
-use super::{column_data::ColumnData, ColumnFrom};
+use super::{column_data::{ColumnData, BoxColumnData}, ColumnFrom};
 
 pub(crate) struct StringColumnData {
     pool: StringPool,
@@ -23,7 +23,7 @@ pub(crate) struct StringAdapter {
 }
 
 impl StringColumnData {
-    pub fn with_capacity(capacity: usize) -> Self {
+    pub(crate) fn with_capacity(capacity: usize) -> Self {
         Self {
             pool: StringPool::with_capacity(capacity),
         }
@@ -182,6 +182,10 @@ impl ColumnData for StringColumnData {
         let s = self.pool.get(index);
         ValueRef::from(s)
     }
+
+    fn clone_instance(&self) -> BoxColumnData {
+        Box::new(Self{ pool: self.pool.clone() })
+    }
 }
 
 impl ColumnData for StringAdapter {
@@ -206,5 +210,9 @@ impl ColumnData for StringAdapter {
 
     fn at(&self, index: usize) -> ValueRef {
         self.column.at(index)
+    }
+
+    fn clone_instance(&self) -> BoxColumnData {
+        unimplemented!()
     }
 }

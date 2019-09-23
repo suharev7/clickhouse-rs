@@ -99,7 +99,7 @@ use tokio::timer::Timeout;
 
 pub use crate::{
     pool::Pool,
-    types::{block::Block, Options, SqlType},
+    types::{block::Block, Options},
 };
 use crate::{
     connecting_stream::ConnectingStream,
@@ -115,7 +115,8 @@ use crate::{
         Packet,
         Query,
         query_result::stream_blocks::BlockStream,
-        QueryResult
+        QueryResult,
+        SqlType
     },
 };
 
@@ -129,6 +130,65 @@ mod pool;
 mod retry_guard;
 /// Clickhouse types.
 pub mod types;
+
+/// This macro is a convenient way to pass row into a block.
+///
+/// ```rust
+/// # use clickhouse_rs::{Block, row, errors::Error};
+/// # fn make_block() -> Result<(), Error> {
+///       let mut block = Block::new();
+///       block.push(row!{customer_id: 1, amount: 2, account_name: "foo"})?;
+///       block.push(row!{customer_id: 4, amount: 4, account_name: "bar"})?;
+///       block.push(row!{customer_id: 5, amount: 5, account_name: "baz"})?;
+/// #     assert_eq!(block.row_count(), 3);
+/// #     Ok(())
+/// # }
+/// # make_block().unwrap()
+/// ```
+///
+/// you can also use `Vec<(String, Value)>` to construct row to insert into a block:
+///
+/// ```rust
+/// # use clickhouse_rs::{Block, errors::Error, types::Value};
+/// # fn make_block() -> Result<(), Error> {
+///       let mut block = Block::new();
+///       for i in 1..10 {
+///           let mut row = Vec::new();
+///           for j in 1..10 {
+///               row.push((format!("#{}", j), Value::from(i * j)));
+///           }
+///           block.push(row)?;
+///       }
+///       assert_eq!(block.row_count(), 9);
+/// #     println!("{:?}", block);
+/// #     Ok(())
+/// # }
+/// # make_block().unwrap()
+/// ```
+#[macro_export]
+macro_rules! row {
+    () => { $crate::types::RNil };
+    ( $i:ident, $($tail:tt)* ) => {
+        row!( $($tail)* ).put(stringify!($i).into(), $i.into())
+    };
+    ( $i:ident ) => { row!($i: $i) };
+
+    ( $k:ident: $v:expr ) => {
+        $crate::types::RNil.put(stringify!($k).into(), $v.into())
+    };
+
+    ( $k:ident: $v:expr, $($tail:tt)* ) => {
+        row!( $($tail)* ).put(stringify!($k).into(), $v.into())
+    };
+
+    ( $k:expr => $v:expr ) => {
+        $crate::types::RNil.put($k.into(), $v.into())
+    };
+
+    ( $k:expr => $v:expr, $($tail:tt)* ) => {
+        row!( $($tail)* ).put($k.into(), $v.into())
+    };
+}
 
 macro_rules! try_opt {
     ($expr:expr) => {

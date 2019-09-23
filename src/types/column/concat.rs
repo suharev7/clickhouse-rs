@@ -5,7 +5,7 @@ use crate::{
     types::{SqlType, Value, ValueRef},
 };
 
-use super::{column_data::ColumnData, ArcColumnData};
+use super::column_data::{ColumnData, ArcColumnData, BoxColumnData};
 
 pub struct ConcatColumnData {
     data: Vec<ArcColumnData>,
@@ -13,7 +13,7 @@ pub struct ConcatColumnData {
 }
 
 impl ConcatColumnData {
-    pub fn concat(data: Vec<ArcColumnData>) -> Self {
+    pub(crate) fn concat(data: Vec<ArcColumnData>) -> Self {
         Self::check_columns(&data);
 
         let index = build_index(data.iter().map(|x| x.len()));
@@ -59,6 +59,10 @@ impl ColumnData for ConcatColumnData {
         let chunk_index = find_chunk(&self.index, index);
         let chunk = &self.data[chunk_index];
         chunk.at(index - self.index[chunk_index])
+    }
+
+    fn clone_instance(&self) -> BoxColumnData {
+        unimplemented!()
     }
 }
 

@@ -2,6 +2,7 @@ use std::{mem, slice};
 
 use crate::types::{Marshal, StatBuffer, Unmarshal};
 
+#[derive(Clone)]
 pub struct List<T>
 where
     T: StatBuffer + Unmarshal<T> + Marshal + Copy + Sync + 'static,

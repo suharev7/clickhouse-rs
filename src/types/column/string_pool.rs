@@ -10,6 +10,7 @@ struct StringPtr {
     len: usize,
 }
 
+#[derive(Clone)]
 pub(crate) struct StringPool {
     chunks: Vec<Vec<u8>>,
     pointers: Vec<StringPtr>,

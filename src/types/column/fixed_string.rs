@@ -3,7 +3,7 @@ use std::cmp;
 use crate::{
     binary::{Encoder, ReadEx},
     errors::Result,
-    types::{from_sql::*, Column, SqlType, Value, ValueRef},
+    types::{from_sql::*, Column, SqlType, Value, ValueRef, column::column_data::BoxColumnData},
 };
 
 use super::column_data::ColumnData;
@@ -76,6 +76,13 @@ impl ColumnData for FixedStringColumnData {
         let str_ref = &self.buffer[shift..shift + self.str_len];
         ValueRef::String(str_ref)
     }
+
+    fn clone_instance(&self) -> BoxColumnData {
+        Box::new(Self {
+            buffer: self.buffer.clone(),
+            str_len: self.str_len,
+        })
+    }
 }
 
 impl ColumnData for FixedStringAdapter {
@@ -119,6 +126,10 @@ impl ColumnData for FixedStringAdapter {
     fn at(&self, index: usize) -> ValueRef {
         self.column.at(index)
     }
+
+    fn clone_instance(&self) -> BoxColumnData {
+        unimplemented!()
+    }
 }
 
 impl ColumnData for NullableFixedStringAdapter {
@@ -161,5 +172,9 @@ impl ColumnData for NullableFixedStringAdapter {
 
     fn at(&self, index: usize) -> ValueRef {
         self.column.at(index)
+    }
+
+    fn clone_instance(&self) -> BoxColumnData {
+        unimplemented!()
     }
 }

@@ -2,7 +2,7 @@ use std::{env, error::Error};
 
 use futures_util::StreamExt;
 
-use clickhouse_rs::{Pool, types::Block};
+use clickhouse_rs::{row, Pool, types::Block};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -16,13 +16,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
             account_name Nullable(FixedString(3))
         ) Engine=Memory";
 
-    let block = Block::new()
-        .column("customer_id", vec![1_u32, 3, 5, 7, 9])
-        .column("amount", vec![2_u32, 4, 6, 8, 10])
-        .column(
-            "account_name",
-            vec![Some("foo"), None, None, None, Some("bar")],
-        );
+    let mut block = Block::new();
+    block.push(row!{ customer_id: 1_u32, amount:  2_u32, account_name: Some("foo") })?;
+    block.push(row!{ customer_id: 3_u32, amount:  4_u32, account_name: None::<&str> })?;
+    block.push(row!{ customer_id: 5_u32, amount:  6_u32, account_name: None::<&str> })?;
+    block.push(row!{ customer_id: 7_u32, amount:  8_u32, account_name: None::<&str> })?;
+    block.push(row!{ customer_id: 9_u32, amount: 10_u32, account_name: Some("bar") })?;
 
     let database_url = env::var("DATABASE_URL")
         .unwrap_or_else(|_| "tcp://localhost:9000?compression=lz4".into());

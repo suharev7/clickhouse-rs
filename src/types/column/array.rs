@@ -2,7 +2,7 @@ use crate::{
     binary::{Encoder, ReadEx},
     errors::Result,
     types::{
-        column::{list::List, BoxColumnWrapper, ColumnData},
+        column::{list::List, BoxColumnWrapper, ColumnData, column_data::BoxColumnData},
         SqlType, Value, ValueRef,
     },
 };
@@ -89,6 +89,13 @@ impl ColumnData for ArrayColumnData {
             vs.push(v);
         }
         ValueRef::Array(sql_type.into(), Arc::new(vs))
+    }
+
+    fn clone_instance(&self) -> BoxColumnData {
+        Box::new(Self {
+            inner: self.inner.clone_instance(),
+            offsets: self.offsets.clone(),
+        })
     }
 }
 

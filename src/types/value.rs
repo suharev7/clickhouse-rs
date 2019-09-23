@@ -242,7 +242,9 @@ value_from! {
     i64: Int64,
 
     f32: Float32,
-    f64: Float64
+    f64: Float64,
+
+    Decimal: Decimal
 }
 
 impl<'a> convert::From<&'a str> for Value {

@@ -2,10 +2,10 @@ use std::{cmp, ops};
 
 use crate::{
     binary::Encoder,
-    types::{SqlType, Value, ValueRef},
+    types::{SqlType, Value, ValueRef, column::column_data::{ArcColumnData, BoxColumnData}},
 };
 
-use super::{ArcColumnData, ColumnData};
+use super::ColumnData;
 
 pub struct ChunkColumnData {
     data: ArcColumnData,
@@ -13,7 +13,7 @@ pub struct ChunkColumnData {
 }
 
 impl ChunkColumnData {
-    pub fn new(data: ArcColumnData, range: ops::Range<usize>) -> Self {
+    pub(crate) fn new(data: ArcColumnData, range: ops::Range<usize>) -> Self {
         Self { data, range }
     }
 }
@@ -45,5 +45,9 @@ impl ColumnData for ChunkColumnData {
         }
 
         self.data.at(index + self.range.start)
+    }
+
+    fn clone_instance(&self) -> BoxColumnData {
+        unimplemented!()
     }
 }

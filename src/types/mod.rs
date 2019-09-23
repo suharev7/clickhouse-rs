@@ -8,13 +8,14 @@ use lazy_static::lazy_static;
 use crate::errors::ServerError;
 
 pub use self::{
-    block::{Block, Row, Rows},
+    block::{Block, Row, Rows, RowBuilder, RCons, RNil},
     column::Column,
     decimal::Decimal,
     from_sql::FromSql,
     options::Options,
     query::Query,
     query_result::QueryResult,
+    value::Value,
 };
 pub(crate) use self::{
     cmd::Cmd,
@@ -23,7 +24,6 @@ pub(crate) use self::{
     options::{IntoOptions, OptionsSource},
     stat_buffer::StatBuffer,
     unmarshal::Unmarshal,
-    value::Value,
     value_ref::ValueRef,
 };
 

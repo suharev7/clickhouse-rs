@@ -11,7 +11,7 @@ use crate::{
     },
 };
 
-use super::{column_data::ColumnData, list::List, ColumnFrom};
+use super::{column_data::{ColumnData, BoxColumnData}, list::List, ColumnFrom};
 
 pub struct VectorColumnData<T>
 where
@@ -147,8 +147,7 @@ where
         + Default
         + 'static,
 {
-    #[cfg(test)]
-    pub fn with_capacity(capacity: usize) -> VectorColumnData<T> {
+    pub(crate) fn with_capacity(capacity: usize) -> VectorColumnData<T> {
         VectorColumnData {
             data: List::with_capacity(capacity),
         }
@@ -212,6 +211,10 @@ where
 
             _ => panic!("can't convert value to value_ref."),
         }
+    }
+
+    fn clone_instance(&self) -> BoxColumnData {
+        Box::new(Self { data: self.data.clone()})
     }
 }
 

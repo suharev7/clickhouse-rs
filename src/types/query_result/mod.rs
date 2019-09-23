@@ -1,21 +1,16 @@
-use std::{sync::Arc, future::Future};
+use std::sync::Arc;
 
 use futures_core::stream::BoxStream;
-use futures_util::{
-    future,
-    stream::{self, StreamExt}
-};
+use futures_util::{future, stream::{self, StreamExt}, TryStreamExt};
 use log::info;
 
 use crate::{
     ClientHandle,
-    errors::{DriverError, Error, Result},
-    io::ClickhouseTransport,
+    errors::Result,
     types::{
         Block,
         block::BlockRef,
         Cmd,
-        Packet,
         Query,
         query_result::stream_blocks::BlockStream,
         Row,
@@ -34,89 +29,13 @@ pub struct QueryResult<'a> {
 impl<'a> QueryResult<'a> {
     /// Fetch data from table. It returns a block that contains all rows.
     pub async fn fetch_all(self) -> Result<Block> {
-        let blocks = self.try_fold_blocks(Vec::new(), |mut blocks, block| {
+        let blocks = self.stream_blocks().try_fold(Vec::new(), |mut blocks, block| {
             if !block.is_empty() {
                 blocks.push(block);
             }
             future::ready(Ok(blocks))
         }).await?;
         Ok(Block::concat(blocks.as_slice()))
-    }
-
-    /// Method that applies a function to each block, producing a single, final value.
-    pub(crate) async fn try_fold_blocks<F, T, Fut>(mut self, init: T, f: F) -> Result<T>
-        where
-            F: (Fn(T, Block) -> Fut) + Send + 'static,
-            Fut: Future<Output = Result<T>> + Unpin,
-            T: Send + 'static,
-    {
-        let (transport, result) = self.fold_blocks_(init, f).await?;
-        self.client.inner = Some(transport);
-        self.client.pool.attach();
-        Ok(result)
-    }
-
-    async fn fold_blocks_<F, T, Fut>(&mut self, init: T, f: F) -> Result<(ClickhouseTransport, T)>
-    where
-        F: (Fn(T, Block) -> Fut) + Send + 'static,
-        Fut: Future<Output = Result<T>> + Unpin,
-        T: Send + 'static,
-    {
-        let release_pool = self.client.pool.clone();
-
-        let acc = (None, init, f);
-        let ret = self.try_fold_packets(acc, async move |(h, acc, f), packet| {
-            match packet {
-                Packet::Block(block) => {
-                    let a = f(acc, block).await?;
-                    Ok((h, a, f))
-                }
-                Packet::Eof(inner) => Ok((Some(inner), acc, f)),
-                Packet::ProfileInfo(_) | Packet::Progress(_) => Ok((h, acc, f)),
-                Packet::Exception(exception) => Err(Error::Server(exception)),
-                _ => Err(Error::Driver(DriverError::UnexpectedPacket)),
-            }
-        }).await;
-
-        match ret {
-            Ok((transport, t, _)) => {
-                Ok((transport.unwrap(), t))
-            }
-            Err(err) => {
-                release_pool.release_conn();
-                Err(err)
-            }
-        }
-    }
-
-    async fn try_fold_packets<F, T, Fut>(&mut self, init: T, f: F) -> Result<T>
-    where
-        F: (Fn(T, Packet<ClickhouseTransport>) -> Fut) + Send + 'static,
-        Fut: Future<Output = Result<T>>,
-        T: Send + 'static,
-    {
-        let context = self.client.context.clone();
-        let query = self.query.clone();
-
-        self.client.wrap_future(move |c| {
-            info!("[send query] {}", query.get_sql());
-            c.pool.detach();
-
-            let mut stream = c.inner
-                .take()
-                .unwrap()
-                .call(Cmd::SendQuery(query, context.clone()));
-
-            async move {
-                let mut acc = init;
-
-                while let Some(packet) = stream.next().await {
-                    acc = f(acc, packet?).await?;
-                }
-
-                Ok(acc)
-            }
-        }).await
     }
 
     /// Method that produces a stream of blocks containing rows

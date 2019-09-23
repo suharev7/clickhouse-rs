@@ -10,7 +10,7 @@ use crate::{
     types::column::{
         array::ArrayColumnData,
         BoxColumnWrapper,
-        column_data::ColumnData,
+        column_data::{ColumnData, BoxColumnData},
         ColumnFrom,
         ColumnWrapper,
         Either,
@@ -50,6 +50,13 @@ where
         + Default
         + 'static,
 {
+    pub(crate) fn with_capacity(capacity: usize, timezone: Tz) -> DateColumnData<T> {
+        DateColumnData {
+            data: List::with_capacity(capacity),
+            tz: timezone,
+        }
+    }
+
     pub(crate) fn load<R: ReadEx>(
         reader: &mut R,
         size: usize,
@@ -217,6 +224,13 @@ where
 
     fn at(&self, index: usize) -> ValueRef {
         self.data.at(index).to_date(self.tz)
+    }
+
+    fn clone_instance(&self) -> BoxColumnData {
+        Box::new(Self{
+            data: self.data.clone(),
+            tz: self.tz,
+        })
     }
 }
 

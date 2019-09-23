@@ -1,9 +1,13 @@
-use std::convert;
+use std::{convert, sync::Arc};
 
 use crate::{
     binary::Encoder,
     types::{SqlType, Value, ValueRef},
 };
+
+pub(crate) type ArcColumnData = Arc<dyn ColumnData + Send + Sync>;
+
+pub(crate) type BoxColumnData = Box<dyn ColumnData + Send + Sync>;
 
 pub trait ColumnData {
     fn sql_type(&self) -> SqlType;
@@ -11,9 +15,11 @@ pub trait ColumnData {
     fn len(&self) -> usize;
     fn push(&mut self, value: Value);
     fn at(&self, index: usize) -> ValueRef;
+
+    fn clone_instance(&self) -> BoxColumnData;
 }
 
-pub trait ColumnDataExt {
+pub(crate) trait ColumnDataExt {
     fn append<T: convert::Into<Value>>(&mut self, value: T);
 }
 

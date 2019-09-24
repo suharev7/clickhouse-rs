@@ -10,6 +10,7 @@ use crate::{
         Rows,
     },
     ClientHandle,
+    try_opt,
 };
 
 use self::{either::Either, fold_block::FoldBlock};
@@ -17,6 +18,16 @@ use self::{either::Either, fold_block::FoldBlock};
 mod either;
 mod fold_block;
 mod stream_blocks;
+
+
+macro_rules! try_opt_stream {
+    ($expr:expr) => {
+        match $expr {
+            Ok(val) => val,
+            Err(err) => return Box::new(stream::once(Err(err))),
+        }
+    };
+}
 
 /// Result of a query or statement execution.
 pub struct QueryResult {
@@ -65,6 +76,8 @@ impl QueryResult {
 
     /// Fetch data from table. It returns a block that contains all rows.
     pub fn fetch_all(self) -> BoxFuture<(ClientHandle, Block)> {
+        let timeout = try_opt!(self.client.context.options.get()).query_timeout;
+
         wrap_future(
             self.fold_blocks(Vec::new(), |mut blocks, block| {
                 if !block.is_empty() {
@@ -72,7 +85,9 @@ impl QueryResult {
                 }
                 Ok(blocks)
             })
-            .map(|(h, blocks)| (h, Block::concat(blocks.as_slice()))),
+            .timeout(timeout)
+            .map_err(Error::from)
+            .map(|(h, blocks)| (h, Block::concat(blocks.as_slice())))
         )
     }
 
@@ -163,6 +178,7 @@ impl QueryResult {
     /// ```
     pub fn stream_blocks(self) -> BoxStream<Block> {
         let query = self.query;
+        let timeout = try_opt_stream!(self.client.context.options.get()).query_block_timeout;
 
         self.client.wrap_stream(move |mut c| {
             info!("[send query] {}", query.get_sql());
@@ -180,6 +196,8 @@ impl QueryResult {
                 context,
                 pool,
             )
+            .timeout(timeout)
+            .map_err(Error::from)
         })
     }
 

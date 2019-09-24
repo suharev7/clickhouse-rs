@@ -202,6 +202,7 @@ macro_rules! row {
     };
 }
 
+#[macro_export]
 macro_rules! try_opt {
     ($expr:expr) => {
         match $expr {

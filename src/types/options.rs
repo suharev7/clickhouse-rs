@@ -168,10 +168,10 @@ pub struct Options {
     /// Timeout for connection (defaults to `500 ms`)
     pub(crate) connection_timeout: Duration,
 
-    /// Timeout for queries (defaults to `1800000 ms`)
+    /// Timeout for queries (defaults to `180,000 ms`)
     pub(crate) query_timeout: Duration,
 
-    /// Timeout for each block in a query (defaults to `180000 ms`)
+    /// Timeout for each block in a query (defaults to `180,000 ms`)
     pub(crate) query_block_timeout: Duration,
 }
 
@@ -192,8 +192,8 @@ impl Default for Options {
             retry_timeout: Duration::from_secs(5),
             ping_timeout: Duration::from_millis(500),
             connection_timeout: Duration::from_millis(500),
-            query_timeout: Duration::from_millis(180000),
-            query_block_timeout: Duration::from_millis(180000),
+            query_timeout: Duration::from_millis(180_000),
+            query_block_timeout: Duration::from_millis(180_000),
         }
     }
 }

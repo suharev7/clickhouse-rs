@@ -44,6 +44,9 @@
 //! - `retry_timeout` - Amount of time to wait before next retry. (defaults to `5 sec`).
 //! - `ping_timeout` - Timeout for ping (defaults to `500 ms`).
 //!
+//! - `query_timeout` - Timeout for queries (defaults to `180 sec`).
+//! - `query_block_timeout` - Timeout for each block in a query (defaults to `180 sec`).
+//!
 //! example:
 //! ```url
 //! tcp://user:password@host:9000/clicks?compression=lz4&ping_timeout=42ms

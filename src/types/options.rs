@@ -19,6 +19,7 @@ const DEFAULT_MIN_CONNS: usize = 10;
 const DEFAULT_MAX_CONNS: usize = 20;
 
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 enum State {
     Raw(Options),
     Url(String),
@@ -168,10 +169,10 @@ pub struct Options {
     /// Timeout for connection (defaults to `500 ms`)
     pub(crate) connection_timeout: Duration,
 
-    /// Timeout for queries (defaults to `180,000 ms`)
+    /// Timeout for queries (defaults to `180 sec`)
     pub(crate) query_timeout: Duration,
 
-    /// Timeout for each block in a query (defaults to `180,000 ms`)
+    /// Timeout for each block in a query (defaults to `180 sec`)
     pub(crate) query_block_timeout: Duration,
 }
 
@@ -192,8 +193,8 @@ impl Default for Options {
             retry_timeout: Duration::from_secs(5),
             ping_timeout: Duration::from_millis(500),
             connection_timeout: Duration::from_millis(500),
-            query_timeout: Duration::from_millis(180_000),
-            query_block_timeout: Duration::from_millis(180_000),
+            query_timeout: Duration::from_secs(180),
+            query_block_timeout: Duration::from_secs(180),
         }
     }
 }

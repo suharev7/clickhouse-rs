@@ -1,5 +1,5 @@
 use crate::{
-    binary::{protocol, Encoder},
+    binary::{Encoder, protocol},
     client_info,
     types::{Block, ClickhouseResult, Context, Query},
 };

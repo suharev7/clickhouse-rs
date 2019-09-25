@@ -76,8 +76,6 @@ impl QueryResult {
 
     /// Fetch data from table. It returns a block that contains all rows.
     pub fn fetch_all(self) -> BoxFuture<(ClientHandle, Block)> {
-        let timeout = try_opt!(self.client.context.options.get()).query_timeout;
-
         wrap_future(
             self.fold_blocks(Vec::new(), |mut blocks, block| {
                 if !block.is_empty() {
@@ -85,7 +83,6 @@ impl QueryResult {
                 }
                 Ok(blocks)
             })
-            .timeout(timeout)
             .map_err(Error::from)
             .map(|(h, blocks)| (h, Block::concat(blocks.as_slice())))
         )
@@ -99,6 +96,7 @@ impl QueryResult {
         Fut::Future: Send,
         T: Send + 'static,
     {
+        let timeout = try_opt!(self.client.context.options.get()).query_timeout;
         let context = self.client.context.clone();
         let pool = self.client.pool.clone();
         let release_pool = self.client.pool.clone();
@@ -122,9 +120,10 @@ impl QueryResult {
                 _ => Either::Right(future::err(Error::Driver(DriverError::UnexpectedPacket))),
             })
             .map(|(c, t)| (c.unwrap(), t))
+            .timeout(timeout)
             .map_err(move |err| {
                 release_pool.release_conn();
-                err
+                err.into()
             }),
         )
     }
@@ -187,6 +186,7 @@ impl QueryResult {
 
             let context = c.context.clone();
             let pool = c.pool.clone();
+            let release_pool = c.pool.clone();
 
             BlockStream::new(
                 c.inner
@@ -197,7 +197,10 @@ impl QueryResult {
                 pool,
             )
             .timeout(timeout)
-            .map_err(Error::from)
+            .map_err(move |err| {
+                release_pool.clone().release_conn();
+                err.into()
+            })
         })
     }
 

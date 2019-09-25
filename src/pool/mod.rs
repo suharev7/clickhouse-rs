@@ -467,4 +467,19 @@ mod test {
 
         run(done).unwrap();
     }
+
+    #[test]
+    fn test_query_timeout() {
+        let test_db_url = format!("{}{}", DATABASE_URL.as_str(), "&query_timeout=5ms");
+        let pool = Pool::new(test_db_url.to_string());
+
+        let done = pool.get_handle()
+            .and_then(|c| c.query("SELECT sleep(10)").fetch_all());
+
+
+        run(done).unwrap_err();
+
+        let info = pool.info();
+        assert_eq!(info.ongoing, 0);
+    }
 }

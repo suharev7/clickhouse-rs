@@ -167,6 +167,12 @@ pub struct Options {
 
     /// Timeout for connection (defaults to `500 ms`)
     pub(crate) connection_timeout: Duration,
+
+    /// Timeout for queries (defaults to `180,000 ms`)
+    pub(crate) query_timeout: Duration,
+
+    /// Timeout for each block in a query (defaults to `180,000 ms`)
+    pub(crate) query_block_timeout: Duration,
 }
 
 impl Default for Options {
@@ -186,6 +192,8 @@ impl Default for Options {
             retry_timeout: Duration::from_secs(5),
             ping_timeout: Duration::from_millis(500),
             connection_timeout: Duration::from_millis(500),
+            query_timeout: Duration::from_millis(180_000),
+            query_block_timeout: Duration::from_millis(180_000),
         }
     }
 }
@@ -289,6 +297,16 @@ impl Options {
         /// Timeout for connection (defaults to `500 ms`).
         => connection_timeout: Duration
     }
+
+    property! {
+        /// Timeout for query (defaults to `180,000 ms`).
+        => query_timeout: Duration
+    }
+
+    property! {
+        /// Timeout for each block in a query (defaults to `180,000 ms`).
+        => query_block_timeout: Duration
+    }
 }
 
 impl FromStr for Options {
@@ -357,7 +375,13 @@ where
             "ping_timeout" => options.ping_timeout = parse_param(key, value, parse_duration)?,
             "connection_timeout" => {
                 options.connection_timeout = parse_param(key, value, parse_duration)?
-            }
+            },
+            "query_timeout" => {
+                options.query_timeout = parse_param(key, value, parse_duration)?
+            },
+            "query_block_timeout" => {
+                options.query_block_timeout = parse_param(key, value, parse_duration)?
+            },
             "compression" => options.compression = parse_param(key, value, parse_compression)?,
             _ => return Err(UrlError::UnknownParameter { param: key.into() }),
         };

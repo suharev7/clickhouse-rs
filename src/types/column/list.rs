@@ -40,6 +40,10 @@ where
     pub fn resize(&mut self, new_len: usize, value: T) {
         self.data.resize(new_len, value);
     }
+
+    pub(super) unsafe fn set_len(&mut self, new_len: usize) {
+        self.data.set_len(new_len);
+    }
 }
 
 impl<T> AsRef<[u8]> for List<T>

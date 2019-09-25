@@ -63,7 +63,7 @@ where
         tz: Tz,
     ) -> Result<DateColumnData<T>, Error> {
         let mut data = List::with_capacity(size);
-        data.resize(size, T::default());
+        unsafe { data.set_len(size); }
         reader.read_bytes(data.as_mut())?;
         Ok(DateColumnData { data, tz })
     }

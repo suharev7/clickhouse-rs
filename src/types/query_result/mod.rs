@@ -186,7 +186,7 @@ impl QueryResult {
 
             let context = c.context.clone();
             let pool = c.pool.clone();
-            let release_pool = c.pool.clone();
+            let mut release_pool = Some(c.pool.clone());
 
             BlockStream::new(
                 c.inner
@@ -198,7 +198,9 @@ impl QueryResult {
             )
             .timeout(timeout)
             .map_err(move |err| {
-                release_pool.clone().release_conn();
+                if let Some(pool) = release_pool.take() {
+                    pool.release_conn();
+                }
                 err.into()
             })
         })

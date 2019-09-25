@@ -37,7 +37,6 @@ pub(crate) fn read_to_end<R: AsyncRead + ?Sized>(
                 g.buf.reserve(32);
                 let capacity = g.buf.capacity();
                 g.buf.set_len(capacity);
-                rd.prepare_uninitialized_buffer(&mut g.buf[g.len..]);
             }
         }
 

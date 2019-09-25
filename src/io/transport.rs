@@ -1,7 +1,7 @@
 use std::{
     collections::VecDeque,
     io::{self, Cursor},
-    mem,
+    ptr,
     pin::Pin,
     task::{self, Poll},
 };
@@ -169,8 +169,13 @@ impl ClickhouseTransport {
             Poll::Pending => (),
             _ => {
                 // Data is consumed
-                let tail = self.rd.split_off(pos);
-                mem::replace(&mut self.rd, tail);
+                let new_len = self.rd.len() - pos;
+                unsafe {
+                    ptr::copy(self.rd.as_ptr().add(pos),
+                              self.rd.as_mut_ptr(),
+                              new_len);
+                    self.rd.set_len(new_len);
+                }
             }
         }
 

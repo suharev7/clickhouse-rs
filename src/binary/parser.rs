@@ -56,7 +56,7 @@ impl<'a, T: Read> Parser<T> {
         match self.tz {
             None => Err(Error::Driver(DriverError::UnexpectedPacket)),
             Some(tz) => {
-                let _ = self.reader.read_string()?;
+                self.reader.skip_string()?;
                 let block = Block::load(&mut self.reader, tz, self.compress)?;
                 Ok(Packet::Block(block))
             }

@@ -1,4 +1,4 @@
-use std::io;
+use std::{io, mem::MaybeUninit};
 
 use crate::{
     errors::{DriverError, Error, Result},
@@ -11,9 +11,12 @@ pub(crate) trait ReadEx {
     where
         V: Copy + Unmarshal<V> + StatBuffer;
     fn read_string(&mut self) -> Result<String>;
+    fn skip_string(&mut self) -> Result<()>;
     fn read_uvarint(&mut self) -> Result<u64>;
     fn read_str_into_buffer(&mut self, pool: &mut StringPool) -> Result<()>;
 }
+
+const MAX_STACK_BUFFER_LEN: usize = 1024;
 
 impl<T> ReadEx for T
 where
@@ -52,6 +55,20 @@ where
         let mut buffer = vec![0_u8; str_len];
         self.read_bytes(buffer.as_mut())?;
         Ok(String::from_utf8(buffer)?)
+    }
+
+    fn skip_string(&mut self) -> Result<()> {
+        let str_len = self.read_uvarint()? as usize;
+
+        if str_len <= MAX_STACK_BUFFER_LEN {
+            let mut buffer: [u8; MAX_STACK_BUFFER_LEN] = unsafe { MaybeUninit::uninit().assume_init() };
+            self.read_bytes(&mut buffer[..str_len])?;
+        } else {
+            let mut buffer = vec![0_u8; str_len];
+            self.read_bytes(buffer.as_mut())?;
+        }
+
+        Ok(())
     }
 
     fn read_uvarint(&mut self) -> Result<u64> {

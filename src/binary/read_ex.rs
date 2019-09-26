@@ -1,4 +1,4 @@
-use std::io;
+use std::{io, mem::MaybeUninit};
 
 use crate::{
     errors::{DriverError, Error},
@@ -11,9 +11,12 @@ pub(crate) trait ReadEx {
     where
         V: Copy + Unmarshal<V> + StatBuffer;
     fn read_string(&mut self) -> ClickhouseResult<String>;
+    fn skip_string(&mut self) -> ClickhouseResult<()>;
     fn read_uvarint(&mut self) -> ClickhouseResult<u64>;
     fn read_str_into_buffer(&mut self, pool: &mut StringPool) -> ClickhouseResult<()>;
 }
+
+const MAX_STACK_BUFFER_LEN: usize = 1024;
 
 impl<T> ReadEx for T
 where
@@ -52,6 +55,22 @@ where
         let mut buffer = vec![0_u8; str_len];
         self.read_bytes(buffer.as_mut())?;
         Ok(String::from_utf8(buffer)?)
+    }
+
+    fn skip_string(&mut self) -> ClickhouseResult<()> {
+        let str_len = self.read_uvarint()? as usize;
+
+        if str_len <= MAX_STACK_BUFFER_LEN {
+            unsafe {
+                let mut buffer: [MaybeUninit<u8>; MAX_STACK_BUFFER_LEN] = MaybeUninit::uninit().assume_init();
+                self.read_bytes(&mut *(&mut buffer[..str_len] as *mut [MaybeUninit<u8>] as *mut [u8]))?;
+            }
+        } else {
+            let mut buffer = vec![0_u8; str_len];
+            self.read_bytes(buffer.as_mut())?;
+        }
+
+        Ok(())
     }
 
     fn read_uvarint(&mut self) -> ClickhouseResult<u64> {

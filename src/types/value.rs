@@ -353,8 +353,7 @@ mod test {
 
     fn test_from_rnd<T>()
     where
-        Value: convert::Into<T>,
-        Value: convert::From<T>,
+        Value: convert::Into<T> + convert::From<T>,
         T: PartialEq + fmt::Debug + Clone,
         Standard: Distribution<T>,
     {
@@ -366,8 +365,7 @@ mod test {
 
     fn test_from_t<T>(value: &T)
     where
-        Value: convert::Into<T>,
-        Value: convert::From<T>,
+        Value: convert::Into<T> + convert::From<T>,
         T: PartialEq + fmt::Debug + Clone,
     {
         test_into_t::<T>(Value::from(value.clone()), &value);

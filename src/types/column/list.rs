@@ -44,6 +44,10 @@ where
     pub(super) unsafe fn set_len(&mut self, new_len: usize) {
         self.data.set_len(new_len);
     }
+
+    pub(super) unsafe fn as_ptr(&self) -> *const T {
+        self.data.as_ptr()
+    }
 }
 
 impl<T> AsRef<[u8]> for List<T>

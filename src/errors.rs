@@ -91,6 +91,9 @@ pub enum FromSqlError {
 
     #[fail(display = "Out of range.")]
     OutOfRange,
+
+    #[fail(display = "Unsupported operation.")]
+    UnsupportedOperation,
 }
 
 impl Error {

@@ -2,6 +2,7 @@ use std::{convert, sync::Arc};
 
 use crate::{
     binary::Encoder,
+    errors::{Result, Error, FromSqlError},
     types::{SqlType, Value, ValueRef},
 };
 
@@ -17,6 +18,9 @@ pub trait ColumnData {
     fn at(&self, index: usize) -> ValueRef;
 
     fn clone_instance(&self) -> BoxColumnData;
+    unsafe fn as_ptr(&self) -> Result<*const u8> {
+        Err(Error::FromSql(FromSqlError::UnsupportedOperation))
+    }
 }
 
 pub(crate) trait ColumnDataExt {

@@ -216,6 +216,10 @@ where
     fn clone_instance(&self) -> BoxColumnData {
         Box::new(Self { data: self.data.clone()})
     }
+
+    unsafe fn as_ptr(&self) -> Result<*const u8> {
+        Ok(self.data.as_ptr() as *const u8)
+    }
 }
 
 pub(crate) fn save_data<T>(data: &[u8], encoder: &mut Encoder, start: usize, end: usize) {

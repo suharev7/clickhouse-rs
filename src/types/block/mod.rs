@@ -1,6 +1,7 @@
 use std::{
     cmp, fmt,
     io::{Cursor, Read},
+    slice,
 };
 
 use byteorder::{LittleEndian, WriteBytesExt};
@@ -21,20 +22,49 @@ use self::chunk_iterator::ChunkIterator;
 pub(crate) use self::row::BlockRef;
 pub use self::{
     block_info::BlockInfo,
+    builder::{RCons, RNil, RowBuilder},
     row::{Row, Rows},
-    builder::{RowBuilder, RCons, RNil},
 };
+use crate::types::SqlType;
 
 mod block_info;
+mod builder;
 mod chunk_iterator;
 mod compressed;
 mod row;
-mod builder;
 
 const INSERT_BLOCK_SIZE: usize = 1_048_576;
 
 pub trait ColumnIdx {
     fn get_index(&self, columns: &[Column]) -> Result<usize>;
+}
+
+pub trait Sliceable {
+    fn slice_type() -> SqlType;
+}
+
+macro_rules! sliceable {
+    ( $($t:ty: $k:ident),* ) => {
+        $(
+            impl Sliceable for $t {
+                fn slice_type() -> SqlType {
+                    SqlType::$k
+                }
+            }
+        )*
+    };
+}
+
+sliceable! {
+    u8: UInt8,
+    u16: UInt16,
+    u32: UInt32,
+    u64: UInt64,
+
+    i8: Int8,
+    i16: Int16,
+    i32: Int32,
+    i64: Int64
 }
 
 /// Represents Clickhouse Block
@@ -151,6 +181,7 @@ impl Block {
     }
 
     /// This method returns a slice of columns.
+    #[inline(always)]
     pub fn columns(&self) -> &[Column] {
         &self.columns
     }
@@ -159,7 +190,7 @@ impl Block {
         let column_len = column.len();
 
         if !self.columns.is_empty() && self.row_count() != column_len {
-            panic!("all columns in block must have same count of rows.")
+            panic!("all columns in block must have same size.")
         }
 
         self.columns.push(column);
@@ -211,6 +242,64 @@ impl Block {
     /// This method is a convenient way to pass row into a block.
     pub fn push<B: RowBuilder>(&mut self, row: B) -> Result<()> {
         row.apply(self)
+    }
+
+    /// This method allows getting a slice of the column.
+    ///
+    /// It doesn't work for blocks returned by [fetch_all](crate::types::QueryResult::fetch_all).
+    ///
+    /// ```rust
+    /// # use std::env;
+    /// # use clickhouse_rs::{errors::Error, Pool, errors::Result};
+    /// # use futures_util::stream::StreamExt;
+    /// # let rt = tokio::runtime::Runtime::new().unwrap();
+    /// # let ret: Result<()> = rt.block_on(async {
+    /// #     let database_url = "tcp://localhost:9000";
+    /// #     let pool = Pool::new(database_url);
+    /// #     let mut client = pool.get_handle().await?;
+    ///       let mut stream = client
+    ///             .query("SELECT number as n1, number as n2, number as n3 FROM numbers(100000000)")
+    ///             .stream_blocks();
+    ///
+    ///       let mut sum = 0;
+    ///       while let Some(block) = stream.next().await {
+    ///           let block = block?;
+    ///
+    ///           let c1: &[u64] = block.get_column_slice("n1")?;
+    ///           let c2: &[u64] = block.get_column_slice("n2")?;
+    ///           let c3: &[u64] = block.get_column_slice("n3")?;
+    ///
+    ///           for i in 0..block.row_count() {
+    ///               let v1: u64 = c1[i];
+    ///               let v2: u64 = c2[i];
+    ///               let v3: u64 = c3[i];
+    ///               sum = v1 + v2 + v3;
+    ///           }
+    ///       }
+    ///
+    ///       dbg!(sum);
+    /// #     Ok(())
+    /// # });
+    /// # ret.unwrap()
+    /// ```
+    pub fn get_column_slice<T, I>(&self, col: I) -> Result<&[T]>
+    where
+        I: ColumnIdx + Copy,
+        T: Sliceable,
+    {
+        let column_index = col.get_index(self.columns())?;
+        let column = &self.columns[column_index];
+        let size = column.len();
+        if column.sql_type() != T::slice_type() {
+            return Err(Error::FromSql(FromSqlError::InvalidType {
+                src: column.sql_type().to_string(),
+                dst: T::slice_type().to_string(),
+            }));
+        }
+        unsafe {
+            let ptr = column.as_ptr()? as *const T;
+            Ok(slice::from_raw_parts(ptr, size))
+        }
     }
 }
 

@@ -90,14 +90,17 @@ impl Column {
         Ok(column)
     }
 
+    #[inline(always)]
     pub fn name(&self) -> &str {
         &self.name
     }
 
+    #[inline(always)]
     pub fn sql_type(&self) -> SqlType {
         self.data.sql_type()
     }
 
+    #[inline(always)]
     pub(crate) fn at(&self, index: usize) -> ValueRef {
         self.data.at(index)
     }
@@ -109,6 +112,7 @@ impl Column {
         self.data.save(encoder, 0, len);
     }
 
+    #[inline(always)]
     pub(crate) fn len(&self) -> usize {
         self.data.len()
     }
@@ -237,6 +241,9 @@ impl Column {
         }
     }
 
+    pub(crate) unsafe fn as_ptr(&self) -> Result<*const u8> {
+        self.data.as_ptr()
+    }
 }
 
 pub(crate) fn new_column(name: &str, data: Arc<(dyn ColumnData + Sync + Send + 'static)>) -> Column {

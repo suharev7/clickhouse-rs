@@ -1,13 +1,15 @@
+use std::sync::Arc;
+
+use chrono_tz::Tz;
+
 use crate::{
     binary::{Encoder, ReadEx},
-    errors::Result,
+    errors::{Error, FromSqlError, Result},
     types::{
-        column::{list::List, BoxColumnWrapper, ColumnData, column_data::BoxColumnData},
+        column::{BoxColumnWrapper, column_data::BoxColumnData, ColumnData, list::List},
         SqlType, Value, ValueRef,
     },
 };
-use chrono_tz::Tz;
-use std::sync::Arc;
 
 pub(crate) struct ArrayColumnData {
     pub(crate) inner: Box<dyn ColumnData + Send + Sync>,
@@ -97,13 +99,19 @@ impl ColumnData for ArrayColumnData {
             offsets: self.offsets.clone(),
         })
     }
+
+    unsafe fn as_ptr(&self) -> Result<*const u8> {
+        Err(Error::FromSql(FromSqlError::UnsupportedOperation))
+    }
 }
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::types::Block;
     use std::io::Cursor;
+
+    use crate::types::Block;
+
+    use super::*;
 
     #[test]
     fn test_write_and_read() {

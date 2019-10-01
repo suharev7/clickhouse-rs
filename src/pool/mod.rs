@@ -1,6 +1,5 @@
 use std::{
-    fmt,
-    mem,
+    fmt, mem,
     pin::Pin,
     sync::{Arc, Mutex, MutexGuard},
     task::{Context, Poll, Waker},
@@ -10,10 +9,10 @@ use futures_core::future::BoxFuture;
 use tokio::prelude::*;
 
 use crate::{
-    Client,
-    ClientHandle,
     errors::Result,
-    pool::futures::GetHandle, types::{IntoOptions, OptionsSource},
+    pool::futures::GetHandle,
+    types::{IntoOptions, OptionsSource},
+    Client, ClientHandle,
 };
 
 use log::error;
@@ -287,13 +286,13 @@ mod test {
             Arc,
         },
         thread,
-        time::{Duration, Instant}
+        time::{Duration, Instant},
     };
 
     use futures_util::future;
     use tokio::runtime::current_thread::Runtime;
 
-    use crate::{errors::Result, Options, test_misc::DATABASE_URL};
+    use crate::{errors::Result, test_misc::DATABASE_URL, Options};
 
     use super::Pool;
 
@@ -314,7 +313,6 @@ mod test {
 
     #[tokio::test]
     async fn test_detach() -> Result<()> {
-
         async fn done(pool: Pool) -> Result<()> {
             let p = pool.clone();
             let mut c = p.get_handle().await?;
@@ -392,8 +390,7 @@ mod test {
 
             let h = thread::spawn(move || {
                 handle.spawn(async move {
-                    while local_barer.load(Ordering::SeqCst) {
-                    }
+                    while local_barer.load(Ordering::SeqCst) {}
 
                     let _ = local_pool.get_handle().await;
                 })
@@ -405,8 +402,8 @@ mod test {
         barrier.store(false, Ordering::SeqCst);
         for h in threads {
             match h.join().unwrap() {
-                Ok(_) => {},
-                Err(e) => panic!(e)
+                Ok(_) => {}
+                Err(e) => panic!(e),
             }
         }
     }

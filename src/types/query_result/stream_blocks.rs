@@ -7,10 +7,10 @@ use futures_core::Stream;
 use futures_util::StreamExt;
 
 use crate::{
-    ClientHandle,
     errors::{DriverError, Error, Result},
     io::transport::PacketStream,
     types::{Block, Packet},
+    ClientHandle,
 };
 
 pub(crate) struct BlockStream<'a> {
@@ -70,7 +70,9 @@ impl<'a> Stream for BlockStream<'a> {
                     self.eof = true;
                 }
                 Packet::ProfileInfo(_) | Packet::Progress(_) => {}
-                Packet::Exception(exception) => return Poll::Ready(Some(Err(Error::Server(exception)))),
+                Packet::Exception(exception) => {
+                    return Poll::Ready(Some(Err(Error::Server(exception))))
+                }
                 Packet::Block(block) => {
                     self.block_index += 1;
                     if self.block_index > 1 && !block.is_empty() {

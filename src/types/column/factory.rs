@@ -3,21 +3,14 @@ use chrono_tz::Tz;
 use crate::{
     binary::ReadEx,
     errors::Result,
-    SqlType,
     types::column::{
-        array::ArrayColumnData,
-        column_data::ColumnData,
-        ColumnWrapper,
-        date::DateColumnData,
-        decimal::DecimalColumnData,
-        fixed_string::FixedStringColumnData,
-        nullable::NullableColumnData,
-        numeric::VectorColumnData,
-        string::StringColumnData,
-        BoxColumnWrapper,
-        list::List
+        array::ArrayColumnData, column_data::ColumnData, date::DateColumnData,
+        decimal::DecimalColumnData, fixed_string::FixedStringColumnData, list::List,
+        nullable::NullableColumnData, numeric::VectorColumnData, string::StringColumnData,
+        BoxColumnWrapper, ColumnWrapper,
     },
     types::decimal::NoBits,
+    SqlType,
 };
 
 const DEFAULT_CAPACITY: usize = 100;
@@ -62,7 +55,10 @@ impl dyn ColumnData {
         })
     }
 
-    pub(crate) fn from_type<W: ColumnWrapper>(sql_type: SqlType, timezone: Tz) -> Result<W::Wrapper> {
+    pub(crate) fn from_type<W: ColumnWrapper>(
+        sql_type: SqlType,
+        timezone: Tz,
+    ) -> Result<W::Wrapper> {
         Ok(match sql_type {
             SqlType::UInt8 => W::wrap(VectorColumnData::<u8>::with_capacity(DEFAULT_CAPACITY)),
             SqlType::UInt16 => W::wrap(VectorColumnData::<u16>::with_capacity(DEFAULT_CAPACITY)),
@@ -73,23 +69,27 @@ impl dyn ColumnData {
             SqlType::Int32 => W::wrap(VectorColumnData::<i32>::with_capacity(DEFAULT_CAPACITY)),
             SqlType::Int64 => W::wrap(VectorColumnData::<i64>::with_capacity(DEFAULT_CAPACITY)),
             SqlType::String => W::wrap(StringColumnData::with_capacity(DEFAULT_CAPACITY)),
-            SqlType::FixedString(len) => W::wrap(FixedStringColumnData::with_capacity(DEFAULT_CAPACITY, len)),
+            SqlType::FixedString(len) => {
+                W::wrap(FixedStringColumnData::with_capacity(DEFAULT_CAPACITY, len))
+            }
             SqlType::Float32 => W::wrap(VectorColumnData::<f32>::with_capacity(DEFAULT_CAPACITY)),
             SqlType::Float64 => W::wrap(VectorColumnData::<f64>::with_capacity(DEFAULT_CAPACITY)),
-            SqlType::Date => W::wrap(DateColumnData::<u16>::with_capacity(DEFAULT_CAPACITY, timezone)),
-            SqlType::DateTime => W::wrap(DateColumnData::<u32>::with_capacity(DEFAULT_CAPACITY, timezone)),
-            SqlType::Nullable(inner_type) => {
-                W::wrap(NullableColumnData {
-                    inner: ColumnData::from_type::<BoxColumnWrapper>(*inner_type, timezone)?,
-                    nulls: Vec::new(),
-                })
-            },
-            SqlType::Array(inner_type) => {
-                W::wrap(ArrayColumnData {
-                    inner: ColumnData::from_type::<BoxColumnWrapper>(*inner_type, timezone)?,
-                    offsets: List::with_capacity(DEFAULT_CAPACITY),
-                })
-            },
+            SqlType::Date => W::wrap(DateColumnData::<u16>::with_capacity(
+                DEFAULT_CAPACITY,
+                timezone,
+            )),
+            SqlType::DateTime => W::wrap(DateColumnData::<u32>::with_capacity(
+                DEFAULT_CAPACITY,
+                timezone,
+            )),
+            SqlType::Nullable(inner_type) => W::wrap(NullableColumnData {
+                inner: ColumnData::from_type::<BoxColumnWrapper>(*inner_type, timezone)?,
+                nulls: Vec::new(),
+            }),
+            SqlType::Array(inner_type) => W::wrap(ArrayColumnData {
+                inner: ColumnData::from_type::<BoxColumnWrapper>(*inner_type, timezone)?,
+                offsets: List::with_capacity(DEFAULT_CAPACITY),
+            }),
             SqlType::Decimal(precision, scale) => {
                 let nobits = NoBits::from_precision(precision).unwrap();
 
@@ -104,7 +104,7 @@ impl dyn ColumnData {
                     scale,
                     nobits,
                 })
-            },
+            }
         })
     }
 }

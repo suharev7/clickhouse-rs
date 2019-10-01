@@ -62,8 +62,11 @@ where
 
         if str_len <= MAX_STACK_BUFFER_LEN {
             unsafe {
-                let mut buffer: [MaybeUninit<u8>; MAX_STACK_BUFFER_LEN] = MaybeUninit::uninit().assume_init();
-                self.read_bytes(&mut *(&mut buffer[..str_len] as *mut [MaybeUninit<u8>] as *mut [u8]))?;
+                let mut buffer: [MaybeUninit<u8>; MAX_STACK_BUFFER_LEN] =
+                    MaybeUninit::uninit().assume_init();
+                self.read_bytes(
+                    &mut *(&mut buffer[..str_len] as *mut [MaybeUninit<u8>] as *mut [u8]),
+                )?;
             }
         } else {
             let mut buffer = vec![0_u8; str_len];

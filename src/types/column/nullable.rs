@@ -3,7 +3,10 @@ use crate::types::column::ColumnData;
 use crate::{
     binary::{Encoder, ReadEx},
     errors::Result,
-    types::{column::{Either, column_data::BoxColumnData}, SqlType, Value, ValueRef},
+    types::{
+        column::{column_data::BoxColumnData, Either},
+        SqlType, Value, ValueRef,
+    },
 };
 
 use crate::types::column::BoxColumnWrapper;
@@ -81,5 +84,15 @@ impl ColumnData for NullableColumnData {
             inner: self.inner.clone_instance(),
             nulls: self.nulls.clone(),
         })
+    }
+
+    unsafe fn get_internal(&self, pointers: &[*mut *const u8], level: u8) -> Result<()> {
+        if level == self.sql_type().level() {
+            *pointers[0] = self.nulls.as_ptr();
+            *(pointers[1] as *mut usize) = self.len();
+            Ok(())
+        } else {
+            self.inner.get_internal(pointers, level)
+        }
     }
 }

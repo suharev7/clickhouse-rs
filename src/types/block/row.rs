@@ -1,17 +1,18 @@
-use std::sync::Arc;
+use std::{marker, sync::Arc};
 
 use crate::{
-    types::{block::ColumnIdx, Block, Column, FromSql, SqlType},
-    errors::Result
+    errors::Result,
+    types::{Block, block::ColumnIdx, ColumnType, Column, FromSql, SqlType},
 };
 
 /// A row from Clickhouse
-pub struct Row<'a> {
+pub struct Row<'a, K: ColumnType> {
     pub(crate) row: usize,
-    pub(crate) block_ref: BlockRef<'a>,
+    pub(crate) block_ref: BlockRef<'a, K>,
+    pub(crate) kind: marker::PhantomData<K>,
 }
 
-impl<'a> Row<'a> {
+impl<'a, K: ColumnType> Row<'a, K> {
     /// Get the value of a particular cell of the row.
     pub fn get<T, I>(&'a self, col: I) -> Result<T>
     where
@@ -42,13 +43,21 @@ impl<'a> Row<'a> {
     }
 }
 
-#[derive(Clone)]
-pub(crate) enum BlockRef<'a> {
-    Borrowed(&'a Block),
-    Owned(Arc<Block>),
+pub(crate) enum BlockRef<'a, K: ColumnType> {
+    Borrowed(&'a Block<K>),
+    Owned(Arc<Block<K>>),
 }
 
-impl<'a> BlockRef<'a> {
+impl<'a, K: ColumnType> Clone for BlockRef<'a, K> {
+    fn clone(&self) -> Self {
+        match self {
+            BlockRef::Borrowed(block_ref) => BlockRef::Borrowed(*block_ref),
+            BlockRef::Owned(block_ref) => BlockRef::Owned(block_ref.clone()),
+        }
+    }
+}
+
+impl<'a, K: ColumnType> BlockRef<'a, K> {
     fn row_count(&self) -> usize {
         match self {
             BlockRef::Borrowed(block) => block.row_count(),
@@ -74,7 +83,7 @@ impl<'a> BlockRef<'a> {
         }
     }
 
-    fn get_column<I: ColumnIdx + Copy>(&self, col: I) -> Result<&Column> {
+    fn get_column<I: ColumnIdx + Copy>(&self, col: I) -> Result<&Column<K>> {
         match self {
             BlockRef::Borrowed(block) => {
                 let column_index = col.get_index(block.columns())?;
@@ -89,13 +98,14 @@ impl<'a> BlockRef<'a> {
 }
 
 /// Immutable rows iterator
-pub struct Rows<'a> {
+pub struct Rows<'a, K: ColumnType> {
     pub(crate) row: usize,
-    pub(crate) block_ref: BlockRef<'a>,
+    pub(crate) block_ref: BlockRef<'a, K>,
+    pub(crate) kind: marker::PhantomData<K>,
 }
 
-impl<'a> Iterator for Rows<'a> {
-    type Item = Row<'a>;
+impl<'a, K: ColumnType> Iterator for Rows<'a, K> {
+    type Item = Row<'a, K>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.row >= self.block_ref.row_count() {
@@ -104,6 +114,7 @@ impl<'a> Iterator for Rows<'a> {
         let result = Some(Row {
             row: self.row,
             block_ref: self.block_ref.clone(),
+            kind: marker::PhantomData,
         });
         self.row += 1;
         result

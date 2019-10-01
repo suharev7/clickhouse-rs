@@ -4,22 +4,26 @@ use crate::{
     binary::{Encoder, ReadEx},
     errors::Result,
     types::{
+        ColumnType,
         column::{
-            array::ArrayColumnData, list::List, nullable::NullableColumnData, BoxColumnWrapper,
-            ColumnWrapper, Either, StringPool,
+            array::ArrayColumnData, BoxColumnWrapper, ColumnWrapper, Either,
+            list::List, nullable::NullableColumnData, StringPool,
         },
         Column, FromSql, SqlType, Value, ValueRef,
     },
 };
 
-use super::{column_data::{ColumnData, BoxColumnData}, ColumnFrom};
+use super::{
+    column_data::{BoxColumnData, ColumnData},
+    ColumnFrom,
+};
 
 pub(crate) struct StringColumnData {
     pool: StringPool,
 }
 
-pub(crate) struct StringAdapter {
-    pub(crate) column: Column,
+pub(crate) struct StringAdapter<K: ColumnType> {
+    pub(crate) column: Column<K>,
 }
 
 impl StringColumnData {
@@ -164,7 +168,7 @@ impl ColumnData for StringColumnData {
     fn save(&self, encoder: &mut Encoder, start: usize, end: usize) {
         let strings = self.pool.strings();
         for v in strings.skip(start).take(end - start) {
-            encoder.string(v);
+            encoder.byte_string(v);
         }
     }
 
@@ -184,11 +188,20 @@ impl ColumnData for StringColumnData {
     }
 
     fn clone_instance(&self) -> BoxColumnData {
-        Box::new(Self{ pool: self.pool.clone() })
+        Box::new(Self {
+            pool: self.pool.clone(),
+        })
+    }
+
+    unsafe fn get_internal(&self, pointers: &[*mut *const u8], level: u8) -> Result<()> {
+        assert_eq!(level, 0);
+        *pointers[0] = &self.pool as *const StringPool as *const u8;
+        *(pointers[1] as *mut usize) = self.len();
+        Ok(())
     }
 }
 
-impl ColumnData for StringAdapter {
+impl<K: ColumnType> ColumnData for StringAdapter<K> {
     fn sql_type(&self) -> SqlType {
         SqlType::String
     }

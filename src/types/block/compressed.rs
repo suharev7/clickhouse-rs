@@ -1,9 +1,4 @@
-use std::{
-    io,
-    io::Read,
-    mem,
-    os::raw::c_int,
-};
+use std::{io, io::Read, mem, os::raw::c_int};
 
 use byteorder::{LittleEndian, WriteBytesExt};
 use clickhouse_rs_cityhash_sys::{city_hash_128, UInt128};
@@ -11,7 +6,7 @@ use lz4::liblz4::LZ4_decompress_safe;
 
 use crate::{
     binary::ReadEx,
-    errors::{Error, Result}
+    errors::{Error, Result},
 };
 
 const DBMS_MAX_COMPRESSED_SIZE: u32 = 0x4000_0000; // 1GB

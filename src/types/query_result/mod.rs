@@ -1,21 +1,20 @@
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
 
 use futures_core::stream::BoxStream;
-use futures_util::{future, stream::{self, StreamExt}, TryStreamExt};
+use futures_util::{
+    future,
+    stream::{self, StreamExt},
+    TryStreamExt,
+};
 use log::info;
 
 use crate::{
-    ClientHandle,
     errors::Result,
     types::{
-        Block,
-        block::BlockRef,
-        Cmd,
-        Query,
-        query_result::stream_blocks::BlockStream,
-        Row,
-        Rows
+        block::BlockRef, query_result::stream_blocks::BlockStream, Block, Cmd, Query, Row,
+        Rows, Complex, Simple
     },
+    ClientHandle,
 };
 
 pub(crate) mod stream_blocks;
@@ -28,13 +27,16 @@ pub struct QueryResult<'a> {
 
 impl<'a> QueryResult<'a> {
     /// Fetch data from table. It returns a block that contains all rows.
-    pub async fn fetch_all(self) -> Result<Block> {
-        let blocks = self.stream_blocks().try_fold(Vec::new(), |mut blocks, block| {
-            if !block.is_empty() {
-                blocks.push(block);
-            }
-            future::ready(Ok(blocks))
-        }).await?;
+    pub async fn fetch_all(self) -> Result<Block<Complex>> {
+        let blocks = self
+            .stream_blocks()
+            .try_fold(Vec::new(), |mut blocks, block| {
+                if !block.is_empty() {
+                    blocks.push(block);
+                }
+                future::ready(Ok(blocks))
+            })
+            .await?;
         Ok(Block::concat(blocks.as_slice()))
     }
 
@@ -70,37 +72,47 @@ impl<'a> QueryResult<'a> {
     pub fn stream_blocks(self) -> BoxStream<'a, Result<Block>> {
         let query = self.query.clone();
 
-        self.client.wrap_stream::<'a, _>(move |c: &'a mut ClientHandle| {
-            info!("[send query] {}", query.get_sql());
-            c.pool.detach();
+        self.client
+            .wrap_stream::<'a, _>(move |c: &'a mut ClientHandle| {
+                info!("[send query] {}", query.get_sql());
+                c.pool.detach();
 
-            let context = c.context.clone();
+                let context = c.context.clone();
 
-            let inner = c.inner
-                .take()
-                .unwrap()
-                .call(Cmd::SendQuery(query, context.clone()));
+                let inner = c
+                    .inner
+                    .take()
+                    .unwrap()
+                    .call(Cmd::SendQuery(query, context.clone()));
 
-            BlockStream::<'a>::new(c, inner)
-        })
+                BlockStream::<'a>::new(c, inner)
+            })
     }
 
     /// Method that produces a stream of rows
-    pub fn stream(self) -> BoxStream<'a, Result<Row<'a>>> {
-        Box::pin(self.stream_blocks()
-            .map(|block_ret| {
-                let result: BoxStream<'a, Result<Row<'a>>> =
-                    match block_ret {
+    pub fn stream(self) -> BoxStream<'a, Result<Row<'a, Simple>>> {
+        Box::pin(
+            self.stream_blocks()
+                .map(|block_ret| {
+                    let result: BoxStream<'a, Result<Row<'a, Simple>>> = match block_ret {
                         Ok(block) => {
                             let block = Arc::new(block);
                             let block_ref = BlockRef::Owned(block);
 
-                            Box::pin(stream::iter(Rows { row: 0, block_ref })
-                                .map(|row| -> Result<Row<'static>> { Ok(row) }))
+                            Box::pin(
+                                stream::iter(Rows {
+                                    row: 0,
+                                    block_ref,
+                                    kind: PhantomData,
+                                })
+                                .map(|row| -> Result<Row<'static, Simple>> { Ok(row) }),
+                            )
                         }
                         Err(err) => Box::pin(stream::once(future::err(err))),
                     };
-                result
-            }).flatten())
+                    result
+                })
+                .flatten(),
+        )
     }
 }

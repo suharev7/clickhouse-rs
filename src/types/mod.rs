@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashMap, fmt, mem, sync::Mutex, pin::Pin};
+use std::{borrow::Cow, collections::HashMap, fmt, mem, pin::Pin, sync::Mutex};
 
 use chrono_tz::Tz;
 use hostname::get_hostname;
@@ -8,8 +8,8 @@ use lazy_static::lazy_static;
 use crate::errors::ServerError;
 
 pub use self::{
-    block::{Block, Row, Rows, RowBuilder, RCons, RNil},
-    column::Column,
+    block::{Block, RCons, RNil, Row, RowBuilder, Rows},
+    column::{Column, ColumnType, Simple, Complex},
     decimal::Decimal,
     from_sql::FromSql,
     options::Options,
@@ -235,6 +235,14 @@ impl SqlType {
             SqlType::Decimal(precision, scale) => {
                 format!("Decimal({}, {})", precision, scale).into()
             }
+        }
+    }
+
+    pub(crate) fn level(&self) -> u8 {
+        match self {
+            SqlType::Nullable(inner) => 1 + inner.level(),
+            SqlType::Array(inner) => 1 + inner.level(),
+            _ => 0,
         }
     }
 }

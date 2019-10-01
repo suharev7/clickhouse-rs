@@ -1,11 +1,11 @@
 use log::trace;
 
 use crate::{
-    binary::{Encoder, protocol},
-    Block,
-    errors::Result,
+    binary::{protocol, Encoder},
     client_info,
-    types::{Context, Query},
+    errors::Result,
+    types::{Context, Query, Simple},
+    Block,
 };
 
 /// Represents Clickhouse commands.
@@ -20,7 +20,7 @@ pub(crate) enum Cmd {
 
 impl Cmd {
     /// Returns the packed command as a byte vector.
-    #[inline]
+    #[inline(always)]
     pub(crate) fn get_packed_command(&self) -> Result<Vec<u8>> {
         encode_command(self)
     }
@@ -106,7 +106,7 @@ fn encode_query(query: &Query, context: &Context) -> Result<Vec<u8>> {
     let options = context.options.get()?;
 
     encoder.string(&query.get_sql());
-    Block::default().send_data(&mut encoder, options.compression);
+    Block::<Simple>::default().send_data(&mut encoder, options.compression);
 
     Ok(encoder.get_buffer())
 }

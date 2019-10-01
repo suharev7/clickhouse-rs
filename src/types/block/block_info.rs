@@ -1,6 +1,6 @@
 use crate::{
     binary::{Encoder, ReadEx},
-    errors::Result
+    errors::Result,
 };
 
 #[allow(dead_code)]

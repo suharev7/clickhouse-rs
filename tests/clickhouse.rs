@@ -2,9 +2,13 @@ use std::{env, f64::EPSILON, fmt};
 
 use chrono::prelude::*;
 use chrono_tz::Tz;
-use futures_util::{future, try_stream::TryStreamExt, stream::StreamExt};
+use futures_util::{future, stream::StreamExt, try_stream::TryStreamExt};
 
-use clickhouse_rs::{Block, errors::Error, Pool, types::{Decimal, FromSql}};
+use clickhouse_rs::{
+    errors::Error,
+    types::{Decimal, FromSql},
+    Block, Pool,
+};
 use Tz::UTC;
 
 fn database_url() -> String {
@@ -28,7 +32,8 @@ async fn test_connection_by_wrong_address() -> Result<(), Error> {
         let mut c = pool.get_handle().await?;
         c.ping().await?;
         Ok(())
-    }.await;
+    }
+        .await;
 
     ret.unwrap_err();
     Ok(())
@@ -44,7 +49,8 @@ async fn test_create_table() -> Result<(), Error> {
 
     let pool = Pool::new(database_url());
     let mut c = pool.get_handle().await?;
-    c.execute("DROP TABLE IF EXISTS clickhouse_test_create_table").await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_test_create_table")
+        .await?;
     c.execute(ddl).await?;
 
     if let Err(err) = c.execute(ddl).await {
@@ -118,10 +124,14 @@ async fn test_insert() -> Result<(), Error> {
     let expected = block.clone();
     let pool = Pool::new(database_url());
     let mut c = pool.get_handle().await?;
-    c.execute("DROP TABLE IF EXISTS clickhouse_test_insert").await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_test_insert")
+        .await?;
     c.execute(ddl).await?;
     c.insert("clickhouse_test_insert", block).await?;
-    let actual = c.query("SELECT * FROM clickhouse_test_insert").fetch_all().await?;
+    let actual = c
+        .query("SELECT * FROM clickhouse_test_insert")
+        .fetch_all()
+        .await?;
 
     assert_eq!(expected.as_ref(), &actual);
     Ok(())
@@ -161,32 +171,52 @@ async fn test_select() -> Result<(), Error> {
 
     let pool = Pool::new(database_url());
     let mut c = pool.get_handle().await?;
-    c.execute("DROP TABLE IF EXISTS clickhouse_test_select").await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_test_select")
+        .await?;
     c.execute(ddl).await?;
     c.insert("clickhouse_test_select", block).await?;
 
-    let r = c.query("SELECT COUNT(*) FROM clickhouse_test_select").fetch_all().await?;
+    let r = c
+        .query("SELECT COUNT(*) FROM clickhouse_test_select")
+        .fetch_all()
+        .await?;
     assert_eq!(4, r.get::<u64, _>(0, 0)?);
 
-    let r = c.query("SELECT COUNT(*) FROM clickhouse_test_select WHERE date = '2014-07-08'").fetch_all().await?;
+    let r = c
+        .query("SELECT COUNT(*) FROM clickhouse_test_select WHERE date = '2014-07-08'")
+        .fetch_all()
+        .await?;
     assert_eq!(3, r.get::<u64, _>(0, 0)?);
 
-    let r = c.query(
-        "SELECT COUNT(*) FROM clickhouse_test_select WHERE datetime = '2014-07-08 14:00:00'",
-    ).fetch_all().await?;
+    let r = c
+        .query("SELECT COUNT(*) FROM clickhouse_test_select WHERE datetime = '2014-07-08 14:00:00'")
+        .fetch_all()
+        .await?;
     assert_eq!(2, r.get::<u64, _>(0, 0)?);
 
-    let r = c.query("SELECT COUNT(*) FROM clickhouse_test_select WHERE id IN (1, 2, 3)").fetch_all().await?;
+    let r = c
+        .query("SELECT COUNT(*) FROM clickhouse_test_select WHERE id IN (1, 2, 3)")
+        .fetch_all()
+        .await?;
     assert_eq!(3, r.get::<u64, _>(0, 0)?);
 
-    let r = c.query("SELECT COUNT(*) FROM clickhouse_test_select WHERE code IN ('US', 'DE', 'RU')").fetch_all().await?;
+    let r = c
+        .query("SELECT COUNT(*) FROM clickhouse_test_select WHERE code IN ('US', 'DE', 'RU')")
+        .fetch_all()
+        .await?;
     assert_eq!(3, r.get::<u64, _>(0, 0)?);
 
-    let r = c.query("SELECT id FROM clickhouse_test_select ORDER BY id LIMIT 1").fetch_all().await?;
+    let r = c
+        .query("SELECT id FROM clickhouse_test_select ORDER BY id LIMIT 1")
+        .fetch_all()
+        .await?;
     assert_eq!(r.row_count(), 1);
     assert_eq!(1, r.get::<i32, _>(0, "id")?);
 
-    let r = c.query("SELECT id FROM clickhouse_test_select ORDER BY id LIMIT 1, 2").fetch_all().await?;
+    let r = c
+        .query("SELECT id FROM clickhouse_test_select ORDER BY id LIMIT 1, 2")
+        .fetch_all()
+        .await?;
     assert_eq!(r.row_count(), 2);
     assert_eq!(2, r.get::<i32, _>(0, "id")?);
     assert_eq!(3, r.get::<i32, _>(1, 0)?);
@@ -203,24 +233,30 @@ async fn test_simple_select() -> Result<(), Error> {
     let expected = Block::new().column("a", vec![1_u8, 2, 3]);
     assert_eq!(expected, actual);
 
-    let r = c.query(
-            "SELECT min(a) FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a)",
-        ).fetch_all().await?;
+    let r = c
+        .query("SELECT min(a) FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a)")
+        .fetch_all()
+        .await?;
     assert_eq!(1, r.get::<u8, _>(0, 0)?);
 
-    let r = c.query(
-        "SELECT max(a) FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a)",
-    ).fetch_all().await?;
+    let r = c
+        .query("SELECT max(a) FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a)")
+        .fetch_all()
+        .await?;
     assert_eq!(3, r.get::<u8, _>(0, 0)?);
 
-    let r = c.query(
-        "SELECT sum(a) FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a)",
-    ).fetch_all().await?;
+    let r = c
+        .query("SELECT sum(a) FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a)")
+        .fetch_all()
+        .await?;
     assert_eq!(6, r.get::<u64, _>(0, 0)?);
 
-    let r = c.query(
-        "SELECT median(a) FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a)",
-    ).fetch_all().await?;
+    let r = c
+        .query(
+            "SELECT median(a) FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a)",
+        )
+        .fetch_all()
+        .await?;
     assert!((2_f64 - r.get::<f64, _>(0, 0)?).abs() < EPSILON);
 
     Ok(())
@@ -236,11 +272,14 @@ async fn test_temporary_table() -> Result<(), Error> {
     c.execute(
         "INSERT INTO clickhouse_test_temporary_table (ID) \
          SELECT number AS ID FROM system.numbers LIMIT 10",
-    ).await?;
-    let block = c.query("SELECT ID AS ID FROM clickhouse_test_temporary_table").fetch_all().await?;
+    )
+    .await?;
+    let block = c
+        .query("SELECT ID AS ID FROM clickhouse_test_temporary_table")
+        .fetch_all()
+        .await?;
 
-    let expected = Block::new()
-        .column("ID", (0_u64..10).collect::<Vec<_>>());
+    let expected = Block::new().column("ID", (0_u64..10).collect::<Vec<_>>());
     assert_eq!(block, expected);
 
     Ok(())
@@ -261,8 +300,7 @@ async fn test_with_totals() -> Result<(), Error> {
         GROUP BY country
             WITH TOTALS";
 
-    let block = Block::new()
-        .column("country", vec!["RU", "EN", "RU", "RU", "EN", "RU"]);
+    let block = Block::new().column("country", vec!["RU", "EN", "RU", "RU", "EN", "RU"]);
 
     let expected = Block::new()
         .column("country", vec!["EN", "RU", ""])
@@ -270,7 +308,8 @@ async fn test_with_totals() -> Result<(), Error> {
 
     let pool = Pool::new(database_url());
     let mut c = pool.get_handle().await?;
-    c.execute("DROP TABLE IF EXISTS clickhouse_test_with_totals").await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_test_with_totals")
+        .await?;
     c.execute(ddl).await?;
     c.insert("clickhouse_test_with_totals", block).await?;
     let block = c.query(query).fetch_all().await?;
@@ -283,12 +322,14 @@ async fn test_with_totals() -> Result<(), Error> {
 async fn test_stream_rows() -> Result<(), Error> {
     let pool = Pool::new(database_url());
     let mut c = pool.get_handle().await?;
-    let actual = c.query("SELECT number FROM system.numbers LIMIT 10")
-                  .stream()
-                  .try_fold(0_u64, |acc, row| {
-                      let number: u64 = row.get("number").unwrap();
-                      future::ready(Ok(acc + number))
-                  }).await?;
+    let actual = c
+        .query("SELECT number FROM system.numbers LIMIT 10")
+        .stream()
+        .try_fold(0_u64, |acc, row| {
+            let number: u64 = row.get("number").unwrap();
+            future::ready(Ok(acc + number))
+        })
+        .await?;
     c.ping().await?;
 
     assert_eq!(45, actual);
@@ -407,7 +448,8 @@ async fn test_nullable() -> Result<(), Error> {
 
     let pool = Pool::new(database_url());
     let mut c = pool.get_handle().await?;
-    c.execute("DROP TABLE IF EXISTS clickhouse_test_nullable").await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_test_nullable")
+        .await?;
     c.execute(ddl).await?;
     c.insert("clickhouse_test_nullable", block).await?;
     let block = c.query(query).fetch_all().await?;
@@ -492,7 +534,8 @@ async fn test_fixed_string() -> Result<(), Error> {
 
     let pool = Pool::new(database_url());
     let mut c = pool.get_handle().await?;
-    c.execute("DROP TABLE IF EXISTS clickhouse_test_fixed_string").await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_test_fixed_string")
+        .await?;
     c.execute(ddl).await?;
     c.insert("clickhouse_test_fixed_string", block).await?;
     let block = c.query(query).fetch_all().await?;
@@ -532,7 +575,8 @@ async fn test_binary_string() -> Result<(), Error> {
 
     let pool = Pool::new(database_url());
     let mut c = pool.get_handle().await?;
-    c.execute("DROP TABLE IF EXISTS clickhouse_binary_string").await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_binary_string")
+        .await?;
     c.execute(ddl).await?;
     c.insert("clickhouse_binary_string", block).await?;
     let block = c.query(query).fetch_all().await?;
@@ -642,15 +686,111 @@ async fn test_inconsistent_read() -> Result<(), Error> {
     let pool = Pool::new(database_url());
     let mut client = pool.get_handle().await?;
     {
-        let mut stream = client.query(r"
+        let mut stream = client
+            .query(
+                r"
             SELECT number FROM system.numbers LIMIT 10000
             UNION ALL
-            SELECT number FROM system.numbers LIMIT 1000000").stream();
+            SELECT number FROM system.numbers LIMIT 1000000",
+            )
+            .stream();
 
         if let Some(row) = stream.next().await {
             row?;
         }
     }
     client.ping().await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_column_iter() -> Result<(), Error> {
+    let ddl = r"
+        CREATE TABLE clickhouse_test_column_iter (
+            uint64    UInt64,
+            str       String,
+            fixed_str FixedString(1),
+            opt_str   Nullable(String),
+            date      Date,
+            datetime  DateTime,
+            decimal   Decimal(8, 3),
+            array     Array(UInt32)
+        ) Engine=Memory";
+
+    let query = r"SELECT * FROM clickhouse_test_column_iter";
+
+    let date_value: Date<Tz> = UTC.ymd(2016, 10, 22);
+    let date_time_value: DateTime<Tz> = UTC.ymd(2014, 7, 8).and_hms(14, 0, 0);
+
+    let block = Block::new()
+        .column("uint64", vec![1_u64, 2, 3])
+        .column("str", vec!["A", "B", "C"])
+        .column("fixed_str", vec!["A", "B", "C"])
+        .column("opt_str", vec![Some("A"), None, None])
+        .column("date", vec![date_value, date_value, date_value])
+        .column(
+            "datetime",
+            vec![date_time_value, date_time_value, date_time_value],
+        )
+        .column(
+            "decimal",
+            vec![Decimal::of(1.234, 3), Decimal::of(5, 3), Decimal::of(5, 3)],
+        )
+        .column("array", vec![vec![42_u32], Vec::new(), Vec::new()]);
+
+    let pool = Pool::new(database_url());
+    let mut c = pool.get_handle().await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_test_column_iter")
+        .await?;
+    c.execute(ddl).await?;
+    c.insert("clickhouse_test_column_iter", block).await?;
+
+    let mut stream = c.query(query).stream_blocks();
+
+    while let Some(block) = stream.next().await {
+        let block = block?;
+
+        let uint64_iter: Vec<_> = block
+            .get_column("uint64")?
+            .iter::<u64>()?
+            .copied()
+            .collect();
+        assert_eq!(uint64_iter, vec![1_u64, 2, 3]);
+
+        let str_iter: Vec<_> = block.get_column("str")?.iter::<&[u8]>()?.collect();
+        assert_eq!(str_iter, vec![&[65_u8], &[66], &[67]]);
+
+        let fixed_str_iter: Vec<_> = block.get_column("fixed_str")?.iter::<&[u8]>()?.collect();
+        assert_eq!(fixed_str_iter, vec![&[65_u8], &[66], &[67]]);
+
+        let opt_str_iter: Vec<_> = block
+            .get_column("opt_str")?
+            .iter::<Option<&[u8]>>()?
+            .collect();
+        let expected: Vec<Option<&[u8]>> = vec![Some(&[65_u8]), None, None];
+        assert_eq!(opt_str_iter, expected);
+
+        let date_iter: Vec<_> = block.get_column("date")?.iter::<Date<Tz>>()?.collect();
+        assert_eq!(date_iter, vec![date_value, date_value, date_value]);
+
+        let datetime_iter: Vec<_> = block
+            .get_column("datetime")?
+            .iter::<DateTime<Tz>>()?
+            .collect();
+        assert_eq!(
+            datetime_iter,
+            vec![date_time_value, date_time_value, date_time_value]
+        );
+
+        let decimal_iter: Vec<_> = block.get_column("decimal")?.iter::<Decimal>()?.collect();
+        assert_eq!(
+            decimal_iter,
+            vec![Decimal::of(1.234, 3), Decimal::of(5, 3), Decimal::of(5, 3)]
+        );
+
+        let array_iter: Vec<_> = block.get_column("array")?.iter::<Vec<u32>>()?.collect();
+        assert_eq!(array_iter, vec![vec![&42_u32], Vec::new(), Vec::new()]);
+    }
+
     Ok(())
 }

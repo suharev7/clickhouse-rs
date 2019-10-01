@@ -58,7 +58,7 @@ tcp://user:password@host:9000/clicks?compression=lz4&ping_timeout=42ms
 ## Example
 
 ```rust
-use clickhouse_rs::{Block, Options, Pool};
+use clickhouse_rs::{Block, Pool};
 use std::error::Error;
 
 #[tokio::main]

@@ -1,23 +1,20 @@
 use std::{convert, fmt, sync::Arc};
 
-use chrono::{Date, prelude::*};
+use chrono::{prelude::*, Date};
 use chrono_tz::Tz;
 
 use crate::{
     binary::{Encoder, ReadEx},
     errors::Result,
-    types::{DateConverter, Marshal, SqlType, StatBuffer, Unmarshal, Value, ValueRef},
     types::column::{
         array::ArrayColumnData,
-        BoxColumnWrapper,
-        column_data::{ColumnData, BoxColumnData},
-        ColumnFrom,
-        ColumnWrapper,
-        Either,
+        column_data::{BoxColumnData, ColumnData},
         list::List,
         nullable::NullableColumnData,
-        numeric::save_data
+        numeric::save_data,
+        BoxColumnWrapper, ColumnFrom, ColumnWrapper, Either,
     },
+    types::{DateConverter, Marshal, SqlType, StatBuffer, Unmarshal, Value, ValueRef},
 };
 
 pub struct DateColumnData<T>
@@ -63,7 +60,9 @@ where
         tz: Tz,
     ) -> Result<DateColumnData<T>> {
         let mut data = List::with_capacity(size);
-        unsafe { data.set_len(size); }
+        unsafe {
+            data.set_len(size);
+        }
         reader.read_bytes(data.as_mut())?;
         Ok(DateColumnData { data, tz })
     }
@@ -227,10 +226,18 @@ where
     }
 
     fn clone_instance(&self) -> BoxColumnData {
-        Box::new(Self{
+        Box::new(Self {
             data: self.data.clone(),
             tz: self.tz,
         })
+    }
+
+    unsafe fn get_internal(&self, pointers: &[*mut *const u8], level: u8) -> Result<()> {
+        assert_eq!(level, 0);
+        *pointers[0] = self.data.as_ptr() as *const u8;
+        *pointers[1] = &self.tz as *const Tz as *const u8;
+        *(pointers[2] as *mut usize) = self.len();
+        Ok(())
     }
 }
 

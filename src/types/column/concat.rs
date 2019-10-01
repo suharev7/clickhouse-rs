@@ -5,7 +5,7 @@ use crate::{
     types::{SqlType, Value, ValueRef},
 };
 
-use super::column_data::{ColumnData, ArcColumnData, BoxColumnData};
+use super::column_data::{ArcColumnData, BoxColumnData, ColumnData};
 
 pub struct ConcatColumnData {
     data: Vec<ArcColumnData>,

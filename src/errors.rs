@@ -1,8 +1,8 @@
-use std::{borrow::Cow, io, str::Utf8Error, string::FromUtf8Error, result};
+use std::{borrow::Cow, io, result, str::Utf8Error, string::FromUtf8Error};
 
 use failure::*;
-use url::ParseError;
 use tokio::timer::timeout::Elapsed;
+use url::ParseError;
 
 /// Result type alias for this library.
 pub type Result<T> = result::Result<T, Error>;

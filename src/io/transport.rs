@@ -1,8 +1,8 @@
 use std::{
     collections::VecDeque,
     io::{self, Cursor},
-    ptr,
     pin::Pin,
+    ptr,
     task::{self, Poll},
 };
 
@@ -16,7 +16,7 @@ use crate::{
     binary::Parser,
     errors::{DriverError, Error, Result},
     io::read_to_end::read_to_end,
-    types::{Block, Cmd, Packet}
+    types::{Block, Cmd, Packet},
 };
 
 /// Line transport
@@ -83,12 +83,10 @@ impl ClickhouseTransport {
                 Ok(Packet::Pong(inner)) => {
                     h = Some(inner);
                 }
-                Ok(Packet::Eof(inner)) => {
-                    h = Some(inner)
-                }
+                Ok(Packet::Eof(inner)) => h = Some(inner),
                 Ok(Packet::Exception(e)) => return Err(Error::Server(e)),
                 Err(e) => return Err(e.into()),
-                _ => {},
+                _ => {}
             }
         }
 
@@ -161,7 +159,7 @@ impl ClickhouseTransport {
                     } else {
                         Poll::Ready(Some(Err(e.into())))
                     }
-                },
+                }
             }
         };
 
@@ -171,9 +169,7 @@ impl ClickhouseTransport {
                 // Data is consumed
                 let new_len = self.rd.len() - pos;
                 unsafe {
-                    ptr::copy(self.rd.as_ptr().add(pos),
-                              self.rd.as_mut_ptr(),
-                              new_len);
+                    ptr::copy(self.rd.as_ptr().add(pos), self.rd.as_mut_ptr(), new_len);
                     self.rd.set_len(new_len);
                 }
             }
@@ -235,11 +231,7 @@ impl Stream for ClickhouseTransport {
         // Try to parse the new data!
         let ret = self.as_mut().try_parse_msg();
 
-        self.buf_is_incomplete = if let Poll::Pending = ret {
-            true
-        } else {
-            false
-        };
+        self.buf_is_incomplete = if let Poll::Pending = ret { true } else { false };
 
         ret
     }

@@ -5,7 +5,7 @@ use log::{trace, warn};
 
 use crate::{
     binary::{protocol, ReadEx},
-    errors::{DriverError, Error, ServerError, Result},
+    errors::{DriverError, Error, Result, ServerError},
     types::{Block, Packet, ProfileInfo, Progress, ServerInfo},
 };
 

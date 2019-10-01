@@ -1,4 +1,4 @@
-use std::{mem, slice};
+use std::{fmt, mem, slice};
 
 use crate::types::{Marshal, StatBuffer, Unmarshal};
 
@@ -47,6 +47,15 @@ where
 
     pub(super) unsafe fn as_ptr(&self) -> *const T {
         self.data.as_ptr()
+    }
+}
+
+impl<T> fmt::Debug for List<T>
+where
+    T: StatBuffer + Unmarshal<T> + Marshal + Copy + Sync + 'static + fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self.data)
     }
 }
 

@@ -1,10 +1,10 @@
 use std::{future::Future, pin::Pin};
 
-use futures_core::{Poll, task::Context};
+use futures_core::{task::Context, Poll};
 
 use pin_project::pin_project;
 
-use crate::{ClientHandle, errors::Result, pool::Pool};
+use crate::{errors::Result, pool::Pool, ClientHandle};
 
 #[pin_project]
 pub struct GetHandle {
@@ -22,10 +22,6 @@ impl Future for GetHandle {
     type Output = Result<ClientHandle>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        match self.project().pool.poll(cx) {
-            Poll::Ready(Ok(h)) => Poll::Ready(Ok(h)),
-            Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
-            Poll::Pending => Poll::Pending,
-        }
+        self.project().pool.poll(cx)
     }
 }

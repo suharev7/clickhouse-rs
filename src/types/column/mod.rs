@@ -1,4 +1,4 @@
-use std::{ops, fmt, sync::Arc};
+use std::{fmt, marker, ops, sync::Arc};
 
 use chrono_tz::Tz;
 
@@ -7,20 +7,20 @@ use crate::{
     errors::{Error, FromSqlError, Result},
     types::{
         column::{
+            column_data::ArcColumnData,
             decimal::{DecimalAdapter, NullableDecimalAdapter},
             fixed_string::{FixedStringAdapter, NullableFixedStringAdapter},
-            string::StringAdapter, column_data::ArcColumnData
+            string::StringAdapter,
         },
-        decimal::NoBits, SqlType, ValueRef, Value
+        column::iter::SimpleIterable,
+        decimal::NoBits,
+        SqlType, Value, ValueRef,
     },
 };
 
-pub use self::{
-    concat::ConcatColumnData,
-    numeric::VectorColumnData,
-};
+pub(crate) use self::{column_data::ColumnData, string_pool::StringPool};
+pub use self::{concat::ConcatColumnData, numeric::VectorColumnData};
 use self::chunk::ChunkColumnData;
-pub(crate) use self::{string_pool::StringPool, column_data::ColumnData};
 
 mod array;
 mod chunk;
@@ -30,6 +30,7 @@ mod date;
 mod decimal;
 mod factory;
 pub(crate) mod fixed_string;
+mod iter;
 mod list;
 mod nullable;
 mod numeric;
@@ -37,23 +38,52 @@ mod string;
 mod string_pool;
 
 /// Represents Clickhouse Column
-pub struct Column {
+pub struct Column<K: ColumnType> {
     pub(crate) name: String,
     pub(crate) data: ArcColumnData,
+    pub(crate) _marker: marker::PhantomData<K>,
 }
 
 pub trait ColumnFrom {
     fn column_from<W: ColumnWrapper>(source: Self) -> W::Wrapper;
 }
 
-impl ColumnFrom for Column {
+pub trait ColumnType: Send + Copy + Sync + 'static {}
+
+#[derive(Copy, Clone)]
+pub struct Simple {
+    _private: (),
+}
+
+#[derive(Copy, Clone)]
+pub struct Complex {
+    _private: (),
+}
+
+impl ColumnType for Simple {}
+
+impl ColumnType for Complex {}
+
+impl Default for Simple {
+    fn default() -> Self {
+        Self { _private: () }
+    }
+}
+
+impl Default for Complex {
+    fn default() -> Self {
+        Self { _private: () }
+    }
+}
+
+impl<K: ColumnType> ColumnFrom for Column<K> {
     fn column_from<W: ColumnWrapper>(source: Self) -> W::Wrapper {
         W::wrap_arc(source.data)
     }
 }
 
-impl PartialEq<Column> for Column {
-    fn eq(&self, other: &Self) -> bool {
+impl<L: ColumnType, R: ColumnType> PartialEq<Column<R>> for Column<L> {
+    fn eq(&self, other: &Column<R>) -> bool {
         if self.len() != other.len() {
             return false;
         }
@@ -72,21 +102,90 @@ impl PartialEq<Column> for Column {
     }
 }
 
-impl Clone for Column {
+impl<K: ColumnType> Clone for Column<K> {
     fn clone(&self) -> Self {
         Self {
             name: self.name.clone(),
             data: self.data.clone(),
+            _marker: marker::PhantomData,
         }
     }
 }
 
-impl Column {
-    pub(crate) fn read<R: ReadEx>(reader: &mut R, size: usize, tz: Tz) -> Result<Column> {
+impl Column<Simple> {
+    pub(crate) fn concat<'a, I>(items: I) -> Column<Complex>
+    where
+        I: Iterator<Item = &'a Self>,
+    {
+        let items_vec: Vec<&Self> = items.collect();
+        let chunks: Vec<_> = items_vec.iter().map(|column| column.data.clone()).collect();
+        match items_vec.first() {
+            None => unreachable!(),
+            Some(ref first_column) => {
+                let name: String = first_column.name().to_string();
+                let data = ConcatColumnData::concat(chunks);
+                Column {
+                    name,
+                    data: Arc::new(data),
+                    _marker: marker::PhantomData,
+                }
+            }
+        }
+    }
+
+    /// Returns an iterator over the column.
+    ///
+    /// ### Example
+    ///
+    /// ```rust
+    /// # use std::env;
+    /// # use clickhouse_rs::{errors::Error, Pool, errors::Result};
+    /// # use futures_util::stream::StreamExt;
+    /// # let rt = tokio::runtime::Runtime::new().unwrap();
+    /// # let ret: Result<()> = rt.block_on(async {
+    /// #     let database_url = "tcp://localhost:9000";
+    /// #     let pool = Pool::new(database_url);
+    /// #     let mut client = pool.get_handle().await?;
+    ///       let mut stream = client
+    ///             .query("SELECT number as n1, number as n2, number as n3 FROM numbers(100000000)")
+    ///             .stream_blocks();
+    ///
+    ///       let mut sum = 0;
+    ///       while let Some(block) = stream.next().await {
+    ///           let block = block?;
+    ///
+    ///           let c1 = block.get_column("n1")?.iter::<u64>()?;
+    ///           let c2 = block.get_column("n2")?.iter::<u64>()?;
+    ///           let c3 = block.get_column("n3")?.iter::<u64>()?;
+    ///
+    ///           for ((v1, v2), v3) in c1.zip(c2).zip(c3) {
+    ///               sum = v1 + v2 + v3;
+    ///           }
+    ///       }
+    ///
+    ///       dbg!(sum);
+    /// #     Ok(())
+    /// # });
+    /// # ret.unwrap()
+    /// ```
+    pub fn iter<'a, T>(&'a self) -> Result<T::Iter>
+    where
+        T: SimpleIterable<'a>,
+    {
+        T::iter(self, self.sql_type())
+    }
+}
+
+impl<K: ColumnType> Column<K> {
+    pub(crate) fn read<R: ReadEx>(reader: &mut R, size: usize, tz: Tz) -> Result<Column<K>> {
         let name = reader.read_string()?;
         let type_name = reader.read_string()?;
         let data = ColumnData::load_data::<ArcColumnWrapper, _>(reader, &type_name, size, tz)?;
-        let column = Self { name, data };
+        let column = Self {
+            name,
+            data,
+            _marker: marker::PhantomData,
+        };
         Ok(column)
     }
 
@@ -117,34 +216,16 @@ impl Column {
         self.data.len()
     }
 
-    pub(crate) fn concat<'a, I>(items: I) -> Self
-    where
-        I: Iterator<Item = &'a Self>,
-    {
-        let items_vec: Vec<&Self> = items.collect();
-        let chunks: Vec<_> = items_vec.iter().map(|column| column.data.clone()).collect();
-        match items_vec.first() {
-            None => unreachable!(),
-            Some(ref first_column) => {
-                let name: String = first_column.name().to_string();
-                let data = ConcatColumnData::concat(chunks);
-                Self {
-                    name,
-                    data: Arc::new(data),
-                }
-            }
-        }
-    }
-
-    pub(crate) fn slice(&self, range: ops::Range<usize>) -> Self {
+    pub(crate) fn slice(&self, range: ops::Range<usize>) -> Column<Complex> {
         let data = ChunkColumnData::new(self.data.clone(), range);
-        Self {
+        Column {
             name: self.name.clone(),
             data: Arc::new(data),
+            _marker: marker::PhantomData,
         }
     }
 
-    pub fn cast_to(self, dst_type: SqlType) -> Result<Column> {
+    pub(crate) fn cast_to(self, dst_type: SqlType) -> Result<Self> {
         let src_type = self.sql_type();
 
         if dst_type == src_type {
@@ -161,6 +242,7 @@ impl Column {
                 Ok(Column {
                     name,
                     data: Arc::new(adapter),
+                    _marker: marker::PhantomData,
                 })
             }
             (
@@ -175,6 +257,7 @@ impl Column {
                 Ok(Column {
                     name,
                     data: Arc::new(adapter),
+                    _marker: marker::PhantomData,
                 })
             }
             (SqlType::String, SqlType::Array(SqlType::UInt8)) => {
@@ -183,6 +266,7 @@ impl Column {
                 Ok(Column {
                     name,
                     data: Arc::new(adapter),
+                    _marker: marker::PhantomData,
                 })
             }
             (SqlType::FixedString(n), SqlType::Array(SqlType::UInt8)) => {
@@ -201,6 +285,7 @@ impl Column {
                 Ok(Column {
                     name,
                     data: Arc::new(adapter),
+                    _marker: marker::PhantomData,
                 })
             }
             (
@@ -218,6 +303,7 @@ impl Column {
                 Ok(Column {
                     name,
                     data: Arc::new(adapter),
+                    _marker: marker::PhantomData,
                 })
             }
             _ => Err(Error::FromSql(FromSqlError::InvalidType {
@@ -232,24 +318,28 @@ impl Column {
             match Arc::get_mut(&mut self.data) {
                 None => {
                     self.data = Arc::from(self.data.clone_instance());
-                },
+                }
                 Some(data) => {
                     data.push(value);
                     break;
-                },
+                }
             }
         }
     }
 
-    pub(crate) unsafe fn as_ptr(&self) -> Result<*const u8> {
-        self.data.as_ptr()
+    pub(crate) unsafe fn get_internal(&self, pointers: &[*mut *const u8], level: u8) -> Result<()> {
+        self.data.get_internal(pointers, level)
     }
 }
 
-pub(crate) fn new_column(name: &str, data: Arc<(dyn ColumnData + Sync + Send + 'static)>) -> Column {
+pub(crate) fn new_column<K: ColumnType>(
+    name: &str,
+    data: Arc<(dyn ColumnData + Sync + Send + 'static)>,
+) -> Column<K> {
     Column {
         name: name.to_string(),
         data,
+        _marker: marker::PhantomData,
     }
 }
 

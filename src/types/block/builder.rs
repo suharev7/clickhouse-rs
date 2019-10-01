@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, marker};
 
 use chrono_tz::Tz;
 
@@ -6,15 +6,13 @@ use crate::{
     Block,
     errors::{Error, FromSqlError, Result},
     types::{
-        block::ColumnIdx,
-        column::{ArcColumnWrapper, ColumnData, Either},
-        Column,
-        Value
+        block::ColumnIdx, ColumnType,
+        column::{ArcColumnWrapper, ColumnData, Either}, Column, Value,
     },
 };
 
 pub trait RowBuilder {
-    fn apply(self, block: &mut Block) -> Result<()>;
+    fn apply<K: ColumnType>(self, block: &mut Block<K>) -> Result<()>;
 }
 
 pub struct RNil;
@@ -53,7 +51,7 @@ where
 
 impl RowBuilder for RNil {
     #[inline(always)]
-    fn apply(self, _block: &mut Block) -> Result<()> {
+    fn apply<K: ColumnType>(self, _block: &mut Block<K>) -> Result<()> {
         Ok(())
     }
 }
@@ -63,14 +61,14 @@ where
     T: RowBuilder,
 {
     #[inline(always)]
-    fn apply(self, block: &mut Block) -> Result<()> {
+    fn apply<K: ColumnType>(self, block: &mut Block<K>) -> Result<()> {
         put_param(self.key, self.value, block)?;
         self.tail.apply(block)
     }
 }
 
 impl RowBuilder for Vec<(String, Value)> {
-    fn apply(self, block: &mut Block) -> Result<()> {
+    fn apply<K: ColumnType>(self, block: &mut Block<K>) -> Result<()> {
         for (k, v) in self {
             put_param(k.into(), v, block)?;
         }
@@ -78,7 +76,11 @@ impl RowBuilder for Vec<(String, Value)> {
     }
 }
 
-fn put_param(key: Cow<'static, str>, value: Value, block: &mut Block) -> Result<()> {
+fn put_param<K: ColumnType>(
+    key: Cow<'static, str>,
+    value: Value,
+    block: &mut Block<K>,
+) -> Result<()> {
     let col_index = match key.as_ref().get_index(&block.columns) {
         Ok(col_index) => col_index,
         Err(Error::FromSql(FromSqlError::OutOfRange)) => {
@@ -90,6 +92,7 @@ fn put_param(key: Cow<'static, str>, value: Value, block: &mut Block) -> Result<
                 let column = Column {
                     name: key.clone().into(),
                     data: ColumnData::from_type::<ArcColumnWrapper>(sql_type, timezone)?,
+                    _marker: marker::PhantomData,
                 };
 
                 block.columns.push(column);
@@ -109,9 +112,7 @@ fn extract_timezone(value: &Value) -> Tz {
     match value {
         Value::Date(_, tz) => *tz,
         Value::DateTime(_, tz) => *tz,
-        Value::Nullable(Either::Right(d)) => {
-            extract_timezone(&&d)
-        }
+        Value::Nullable(Either::Right(d)) => extract_timezone(&&d),
         Value::Array(_, data) => {
             if let Some(v) = data.first() {
                 extract_timezone(v)
@@ -119,7 +120,7 @@ fn extract_timezone(value: &Value) -> Tz {
                 Tz::Zulu
             }
         }
-        _ => Tz::Zulu
+        _ => Tz::Zulu,
     }
 }
 
@@ -128,7 +129,10 @@ mod test {
     use chrono::prelude::*;
     use chrono_tz::Tz::{self, UTC};
 
-    use crate::{row, types::{Decimal, SqlType}};
+    use crate::{
+        row,
+        types::{Decimal, SqlType, Simple},
+    };
 
     use super::*;
 
@@ -139,30 +143,32 @@ mod test {
 
         let decimal = Decimal::of(2.0_f64, 4);
 
-        let mut block = Block::new();
-        block.push(row!{
-            i8_field: 1_i8,
-            i16_field: 1_i16,
-            i32_field: 1_i32,
-            i64_field: 1_i64,
+        let mut block = Block::<Simple>::new();
+        block
+            .push(row! {
+                i8_field: 1_i8,
+                i16_field: 1_i16,
+                i32_field: 1_i32,
+                i64_field: 1_i64,
 
-            u8_field: 1_u8,
-            u16_field: 1_u16,
-            u32_field: 1_u32,
-            u64_field: 1_u64,
+                u8_field: 1_u8,
+                u16_field: 1_u16,
+                u32_field: 1_u32,
+                u64_field: 1_u64,
 
-            f32_field: 4.66_f32,
-            f64_field: 2.71_f64,
+                f32_field: 4.66_f32,
+                f64_field: 2.71_f64,
 
-            str_field: "text",
-            opt_filed: Some("text"),
-            nil_filed: Option::<&str>::None,
+                str_field: "text",
+                opt_filed: Some("text"),
+                nil_filed: Option::<&str>::None,
 
-            date_field: date_value,
-            date_time_field: date_time_value,
+                date_field: date_value,
+                date_time_field: date_time_value,
 
-            decimal_field: decimal
-        }).unwrap();
+                decimal_field: decimal
+            })
+            .unwrap();
 
         assert_eq!(block.row_count(), 1);
 
@@ -180,8 +186,14 @@ mod test {
         assert_eq!(block.columns[9].sql_type(), SqlType::Float64);
 
         assert_eq!(block.columns[10].sql_type(), SqlType::String);
-        assert_eq!(block.columns[11].sql_type(), SqlType::Nullable(SqlType::String.into()));
-        assert_eq!(block.columns[12].sql_type(), SqlType::Nullable(SqlType::String.into()));
+        assert_eq!(
+            block.columns[11].sql_type(),
+            SqlType::Nullable(SqlType::String.into())
+        );
+        assert_eq!(
+            block.columns[12].sql_type(),
+            SqlType::Nullable(SqlType::String.into())
+        );
 
         assert_eq!(block.columns[13].sql_type(), SqlType::Date);
         assert_eq!(block.columns[14].sql_type(), SqlType::DateTime);

@@ -3,11 +3,14 @@ use std::{
     io,
     net::ToSocketAddrs,
     pin::Pin,
-    task::{Context, Poll}
+    task::{Context, Poll},
 };
 
 use futures_core::future::BoxFuture;
-use futures_util::{FutureExt, try_future::{select_ok, SelectOk}};
+use futures_util::{
+    try_future::{select_ok, SelectOk},
+    FutureExt,
+};
 use tokio::net::TcpStream;
 
 use pin_project::{pin_project, project};
@@ -28,9 +31,7 @@ impl State {
                 Poll::Ready(Err(err)) => Poll::Ready(Err(err)),
                 Poll::Pending => Poll::Pending,
             },
-            State::Fail(ref mut err) => {
-                Poll::Ready(Err(err.take().unwrap()))
-            },
+            State::Fail(ref mut err) => Poll::Ready(Err(err.take().unwrap())),
         }
     }
 }

@@ -3,7 +3,10 @@ use std::cmp;
 use crate::{
     binary::{Encoder, ReadEx},
     errors::Result,
-    types::{from_sql::*, Column, SqlType, Value, ValueRef, column::column_data::BoxColumnData},
+    types::{
+        column::column_data::BoxColumnData, from_sql::*, Column, SqlType, Value,
+        ValueRef, ColumnType
+    },
 };
 
 use super::column_data::ColumnData;
@@ -13,13 +16,13 @@ pub(crate) struct FixedStringColumnData {
     str_len: usize,
 }
 
-pub(crate) struct FixedStringAdapter {
-    pub(crate) column: Column,
+pub(crate) struct FixedStringAdapter<K: ColumnType> {
+    pub(crate) column: Column<K>,
     pub(crate) str_len: usize,
 }
 
-pub(crate) struct NullableFixedStringAdapter {
-    pub(crate) column: Column,
+pub(crate) struct NullableFixedStringAdapter<K: ColumnType> {
+    pub(crate) column: Column<K>,
     pub(crate) str_len: usize,
 }
 
@@ -31,11 +34,7 @@ impl FixedStringColumnData {
         }
     }
 
-    pub(crate) fn load<T: ReadEx>(
-        reader: &mut T,
-        size: usize,
-        str_len: usize,
-    ) -> Result<Self> {
+    pub(crate) fn load<T: ReadEx>(reader: &mut T, size: usize, str_len: usize) -> Result<Self> {
         let mut instance = Self::with_capacity(size, str_len);
 
         for _ in 0..size {
@@ -83,9 +82,16 @@ impl ColumnData for FixedStringColumnData {
             str_len: self.str_len,
         })
     }
+
+    unsafe fn get_internal(&self, pointers: &[*mut *const u8], level: u8) -> Result<()> {
+        assert_eq!(level, 0);
+        *pointers[0] = self.buffer.as_ptr() as *const u8;
+        *(pointers[1] as *mut usize) = self.len();
+        Ok(())
+    }
 }
 
-impl ColumnData for FixedStringAdapter {
+impl<K: ColumnType> ColumnData for FixedStringAdapter<K> {
     fn sql_type(&self) -> SqlType {
         SqlType::FixedString(self.str_len)
     }
@@ -132,7 +138,7 @@ impl ColumnData for FixedStringAdapter {
     }
 }
 
-impl ColumnData for NullableFixedStringAdapter {
+impl<K: ColumnType> ColumnData for NullableFixedStringAdapter<K> {
     fn sql_type(&self) -> SqlType {
         SqlType::Nullable(SqlType::FixedString(self.str_len).into())
     }

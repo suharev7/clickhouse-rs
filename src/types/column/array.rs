@@ -4,9 +4,9 @@ use chrono_tz::Tz;
 
 use crate::{
     binary::{Encoder, ReadEx},
-    errors::{Error, FromSqlError, Result},
+    errors::Result,
     types::{
-        column::{BoxColumnWrapper, column_data::BoxColumnData, ColumnData, list::List},
+        column::{column_data::BoxColumnData, list::List, BoxColumnWrapper, ColumnData},
         SqlType, Value, ValueRef,
     },
 };
@@ -100,8 +100,14 @@ impl ColumnData for ArrayColumnData {
         })
     }
 
-    unsafe fn as_ptr(&self) -> Result<*const u8> {
-        Err(Error::FromSql(FromSqlError::UnsupportedOperation))
+    unsafe fn get_internal(&self, pointers: &[*mut *const u8], level: u8) -> Result<()> {
+        if level == self.sql_type().level() {
+            *pointers[0] = self.offsets.as_ptr() as *const u8;
+            *(pointers[1] as *mut usize) = self.offsets.len();
+            Ok(())
+        } else {
+            self.inner.get_internal(pointers, level)
+        }
     }
 }
 
@@ -109,13 +115,12 @@ impl ColumnData for ArrayColumnData {
 mod test {
     use std::io::Cursor;
 
-    use crate::types::Block;
-
     use super::*;
+    use crate::{Block, types::Simple};
 
     #[test]
     fn test_write_and_read() {
-        let block = Block::new().column(
+        let block = Block::<Simple>::new().column(
             "vals",
             vec![vec![7_u32, 8], vec![9, 1, 2], vec![3, 4, 5, 6]],
         );

@@ -2,7 +2,10 @@ use std::{cmp, ops};
 
 use crate::{
     binary::Encoder,
-    types::{SqlType, Value, ValueRef, column::column_data::{ArcColumnData, BoxColumnData}},
+    types::{
+        column::column_data::{ArcColumnData, BoxColumnData},
+        SqlType, Value, ValueRef,
+    },
 };
 
 use super::ColumnData;

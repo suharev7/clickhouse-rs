@@ -1,14 +1,14 @@
 use std::cmp;
 
-use crate::types::Block;
+use crate::types::{Block, ColumnType};
 
-pub struct ChunkIterator<'a> {
+pub struct ChunkIterator<'a, K: ColumnType> {
     position: usize,
     size: usize,
-    block: &'a Block,
+    block: &'a Block<K>,
 }
 
-impl<'a> Iterator for ChunkIterator<'a> {
+impl<'a, K: ColumnType> Iterator for ChunkIterator<'a, K> {
     type Item = Block;
 
     fn next(&mut self) -> Option<Block> {
@@ -37,8 +37,8 @@ impl<'a> Iterator for ChunkIterator<'a> {
     }
 }
 
-impl<'a> ChunkIterator<'a> {
-    pub fn new(size: usize, block: &Block) -> ChunkIterator {
+impl<'a, K: ColumnType> ChunkIterator<'a, K> {
+    pub fn new(size: usize, block: &Block<K>) -> ChunkIterator<K> {
         ChunkIterator {
             position: 0,
             size,

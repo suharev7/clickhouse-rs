@@ -8,7 +8,7 @@ use std::{
     vec,
 };
 
-use crate::errors::{Error, UrlError, Result};
+use crate::errors::{Error, Result, UrlError};
 use url::Url;
 
 const DEFAULT_MIN_CONNS: usize = 10;

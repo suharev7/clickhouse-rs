@@ -11,7 +11,11 @@ use crate::{
     },
 };
 
-use super::{column_data::{ColumnData, BoxColumnData}, list::List, ColumnFrom};
+use super::{
+    column_data::{BoxColumnData, ColumnData},
+    list::List,
+    ColumnFrom,
+};
 
 pub struct VectorColumnData<T>
 where
@@ -153,12 +157,11 @@ where
         }
     }
 
-    pub(crate) fn load<R: ReadEx>(
-        reader: &mut R,
-        size: usize,
-    ) -> Result<VectorColumnData<T>> {
+    pub(crate) fn load<R: ReadEx>(reader: &mut R, size: usize) -> Result<VectorColumnData<T>> {
         let mut data = List::with_capacity(size);
-        unsafe { data.set_len(size); }
+        unsafe {
+            data.set_len(size);
+        }
         reader.read_bytes(data.as_mut())?;
         Ok(Self { data })
     }
@@ -214,11 +217,16 @@ where
     }
 
     fn clone_instance(&self) -> BoxColumnData {
-        Box::new(Self { data: self.data.clone()})
+        Box::new(Self {
+            data: self.data.clone(),
+        })
     }
 
-    unsafe fn as_ptr(&self) -> Result<*const u8> {
-        Ok(self.data.as_ptr() as *const u8)
+    unsafe fn get_internal(&self, pointers: &[*mut *const u8], level: u8) -> Result<()> {
+        assert_eq!(level, 0);
+        *pointers[0] = self.data.as_ptr() as *const u8;
+        *(pointers[1] as *mut usize) = self.len();
+        Ok(())
     }
 }
 

@@ -82,12 +82,14 @@ base_for! {
 }
 
 impl InternalResult for i32 {
+    #[inline(always)]
     fn get(underlying: i64) -> Self {
         underlying as Self
     }
 }
 
 impl InternalResult for i64 {
+    #[inline(always)]
     fn get(underlying: i64) -> Self {
         underlying
     }
@@ -200,6 +202,7 @@ impl Decimal {
     /// # });
     /// # ret.unwrap()
     /// ```
+    #[inline(always)]
     pub fn internal<I: InternalResult>(&self) -> I {
         InternalResult::get(self.underlying)
     }

@@ -87,20 +87,22 @@
 //! }
 //! ```
 
-#![feature(type_ascription, async_closure)]
+#![feature(
+    type_ascription,
+    async_closure,
+    exact_size_is_empty,
+    trusted_len,
+    core_intrinsics
+)]
 #![recursion_limit = "1024"]
 
 use std::{fmt, future::Future, time::Duration};
 
 use futures_core::{future::BoxFuture, stream::BoxStream};
-use futures_util::{future, stream, StreamExt, future::FutureExt};
+use futures_util::{future, future::FutureExt, stream, StreamExt};
 use log::info;
 use tokio::timer::Timeout;
 
-pub use crate::{
-    pool::Pool,
-    types::{block::Block, Options},
-};
 use crate::{
     connecting_stream::ConnectingStream,
     errors::{DriverError, Error, Result},
@@ -108,16 +110,13 @@ use crate::{
     pool::PoolBinding,
     retry_guard::retry_guard,
     types::{
-        Cmd,
-        Context,
-        IntoOptions,
-        OptionsSource,
-        Packet,
-        Query,
-        query_result::stream_blocks::BlockStream,
-        QueryResult,
-        SqlType
+        query_result::stream_blocks::BlockStream, Cmd, Context, IntoOptions, OptionsSource, Packet,
+        Query, QueryResult, SqlType,
     },
+};
+pub use crate::{
+    pool::Pool,
+    types::{block::Block, Options},
 };
 
 mod binary;
@@ -236,21 +235,25 @@ impl Client {
             ..Context::default()
         };
 
-        with_timeout(async move {
-            let stream = ConnectingStream::new(&options.addr).await?;
-            stream.set_nodelay(options.nodelay)?;
-            stream.set_keepalive(options.keepalive)?;
+        with_timeout(
+            async move {
+                let stream = ConnectingStream::new(&options.addr).await?;
+                stream.set_nodelay(options.nodelay)?;
+                stream.set_keepalive(options.keepalive)?;
 
-            let transport = ClickhouseTransport::new(stream, compress);
-            let mut handle = ClientHandle {
-                inner: Some(transport),
-                context,
-                pool: PoolBinding::None,
-            };
+                let transport = ClickhouseTransport::new(stream, compress);
+                let mut handle = ClientHandle {
+                    inner: Some(transport),
+                    context,
+                    pool: PoolBinding::None,
+                };
 
-            handle.hello().await?;
-            Ok(handle)
-        }, timeout).await
+                handle.hello().await?;
+                Ok(handle)
+            },
+            timeout,
+        )
+        .await
     }
 }
 
@@ -261,11 +264,7 @@ impl ClientHandle {
 
         let mut h = None;
         let mut info = None;
-        let mut stream = self
-            .inner
-            .take()
-            .unwrap()
-            .call(Cmd::Hello(context.clone()));
+        let mut stream = self.inner.take().unwrap().call(Cmd::Hello(context.clone()));
 
         while let Some(packet) = stream.next().await {
             match packet {
@@ -288,34 +287,38 @@ impl ClientHandle {
     pub async fn ping(&mut self) -> Result<()> {
         let timeout = try_opt!(self.context.options.get()).ping_timeout;
 
-        with_timeout(async move {
-            info!("[ping]");
+        with_timeout(
+            async move {
+                info!("[ping]");
 
-            let mut h = None;
+                let mut h = None;
 
-            let transport = self.inner.take().unwrap().clear().await?;
-            let mut stream = transport.call(Cmd::Ping);
+                let transport = self.inner.take().unwrap().clear().await?;
+                let mut stream = transport.call(Cmd::Ping);
 
-            while let Some(packet) = stream.next().await {
-                match packet {
-                    Ok(Packet::Pong(inner)) => {
-                        info!("[pong]");
-                        h = Some(inner);
+                while let Some(packet) = stream.next().await {
+                    match packet {
+                        Ok(Packet::Pong(inner)) => {
+                            info!("[pong]");
+                            h = Some(inner);
+                        }
+                        Ok(Packet::Exception(e)) => return Err(Error::Server(e)),
+                        Err(e) => return Err(e.into()),
+                        _ => return Err(Error::Driver(DriverError::UnexpectedPacket)),
                     }
-                    Ok(Packet::Exception(e)) => return Err(Error::Server(e)),
-                    Err(e) => return Err(e.into()),
-                    _ => return Err(Error::Driver(DriverError::UnexpectedPacket)),
                 }
-            }
 
-            self.inner = h;
-            Ok(())
-        }, timeout).await
+                self.inner = h;
+                Ok(())
+            },
+            timeout,
+        )
+        .await
     }
 
     /// Executes Clickhouse `query` on Conn.
     pub fn query<Q>(&mut self, sql: Q) -> QueryResult
-        where
+    where
         Query: From<Q>,
     {
         let query = Query::from(sql);
@@ -327,8 +330,8 @@ impl ClientHandle {
 
     /// Convenience method to prepare and execute a single SQL statement.
     pub async fn execute<Q>(&mut self, sql: Q) -> Result<()>
-        where
-            Query: From<Q>,
+    where
+        Query: From<Q>,
     {
         let transport = self.execute_(sql).await?;
         self.inner = Some(transport);
@@ -355,10 +358,10 @@ impl ClientHandle {
 
                 while let Some(packet) = stream.next().await {
                     match packet {
-                        Ok(Packet::Eof(inner)) => {
-                            h = Some(inner)
-                        }
-                        Ok(Packet::Block(_)) | Ok(Packet::ProfileInfo(_)) | Ok(Packet::Progress(_)) => (),
+                        Ok(Packet::Eof(inner)) => h = Some(inner),
+                        Ok(Packet::Block(_))
+                        | Ok(Packet::ProfileInfo(_))
+                        | Ok(Packet::Progress(_)) => (),
                         Ok(Packet::Exception(e)) => return Err(Error::Server(e)),
                         Err(e) => return Err(e.into()),
                         _ => return Err(Error::Driver(DriverError::UnexpectedPacket)),
@@ -367,7 +370,8 @@ impl ClientHandle {
 
                 Ok(h.unwrap())
             }
-        }).await
+        })
+        .await
     }
 
     /// Convenience method to insert block of data.
@@ -421,7 +425,8 @@ impl ClientHandle {
                 let (transport, _) = transport.call(send_cmd).read_block().await?;
                 Ok(transport)
             }
-        }).await
+        })
+        .await
     }
 
     pub(crate) async fn wrap_future<T, R, F>(&mut self, f: F) -> Result<T>
@@ -448,15 +453,13 @@ impl ClientHandle {
         };
 
         if ping_before_query {
-            let fut: BoxFuture<'a, BoxStream<'a, Result<Block>>> =
-                Box::pin(async move {
-                    let inner: BoxStream<'a, Result<Block>> =
-                        match self.check_connection().await {
-                            Ok(_) => Box::pin(f(self)),
-                            Err(err) => Box::pin(stream::once(future::err(err))),
-                        };
-                    inner
-                });
+            let fut: BoxFuture<'a, BoxStream<'a, Result<Block>>> = Box::pin(async move {
+                let inner: BoxStream<'a, Result<Block>> = match self.check_connection().await {
+                    Ok(_) => Box::pin(f(self)),
+                    Err(err) => Box::pin(stream::once(future::err(err))),
+                };
+                inner
+            });
 
             Box::pin(fut.flatten_stream())
         } else {
@@ -475,7 +478,7 @@ impl ClientHandle {
             (options.send_retries, options.retry_timeout)
         };
 
-        retry_guard(self, &source, send_retries,retry_timeout).await?;
+        retry_guard(self, &source, send_retries, retry_timeout).await?;
 
         if !self.pool.is_attached() && self.pool.is_some() {
             self.pool.attach();
@@ -487,7 +490,7 @@ impl ClientHandle {
 
 async fn with_timeout<F, T>(future: F, timeout: Duration) -> F::Output
 where
-    F: Future<Output = Result<T>>
+    F: Future<Output = Result<T>>,
 {
     match Timeout::new(future, timeout).await {
         Ok(Ok(c)) => Ok(c),

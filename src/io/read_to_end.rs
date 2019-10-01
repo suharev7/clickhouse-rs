@@ -4,8 +4,8 @@ use std::{
     task::{Context, Poll},
 };
 
-use tokio::prelude::*;
 use futures_core::ready;
+use tokio::prelude::*;
 
 struct Guard<'a> {
     buf: &'a mut Vec<u8>,

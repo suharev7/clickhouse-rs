@@ -1,19 +1,16 @@
-use std::{
-    mem,
-    time::Duration,
-};
+use std::{mem, time::Duration};
 
 use tokio::timer::Interval;
 
 use log::warn;
 
-use crate::{Client, ClientHandle, errors::Result, types::OptionsSource};
+use crate::{errors::Result, types::OptionsSource, Client, ClientHandle};
 
 pub(crate) async fn retry_guard(
     handle: &mut ClientHandle,
     source: &OptionsSource,
     max_attempt: usize,
-    duration: Duration
+    duration: Duration,
 ) -> Result<()> {
     let mut attempt = 0;
     let mut skip_check = false;
@@ -28,7 +25,7 @@ pub(crate) async fn retry_guard(
                     if attempt >= max_attempt {
                         return Err(err);
                     }
-                },
+                }
             }
         }
 

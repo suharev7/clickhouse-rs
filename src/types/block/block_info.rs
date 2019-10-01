@@ -1,6 +1,6 @@
 use crate::{
+    errors::Result,
     binary::{Encoder, ReadEx},
-    types::ClickhouseResult,
 };
 
 #[allow(dead_code)]
@@ -26,7 +26,7 @@ impl Default for BlockInfo {
 }
 
 impl BlockInfo {
-    pub(crate) fn read<R: ReadEx>(reader: &mut R) -> ClickhouseResult<Self> {
+    pub(crate) fn read<R: ReadEx>(reader: &mut R) -> Result<Self> {
         let block_info = Self {
             num1: reader.read_uvarint()?,
             is_overflows: reader.read_scalar()?,

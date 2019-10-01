@@ -4,8 +4,8 @@ use chrono_tz::Tz;
 
 use crate::{
     binary::{protocol, ReadEx},
-    errors::{DriverError, Error, ServerError},
-    types::{Block, ClickhouseResult, Packet, ProfileInfo, Progress, ServerInfo},
+    errors::{DriverError, Error, ServerError, Result},
+    types::{Block, Packet, ProfileInfo, Progress, ServerInfo},
 };
 
 /// The internal clickhouse response parser.
@@ -32,10 +32,10 @@ impl<'a, T: Read> Parser<T> {
         }
     }
 
-    /// parses a single value out of the stream.  If there are multiple
-    /// values you can call this multiple times.  If the reader is not yet
+    /// Parses a single value out of the stream. If there are multiple
+    /// values you can call this multiple times. If the reader is not yet
     /// ready this will block.
-    pub(crate) fn parse_packet(&mut self) -> ClickhouseResult<Packet<()>> {
+    pub(crate) fn parse_packet(&mut self) -> Result<Packet<()>> {
         let packet = self.reader.read_uvarint()?;
         match packet {
             protocol::SERVER_HELLO => Ok(self.parse_server_info()?),
@@ -51,7 +51,7 @@ impl<'a, T: Read> Parser<T> {
         }
     }
 
-    fn parse_block(&mut self) -> ClickhouseResult<Packet<()>> {
+    fn parse_block(&mut self) -> Result<Packet<()>> {
         match self.tz {
             None => Err(Error::Driver(DriverError::UnexpectedPacket)),
             Some(tz) => {
@@ -62,7 +62,7 @@ impl<'a, T: Read> Parser<T> {
         }
     }
 
-    fn parse_server_info(&mut self) -> ClickhouseResult<Packet<()>> {
+    fn parse_server_info(&mut self) -> Result<Packet<()>> {
         let server_info = ServerInfo {
             name: self.reader.read_string()?,
             major_version: self.reader.read_uvarint()?,
@@ -78,7 +78,7 @@ impl<'a, T: Read> Parser<T> {
         Ok(Packet::Hello((), server_info))
     }
 
-    fn parse_progress(&mut self) -> ClickhouseResult<Packet<()>> {
+    fn parse_progress(&mut self) -> Result<Packet<()>> {
         let progress = Progress {
             rows: self.reader.read_uvarint()?,
             bytes: self.reader.read_uvarint()?,
@@ -95,7 +95,7 @@ impl<'a, T: Read> Parser<T> {
         Ok(Packet::Progress(progress))
     }
 
-    fn parse_profile_info(&mut self) -> ClickhouseResult<Packet<()>> {
+    fn parse_profile_info(&mut self) -> Result<Packet<()>> {
         let info = Packet::ProfileInfo(ProfileInfo {
             rows: self.reader.read_uvarint()?,
             blocks: self.reader.read_uvarint()?,
@@ -109,7 +109,7 @@ impl<'a, T: Read> Parser<T> {
         Ok(info)
     }
 
-    fn parse_exception(&mut self) -> ClickhouseResult<Packet<()>> {
+    fn parse_exception(&mut self) -> Result<Packet<()>> {
         let exception = ServerError {
             code: self.reader.read_scalar()?,
             name: self.reader.read_string()?,
@@ -121,7 +121,7 @@ impl<'a, T: Read> Parser<T> {
         Ok(Packet::Exception(exception))
     }
 
-    fn parse_pong(&self) -> ClickhouseResult<Packet<()>> {
+    fn parse_pong(&self) -> Result<Packet<()>> {
         trace!("[process]      <- pong");
         Ok(Packet::Pong(()))
     }

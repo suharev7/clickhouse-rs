@@ -104,18 +104,18 @@ fn test_insert() {
                ) Engine=Memory";
 
     let block = Block::new()
-        .add_column("int8", vec![-1_i8, -2, -3, -4, -5, -6, -7])
-        .add_column("int16", vec![-1_i16, -2, -3, -4, -5, -6, -7])
-        .add_column("int32", vec![-1_i32, -2, -3, -4, -5, -6, -7])
-        .add_column("int64", vec![-1_i64, -2, -3, -4, -5, -6, -7])
-        .add_column("uint8", vec![1_u8, 2, 3, 4, 5, 6, 7])
-        .add_column("uint16", vec![1_u16, 2, 3, 4, 5, 6, 7])
-        .add_column("uint32", vec![1_u32, 2, 3, 4, 5, 6, 7])
-        .add_column("uint64", vec![1_u64, 2, 3, 4, 5, 6, 7])
-        .add_column("float32", vec![1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0])
-        .add_column("float64", vec![1.0_f64, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0])
-        .add_column("string", vec!["1", "2", "3", "4", "5", "6", "7"])
-        .add_column(
+        .column("int8", vec![-1_i8, -2, -3, -4, -5, -6, -7])
+        .column("int16", vec![-1_i16, -2, -3, -4, -5, -6, -7])
+        .column("int32", vec![-1_i32, -2, -3, -4, -5, -6, -7])
+        .column("int64", vec![-1_i64, -2, -3, -4, -5, -6, -7])
+        .column("uint8", vec![1_u8, 2, 3, 4, 5, 6, 7])
+        .column("uint16", vec![1_u16, 2, 3, 4, 5, 6, 7])
+        .column("uint32", vec![1_u32, 2, 3, 4, 5, 6, 7])
+        .column("uint64", vec![1_u64, 2, 3, 4, 5, 6, 7])
+        .column("float32", vec![1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0])
+        .column("float64", vec![1.0_f64, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0])
+        .column("string", vec!["1", "2", "3", "4", "5", "6", "7"])
+        .column(
             "date",
             vec![
                 UTC.ymd(2016, 10, 22),
@@ -127,7 +127,7 @@ fn test_insert() {
                 UTC.ymd(2016, 10, 22),
             ],
         )
-        .add_column(
+        .column(
             "datetime",
             vec![
                 UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
@@ -165,9 +165,9 @@ fn test_select() {
         ) Engine=Memory";
 
     let block = Block::new()
-        .add_column("id", vec![1, 2, 3, 4])
-        .add_column("code", vec!["RU", "UA", "DE", "US"])
-        .add_column(
+        .column("id", vec![1, 2, 3, 4])
+        .column("code", vec!["RU", "UA", "DE", "US"])
+        .column(
             "date",
             vec![
                 UTC.ymd(2014, 7, 8),
@@ -176,7 +176,7 @@ fn test_select() {
                 UTC.ymd(2014, 7, 9),
             ],
         )
-        .add_column(
+        .column(
             "datetime",
             vec![
                 Tz::Singapore.ymd(2014, 7, 8).and_hms(14, 0, 0),
@@ -240,7 +240,7 @@ fn test_simple_select() {
         .and_then(|c| c.query("SELECT a FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a) ORDER BY a ASC").fetch_all())
         .and_then(|(c, actual)| {
             let expected = Block::new()
-                .add_column("a", vec![1_u8, 2, 3]);
+                .column("a", vec![1_u8, 2, 3]);
             assert_eq!(expected, actual);
             Ok(c)
         })
@@ -287,7 +287,7 @@ fn test_temporary_table() {
                 .fetch_all()
         })
         .map(|(_, block)| {
-            let expected = Block::new().add_column("ID", (0_u64..10).collect::<Vec<_>>());
+            let expected = Block::new().column("ID", (0_u64..10).collect::<Vec<_>>());
             assert_eq!(block, expected)
         });
 
@@ -309,11 +309,11 @@ fn test_with_totals() {
         GROUP BY country
             WITH TOTALS";
 
-    let block = Block::new().add_column("country", vec!["RU", "EN", "RU", "RU", "EN", "RU"]);
+    let block = Block::new().column("country", vec!["RU", "EN", "RU", "RU", "EN", "RU"]);
 
     let expected = Block::new()
-        .add_column("country", vec!["EN", "RU", ""])
-        .add_column("country", vec![2u64, 4, 6]);
+        .column("country", vec!["EN", "RU", ""])
+        .column("country", vec![2u64, 4, 6]);
 
     let pool = Pool::new(database_url());
     let done = pool
@@ -438,19 +438,19 @@ fn test_nullable() {
     let date_time_value: DateTime<Tz> = UTC.ymd(2014, 7, 8).and_hms(14, 0, 0);
 
     let block = Block::new()
-        .add_column("int8", vec![Some(1_i8)])
-        .add_column("int16", vec![Some(1_i16)])
-        .add_column("int32", vec![Some(1_i32)])
-        .add_column("int64", vec![Some(1_i64)])
-        .add_column("uint8", vec![Some(1_u8)])
-        .add_column("uint16", vec![Some(1_u16)])
-        .add_column("uint32", vec![Some(1_u32)])
-        .add_column("uint64", vec![Some(1_u64)])
-        .add_column("float32", vec![Some(1_f32)])
-        .add_column("float64", vec![Some(1_f64)])
-        .add_column("string", vec![Some("text")])
-        .add_column("date", vec![Some(date_value)])
-        .add_column("datetime", vec![Some(date_time_value)]);
+        .column("int8", vec![Some(1_i8)])
+        .column("int16", vec![Some(1_i16)])
+        .column("int32", vec![Some(1_i32)])
+        .column("int64", vec![Some(1_i64)])
+        .column("uint8", vec![Some(1_u8)])
+        .column("uint16", vec![Some(1_u16)])
+        .column("uint32", vec![Some(1_u32)])
+        .column("uint64", vec![Some(1_u64)])
+        .column("float32", vec![Some(1_f32)])
+        .column("float64", vec![Some(1_f64)])
+        .column("string", vec![Some("text")])
+        .column("date", vec![Some(date_value)])
+        .column("datetime", vec![Some(date_time_value)]);
 
     let pool = Pool::new(database_url());
     let done = pool
@@ -510,8 +510,8 @@ fn test_generic_column() {
     }
 
     let block = Block::new()
-        .add_column("int", vec![1u32, 2, 3])
-        .add_column("str", vec!["A", "B", "C"]);
+        .column("int", vec![1u32, 2, 3])
+        .column("str", vec!["A", "B", "C"]);
 
     let int_vec: Vec<u32> = extract_to_vec("int", &block);
     let str_vec: Vec<String> = extract_to_vec("str", &block);
@@ -538,8 +538,8 @@ fn test_fixed_string() {
         FROM clickhouse_test_fixed_string";
 
     let block = Block::new()
-        .add_column("opt_text", vec![Some("text")])
-        .add_column("text", vec!["text"]);
+        .column("opt_text", vec![Some("text")])
+        .column("text", vec!["text"]);
 
     let pool = Pool::new(database_url());
     let done = pool
@@ -580,10 +580,10 @@ fn test_binary_string() {
         FROM clickhouse_binary_string";
 
     let block = Block::new()
-        .add_column("text", vec![vec![0_u8, 159, 146, 150]])
-        .add_column("fx_text", vec![vec![0_u8, 159, 146, 150]])
-        .add_column("opt_text", vec![Some(vec![0_u8, 159, 146, 150])])
-        .add_column("fx_opt_text", vec![Some(vec![0_u8, 159, 146, 150])]);
+        .column("text", vec![vec![0_u8, 159, 146, 150]])
+        .column("fx_text", vec![vec![0_u8, 159, 146, 150]])
+        .column("opt_text", vec![Some(vec![0_u8, 159, 146, 150])])
+        .column("fx_opt_text", vec![Some(vec![0_u8, 159, 146, 150])]);
 
     let pool = Pool::new(database_url());
     let done = pool
@@ -628,12 +628,12 @@ fn test_array() {
     let date_time_value: DateTime<Tz> = UTC.ymd(2014, 7, 8).and_hms(14, 0, 0);
 
     let block = Block::new()
-        .add_column("u8", vec![vec![41_u8]])
-        .add_column("u32", vec![vec![42_u32]])
-        .add_column("text1", vec![vec!["A"]])
-        .add_column("text2", vec![vec!["B".to_string()]])
-        .add_column("date", vec![vec![date_value]])
-        .add_column("time", vec![vec![date_time_value]]);
+        .column("u8", vec![vec![41_u8]])
+        .column("u32", vec![vec![42_u32]])
+        .column("text1", vec![vec!["A"]])
+        .column("text2", vec![vec!["B".to_string()]])
+        .column("date", vec![vec![date_value]])
+        .column("time", vec![vec![date_time_value]]);
 
     let pool = Pool::new(database_url());
     let done = pool
@@ -676,8 +676,8 @@ fn test_decimal() {
     let query = "SELECT x, ox FROM clickhouse_decimal";
 
     let block = Block::new()
-        .add_column("x", vec![Decimal::of(1.234, 3), Decimal::of(5, 3)])
-        .add_column("ox", vec![None, Some(Decimal::of(1.23, 2))]);
+        .column("x", vec![Decimal::of(1.234, 3), Decimal::of(5, 3)])
+        .column("ox", vec![None, Some(Decimal::of(1.23, 2))]);
 
     let pool = Pool::new(database_url());
     let done = pool
@@ -725,4 +725,97 @@ fn test_reconnect() {
     }
 
     assert_eq!(2, counter.load(Ordering::SeqCst))
+}
+
+#[test]
+fn test_column_iter() {
+    let ddl = r"
+        CREATE TABLE clickhouse_test_column_iter (
+            uint64    UInt64,
+            str       String,
+            fixed_str FixedString(1),
+            opt_str   Nullable(String),
+            date      Date,
+            datetime  DateTime,
+            decimal   Decimal(8, 3),
+            array     Array(UInt32)
+        ) Engine=Memory";
+
+    let query = r"SELECT * FROM clickhouse_test_column_iter";
+
+    let date_value: Date<Tz> = UTC.ymd(2016, 10, 22);
+    let date_time_value: DateTime<Tz> = UTC.ymd(2014, 7, 8).and_hms(14, 0, 0);
+
+    let block = Block::new()
+        .add_column("uint64", vec![1_u64, 2, 3])
+        .add_column("str", vec!["A", "B", "C"])
+        .add_column("fixed_str", vec!["A", "B", "C"])
+        .add_column("opt_str", vec![Some("A"), None, None])
+        .add_column("date", vec![date_value, date_value, date_value])
+        .add_column(
+            "datetime",
+            vec![date_time_value, date_time_value, date_time_value],
+        )
+        .add_column(
+            "decimal",
+            vec![Decimal::of(1.234, 3), Decimal::of(5, 3), Decimal::of(5, 3)],
+        )
+        .add_column("array", vec![vec![42_u32], Vec::new(), Vec::new()]);
+
+    let pool = Pool::new(database_url());
+
+    let done = pool.get_handle()
+        .and_then(move |c| c.execute("DROP TABLE IF EXISTS clickhouse_test_column_iter"))
+        .and_then(move |c| c.execute(ddl))
+        .and_then(move |c| c.insert("clickhouse_test_column_iter", block))
+        .and_then(move |c| {
+            c.query(query)
+                .stream_blocks()
+                .for_each(move |block| {
+                    let uint64_iter: Vec<_> = block
+                        .get_column("uint64")?
+                        .iter::<u64>()?
+                        .copied()
+                        .collect();
+                    assert_eq!(uint64_iter, vec![1_u64, 2, 3]);
+
+                    let str_iter: Vec<_> = block.get_column("str")?.iter::<&[u8]>()?.collect();
+                    assert_eq!(str_iter, vec![&[65_u8], &[66], &[67]]);
+
+                    let fixed_str_iter: Vec<_> = block.get_column("fixed_str")?.iter::<&[u8]>()?.collect();
+                    assert_eq!(fixed_str_iter, vec![&[65_u8], &[66], &[67]]);
+
+                    let opt_str_iter: Vec<_> = block
+                        .get_column("opt_str")?
+                        .iter::<Option<&[u8]>>()?
+                        .collect();
+                    let expected: Vec<Option<&[u8]>> = vec![Some(&[65_u8]), None, None];
+                    assert_eq!(opt_str_iter, expected);
+
+                    let date_iter: Vec<_> = block.get_column("date")?.iter::<Date<Tz>>()?.collect();
+                    assert_eq!(date_iter, vec![date_value, date_value, date_value]);
+
+                    let datetime_iter: Vec<_> = block
+                        .get_column("datetime")?
+                        .iter::<DateTime<Tz>>()?
+                        .collect();
+                    assert_eq!(
+                        datetime_iter,
+                        vec![date_time_value, date_time_value, date_time_value]
+                    );
+
+                    let decimal_iter: Vec<_> = block.get_column("decimal")?.iter::<Decimal>()?.collect();
+                    assert_eq!(
+                        decimal_iter,
+                        vec![Decimal::of(1.234, 3), Decimal::of(5, 3), Decimal::of(5, 3)]
+                    );
+
+                    let array_iter: Vec<_> = block.get_column("array")?.iter::<Vec<u32>>()?.collect();
+                    assert_eq!(array_iter, vec![vec![&42_u32], Vec::new(), Vec::new()]);
+
+                    Ok(())
+                })
+        });
+
+    run(done).unwrap();
 }

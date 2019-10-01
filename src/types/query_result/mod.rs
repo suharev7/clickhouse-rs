@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{marker, sync::Arc};
 
 use tokio::prelude::*;
 
@@ -7,12 +7,13 @@ use crate::{
     io::{BoxFuture, BoxStream, ClickhouseTransport},
     types::{
         block::BlockRef, query_result::stream_blocks::BlockStream, Block, Cmd, Packet, Query, Row,
-        Rows,
+        Rows, Complex,
     },
     ClientHandle,
 };
 
 use self::{either::Either, fold_block::FoldBlock};
+use crate::types::Simple;
 
 mod either;
 mod fold_block;
@@ -69,7 +70,7 @@ impl QueryResult {
     /// ```
     pub fn fold<F, T, Fut>(self, init: T, f: F) -> BoxFuture<(ClientHandle, T)>
     where
-        F: Fn(T, Row) -> Fut + Send + Sync + 'static,
+        F: Fn(T, Row<Simple>) -> Fut + Send + Sync + 'static,
         Fut: IntoFuture<Item = T, Error = Error> + Send + 'static,
         Fut::Future: Send,
         T: Send + 'static,
@@ -82,7 +83,7 @@ impl QueryResult {
     }
 
     /// Fetch data from table. It returns a block that contains all rows.
-    pub fn fetch_all(self) -> BoxFuture<(ClientHandle, Block)> {
+    pub fn fetch_all(self) -> BoxFuture<(ClientHandle, Block<Complex>)> {
         wrap_future(
             self.fold_blocks(Vec::new(), |mut blocks, block| {
                 if !block.is_empty() {
@@ -110,7 +111,13 @@ impl QueryResult {
         let acc = (None, init);
 
         let future = self.fold_packets(acc, move |(h, acc), packet| match packet {
-            Packet::Block(b) => Either::Left(f(acc, b).into_future().map(move |a| (h, a))),
+            Packet::Block(b) => {
+                if b.is_empty() {
+                    Either::Right(future::ok((h, acc)))
+                } else {
+                    Either::Left(f(acc, b).into_future().map(move |a| (h, a)))
+                }
+            },
             Packet::Eof(inner) => Either::Right(future::ok((
                 Some(ClientHandle {
                     inner: Some(inner),
@@ -213,13 +220,13 @@ impl QueryResult {
     }
 
     /// Method that produces a stream of rows
-    pub fn stream_rows(self) -> BoxStream<Row<'static>> {
+    pub fn stream_rows(self) -> BoxStream<Row<'static, Simple>> {
         Box::new(
             self.stream_blocks()
                 .map(Arc::new)
                 .map(|block| {
                     let block_ref = BlockRef::Owned(block);
-                    stream::iter_ok(Rows { row: 0, block_ref })
+                    stream::iter_ok(Rows { row: 0, block_ref, kind: marker::PhantomData })
                 })
                 .flatten(),
         )

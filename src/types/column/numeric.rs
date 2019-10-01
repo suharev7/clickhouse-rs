@@ -2,7 +2,7 @@ use std::{convert, mem, sync::Arc};
 
 use crate::{
     binary::{Encoder, ReadEx},
-    errors::Error,
+    errors::Result,
     types::{
         column::{
             array::ArrayColumnData, nullable::NullableColumnData, BoxColumnWrapper, ColumnWrapper,
@@ -157,10 +157,7 @@ where
         }
     }
 
-    pub(crate) fn load<R: ReadEx>(
-        reader: &mut R,
-        size: usize,
-    ) -> Result<VectorColumnData<T>, Error> {
+    pub(crate) fn load<R: ReadEx>(reader: &mut R, size: usize) -> Result<VectorColumnData<T>> {
         let mut data = List::with_capacity(size);
         unsafe {
             data.set_len(size);
@@ -223,6 +220,13 @@ where
         Box::new(Self {
             data: self.data.clone(),
         })
+    }
+
+    unsafe fn get_internal(&self, pointers: &[*mut *const u8], level: u8) -> Result<()> {
+        assert_eq!(level, 0);
+        *pointers[0] = self.data.as_ptr() as *const u8;
+        *(pointers[1] as *mut usize) = self.len();
+        Ok(())
     }
 }
 

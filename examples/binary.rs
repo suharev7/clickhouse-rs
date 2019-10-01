@@ -16,10 +16,10 @@ fn main() {
         ) Engine=Memory";
 
     let block = Block::new()
-        .add_column("text", vec![[0, 159, 146, 150].as_ref(), b"ABCD"])
-        .add_column("fx_text", vec![b"ABCD".as_ref(), &[0, 159, 146, 150]])
-        .add_column("opt_text", vec![Some(vec![0, 159, 146, 150]), None])
-        .add_column("fx_opt_text", vec![None, Some(vec![0, 159, 146, 150])]);
+        .column("text", vec![[0, 159, 146, 150].as_ref(), b"ABCD"])
+        .column("fx_text", vec![b"ABCD".as_ref(), &[0, 159, 146, 150]])
+        .column("opt_text", vec![Some(vec![0, 159, 146, 150]), None])
+        .column("fx_opt_text", vec![None, Some(vec![0, 159, 146, 150])]);
 
     let database_url =
         env::var("DATABASE_URL").unwrap_or_else(|_| "tcp://localhost:9000?compression=lz4".into());

@@ -1,7 +1,8 @@
 use crate::{
     binary::{protocol, Encoder},
     client_info,
-    types::{Block, ClickhouseResult, Context, Query},
+    errors::Result,
+    types::{Block, Context, Query, Simple},
 };
 
 /// Represents clickhouse commands.
@@ -16,12 +17,12 @@ pub(crate) enum Cmd {
 impl Cmd {
     /// Returns the packed command as a byte vector.
     #[inline]
-    pub(crate) fn get_packed_command(&self) -> ClickhouseResult<Vec<u8>> {
+    pub(crate) fn get_packed_command(&self) -> Result<Vec<u8>> {
         encode_command(self)
     }
 }
 
-fn encode_command(cmd: &Cmd) -> ClickhouseResult<Vec<u8>> {
+fn encode_command(cmd: &Cmd) -> Result<Vec<u8>> {
     match cmd {
         Cmd::Hello(context) => encode_hello(context),
         Cmd::Ping => encode_ping(),
@@ -31,7 +32,7 @@ fn encode_command(cmd: &Cmd) -> ClickhouseResult<Vec<u8>> {
     }
 }
 
-fn encode_hello(context: &Context) -> ClickhouseResult<Vec<u8>> {
+fn encode_hello(context: &Context) -> Result<Vec<u8>> {
     trace!("[hello]        -> {}", client_info::description());
 
     let mut encoder = Encoder::new();
@@ -47,7 +48,7 @@ fn encode_hello(context: &Context) -> ClickhouseResult<Vec<u8>> {
     Ok(encoder.get_buffer())
 }
 
-fn encode_ping() -> ClickhouseResult<Vec<u8>> {
+fn encode_ping() -> Result<Vec<u8>> {
     trace!("[ping]         -> ping");
 
     let mut encoder = Encoder::new();
@@ -55,7 +56,7 @@ fn encode_ping() -> ClickhouseResult<Vec<u8>> {
     Ok(encoder.get_buffer())
 }
 
-fn encode_query(query: &Query, context: &Context) -> ClickhouseResult<Vec<u8>> {
+fn encode_query(query: &Query, context: &Context) -> Result<Vec<u8>> {
     trace!("[send query] {}", query.get_sql());
 
     let mut encoder = Encoder::new();
@@ -92,19 +93,19 @@ fn encode_query(query: &Query, context: &Context) -> ClickhouseResult<Vec<u8>> {
     let options = context.options.get()?;
 
     encoder.string(&query.get_sql());
-    Block::default().send_data(&mut encoder, options.compression);
+    Block::<Simple>::default().send_data(&mut encoder, options.compression);
 
     Ok(encoder.get_buffer())
 }
 
-fn encode_data(block: &Block, context: &Context) -> ClickhouseResult<Vec<u8>> {
+fn encode_data(block: &Block, context: &Context) -> Result<Vec<u8>> {
     let mut encoder = Encoder::new();
     let options = context.options.get()?;
     block.send_data(&mut encoder, options.compression);
     Ok(encoder.get_buffer())
 }
 
-fn encode_union(first: &Cmd, second: &Cmd) -> ClickhouseResult<Vec<u8>> {
+fn encode_union(first: &Cmd, second: &Cmd) -> Result<Vec<u8>> {
     let mut result = encode_command(first)?;
     result.extend((encode_command(second)?).iter());
     Ok(result)

@@ -2,13 +2,13 @@ use std::{io::Write, string::ToString, sync::Arc};
 
 use crate::{
     binary::{Encoder, ReadEx},
-    errors::Error,
+    errors::Result,
     types::{
         column::{
             array::ArrayColumnData, list::List, nullable::NullableColumnData, BoxColumnWrapper,
             ColumnWrapper, Either, StringPool,
         },
-        Column, FromSql, SqlType, Value, ValueRef,
+        Column, FromSql, SqlType, Value, ValueRef, ColumnType,
     },
 };
 
@@ -21,8 +21,8 @@ pub(crate) struct StringColumnData {
     pool: StringPool,
 }
 
-pub(crate) struct StringAdapter {
-    pub(crate) column: Column,
+pub(crate) struct StringAdapter<K: ColumnType> {
+    pub(crate) column: Column<K>,
 }
 
 impl StringColumnData {
@@ -32,7 +32,7 @@ impl StringColumnData {
         }
     }
 
-    pub(crate) fn load<T: ReadEx>(reader: &mut T, size: usize) -> Result<Self, Error> {
+    pub(crate) fn load<T: ReadEx>(reader: &mut T, size: usize) -> Result<Self> {
         let mut data = Self::with_capacity(size);
 
         for _ in 0..size {
@@ -167,7 +167,7 @@ impl ColumnData for StringColumnData {
     fn save(&self, encoder: &mut Encoder, start: usize, end: usize) {
         let strings = self.pool.strings();
         for v in strings.skip(start).take(end - start) {
-            encoder.string(v);
+            encoder.byte_string(v);
         }
     }
 
@@ -191,9 +191,16 @@ impl ColumnData for StringColumnData {
             pool: self.pool.clone(),
         })
     }
+
+    unsafe fn get_internal(&self, pointers: &[*mut *const u8], level: u8) -> Result<()> {
+        assert_eq!(level, 0);
+        *pointers[0] = &self.pool as *const StringPool as *const u8;
+        *(pointers[1] as *mut usize) = self.len();
+        Ok(())
+    }
 }
 
-impl ColumnData for StringAdapter {
+impl<K: ColumnType> ColumnData for StringAdapter<K> {
     fn sql_type(&self) -> SqlType {
         SqlType::String
     }

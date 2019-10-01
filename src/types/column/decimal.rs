@@ -2,7 +2,7 @@ use chrono_tz::Tz;
 
 use crate::{
     binary::{Encoder, ReadEx},
-    errors::Error,
+    errors::Result,
     types::{
         column::{
             column_data::BoxColumnData, column_data::ColumnData, list::List,
@@ -11,7 +11,7 @@ use crate::{
         },
         decimal::{Decimal, NoBits},
         from_sql::FromSql,
-        Column, SqlType, Value, ValueRef,
+        Column, SqlType, Value, ValueRef, ColumnType
     },
 };
 
@@ -22,15 +22,15 @@ pub(crate) struct DecimalColumnData {
     pub(crate) nobits: NoBits,
 }
 
-pub(crate) struct DecimalAdapter {
-    pub(crate) column: Column,
+pub(crate) struct DecimalAdapter<K: ColumnType> {
+    pub(crate) column: Column<K>,
     pub(crate) precision: u8,
     pub(crate) scale: u8,
     pub(crate) nobits: NoBits,
 }
 
-pub(crate) struct NullableDecimalAdapter {
-    pub(crate) column: Column,
+pub(crate) struct NullableDecimalAdapter<K: ColumnType> {
+    pub(crate) column: Column<K>,
     pub(crate) precision: u8,
     pub(crate) scale: u8,
     pub(crate) nobits: NoBits,
@@ -44,7 +44,7 @@ impl DecimalColumnData {
         nobits: NoBits,
         size: usize,
         tz: Tz,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self> {
         let type_name = match nobits {
             NoBits::N32 => "Int32",
             NoBits::N64 => "Int64",
@@ -184,9 +184,16 @@ impl ColumnData for DecimalColumnData {
             nobits: self.nobits,
         })
     }
+
+    unsafe fn get_internal(&self, pointers: &[*mut *const u8], level: u8) -> Result<()> {
+        assert_eq!(level, 0);
+        self.inner.get_internal(pointers, 0)?;
+        *(pointers[2] as *mut NoBits) = self.nobits;
+        Ok(())
+    }
 }
 
-impl ColumnData for DecimalAdapter {
+impl<K: ColumnType> ColumnData for DecimalAdapter<K> {
     fn sql_type(&self) -> SqlType {
         SqlType::Decimal(self.precision, self.scale)
     }
@@ -234,7 +241,7 @@ impl ColumnData for DecimalAdapter {
     }
 }
 
-impl ColumnData for NullableDecimalAdapter {
+impl<K: ColumnType> ColumnData for NullableDecimalAdapter<K> {
     fn sql_type(&self) -> SqlType {
         SqlType::Nullable(SqlType::Decimal(self.precision, self.scale).into())
     }

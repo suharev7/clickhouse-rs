@@ -1,5 +1,4 @@
-use std::io::Write;
-use std::str::from_utf8_unchecked;
+use std::{io::Write, slice};
 
 const AVG_STR_SIZE: usize = 80;
 
@@ -24,7 +23,7 @@ pub(crate) struct StringIter<'a> {
 }
 
 impl<'a> Iterator for StringIter<'a> {
-    type Item = &'a str;
+    type Item = &'a [u8];
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.index < self.pool.len() {
@@ -104,13 +103,27 @@ impl StringPool {
             .push(vec![0_u8; max(self.capacity * AVG_STR_SIZE, size)]);
     }
 
-    pub(crate) fn get(&self, index: usize) -> &str {
-        let pointer = self.pointers[index];
-        let chunk = &self.chunks[pointer.chunk];
-        let raw = &chunk[pointer.shift..pointer.shift + pointer.len];
-        unsafe { from_utf8_unchecked(raw) }
+    #[inline(always)]
+    pub(crate) fn get(&self, index: usize) -> &[u8] {
+        let pointer = &self.pointers[index];
+        unsafe { self.get_by_pointer(pointer) }
     }
 
+    #[inline(always)]
+    pub(crate) unsafe fn get_unchecked(&self, index: usize) -> &[u8] {
+        let pointer = self.pointers.get_unchecked(index);
+        self.get_by_pointer(pointer)
+    }
+
+    #[inline(always)]
+    unsafe fn get_by_pointer(&self, pointer: &StringPtr) -> &[u8] {
+        let chunk = &self.chunks.get_unchecked(pointer.chunk);
+
+        let ptr = chunk.as_ptr().add(pointer.shift);
+        slice::from_raw_parts(ptr, pointer.len)
+    }
+
+    #[inline(always)]
     pub(crate) fn len(&self) -> usize {
         self.pointers.len()
     }
@@ -152,7 +165,7 @@ mod test {
         }
 
         for i in 0..1000 {
-            let s = pool.get(i).to_string();
+            let s = String::from_utf8(Vec::from(pool.get(i))).unwrap();
             assert_eq!(s, format!("text-{}", i));
         }
     }

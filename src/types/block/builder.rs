@@ -1,19 +1,18 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, marker};
 
 use chrono_tz::Tz;
 
 use crate::{
     errors::{Error, FromSqlError},
     types::{
-        block::ColumnIdx,
-        column::{ArcColumnWrapper, ColumnData, Either},
-        Column, Value,
+        block::ColumnIdx, ColumnType,
+        column::{ArcColumnWrapper, ColumnData, Either}, Column, Value,
     },
     Block,
 };
 
 pub trait RowBuilder {
-    fn apply(self, block: &mut Block) -> Result<(), Error>;
+    fn apply<K: ColumnType>(self, block: &mut Block<K>) -> Result<(), Error>;
 }
 
 pub struct RNil;
@@ -52,7 +51,7 @@ where
 
 impl RowBuilder for RNil {
     #[inline(always)]
-    fn apply(self, _block: &mut Block) -> Result<(), Error> {
+    fn apply<K: ColumnType>(self, _block: &mut Block<K>) -> Result<(), Error> {
         Ok(())
     }
 }
@@ -62,14 +61,14 @@ where
     T: RowBuilder,
 {
     #[inline(always)]
-    fn apply(self, block: &mut Block) -> Result<(), Error> {
+    fn apply<K: ColumnType>(self, block: &mut Block<K>) -> Result<(), Error> {
         put_param(self.key, self.value, block)?;
         self.tail.apply(block)
     }
 }
 
 impl RowBuilder for Vec<(String, Value)> {
-    fn apply(self, block: &mut Block) -> Result<(), Error> {
+    fn apply<K: ColumnType>(self, block: &mut Block<K>) -> Result<(), Error> {
         for (k, v) in self {
             put_param(k.into(), v, block)?;
         }
@@ -77,7 +76,11 @@ impl RowBuilder for Vec<(String, Value)> {
     }
 }
 
-fn put_param(key: Cow<'static, str>, value: Value, block: &mut Block) -> Result<(), Error> {
+fn put_param<K: ColumnType>(
+    key: Cow<'static, str>,
+    value: Value,
+    block: &mut Block<K>,
+) -> Result<(), Error> {
     let col_index = match key.as_ref().get_index(&block.columns) {
         Ok(col_index) => col_index,
         Err(Error::FromSql(FromSqlError::OutOfRange)) => {
@@ -93,6 +96,7 @@ fn put_param(key: Cow<'static, str>, value: Value, block: &mut Block) -> Result<
                         timezone,
                         block.capacity,
                     )?,
+                    _marker: marker::PhantomData,
                 };
 
                 block.columns.push(column);
@@ -131,7 +135,7 @@ mod test {
 
     use crate::{
         row,
-        types::{Decimal, SqlType},
+        types::{Decimal, SqlType, Simple},
     };
 
     use super::*;
@@ -143,7 +147,7 @@ mod test {
 
         let decimal = Decimal::of(2.0_f64, 4);
 
-        let mut block = Block::new();
+        let mut block = Block::<Simple>::new();
         block
             .push(row! {
                 i8_field: 1_i8,

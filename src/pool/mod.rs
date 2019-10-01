@@ -8,7 +8,8 @@ use tokio::prelude::{*, task::{self, Task}};
 use crate::{
     io::BoxFuture,
     pool::futures::GetHandle,
-    types::{ClickhouseResult, IntoOptions, OptionsSource},
+    errors::Result,
+    types::{IntoOptions, OptionsSource},
     Client, ClientHandle,
 };
 
@@ -178,7 +179,7 @@ impl Pool {
         fun(self.inner.lock().unwrap())
     }
 
-    fn poll(&mut self) -> ClickhouseResult<Async<ClientHandle>> {
+    fn poll(&mut self) -> Result<Async<ClientHandle>> {
         self.handle_futures()?;
 
         match self.take_conn() {
@@ -206,7 +207,7 @@ impl Pool {
         Client::open(&self.options, Some(self.clone()))
     }
 
-    fn handle_futures(&mut self) -> ClickhouseResult<()> {
+    fn handle_futures(&mut self) -> Result<()> {
         self.with_inner(|mut inner| {
             let result = match inner.new {
                 None => return Ok(()),

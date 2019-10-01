@@ -82,12 +82,14 @@ base_for! {
 }
 
 impl InternalResult for i32 {
+    #[inline(always)]
     fn get(underlying: i64) -> Self {
         underlying as Self
     }
 }
 
 impl InternalResult for i64 {
+    #[inline(always)]
     fn get(underlying: i64) -> Self {
         underlying
     }
@@ -203,6 +205,7 @@ impl Decimal {
     /// #    .map_err(|err| eprintln!("database error: {}", err));
     /// # tokio::run(done)
     /// ```
+    #[inline(always)]
     pub fn internal<I: InternalResult>(&self) -> I {
         InternalResult::get(self.underlying)
     }

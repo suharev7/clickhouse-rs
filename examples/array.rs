@@ -1,7 +1,7 @@
 extern crate clickhouse_rs;
 extern crate futures;
 
-use clickhouse_rs::{types::Block, Pool};
+use clickhouse_rs::{types::{Block, Complex}, Pool};
 use futures::Future;
 use std::env;
 
@@ -21,8 +21,8 @@ fn main() {
     let query = "SELECT nums, text FROM array_table";
 
     let block = Block::new()
-        .add_column("nums", vec![vec![1_u32, 2, 3], vec![4, 5, 6]])
-        .add_column("text", vec![vec!["A", "B", "C"], vec!["D", "E"]]);
+        .column("nums", vec![vec![1_u32, 2, 3], vec![4, 5, 6]])
+        .column("text", vec![vec!["A", "B", "C"], vec!["D", "E"]]);
 
     let done = pool
         .get_handle()
@@ -30,7 +30,7 @@ fn main() {
         .and_then(move |c| c.execute(ddl))
         .and_then(move |c| c.insert("array_table", block))
         .and_then(move |c| c.query(query).fetch_all())
-        .and_then(move |(_, block): (_, Block)| {
+        .and_then(move |(_, block): (_, Block<Complex>)| {
             for row in block.rows() {
                 let nums: Vec<u32> = row.get("nums")?;
                 let text: Vec<&str> = row.get("text")?;

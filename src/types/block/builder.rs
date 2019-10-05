@@ -89,7 +89,7 @@ fn put_param(key: Cow<'static, str>, value: Value, block: &mut Block) -> Result<
 
                 let column = Column {
                     name: key.clone().into(),
-                    data: ColumnData::from_type::<ArcColumnWrapper>(sql_type, timezone)?,
+                    data: ColumnData::from_type::<ArcColumnWrapper>(sql_type, timezone, block.capacity)?,
                 };
 
                 block.columns.push(column);

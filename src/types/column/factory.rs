@@ -14,8 +14,6 @@ use crate::{
     SqlType,
 };
 
-const DEFAULT_CAPACITY: usize = 100;
-
 macro_rules! match_str {
     ($arg:ident, {
         $( $($var:literal)|* => $doit:expr,)*
@@ -33,6 +31,7 @@ macro_rules! match_str {
 }
 
 impl dyn ColumnData {
+    #[allow(clippy::cognitive_complexity)]
     pub(crate) fn load_data<W: ColumnWrapper, T: ReadEx>(
         reader: &mut T,
         type_name: &str,

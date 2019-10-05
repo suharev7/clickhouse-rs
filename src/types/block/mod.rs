@@ -36,6 +36,8 @@ mod row;
 
 const INSERT_BLOCK_SIZE: usize = 1_048_576;
 
+const DEFAULT_CAPACITY: usize = 100;
+
 pub trait ColumnIdx {
     fn get_index<K: ColumnType>(&self, columns: &[Column<K>]) -> Result<usize>;
 }
@@ -73,6 +75,7 @@ sliceable! {
 pub struct Block<K: ColumnType = Simple> {
     info: BlockInfo,
     columns: Vec<Column<K>>,
+    capacity: usize,
 }
 
 impl<L: ColumnType, R: ColumnType> PartialEq<Block<R>> for Block<L> {
@@ -96,6 +99,7 @@ impl<K: ColumnType> Clone for Block<K> {
         Self {
             info: self.info,
             columns: self.columns.iter().map(|c| (*c).clone()).collect(),
+            capacity: self.capacity,
         }
     }
 }
@@ -133,11 +137,17 @@ impl ColumnIdx for String {
 }
 
 impl Block {
-    /// Constructs a new, empty Block.
+    /// Constructs a new, empty `Block`.
     pub fn new() -> Self {
+        Self::with_capacity(DEFAULT_CAPACITY)
+    }
+
+    /// Constructs a new, empty `Block` with the specified capacity.
+    pub fn with_capacity(capacity: usize) -> Self {
         Self {
             info: Default::default(),
             columns: vec![],
+            capacity
         }
     }
 
@@ -284,6 +294,7 @@ impl Block<Simple> {
         Block {
             info: first.info,
             columns,
+            capacity: blocks.iter().map(|b| b.capacity).sum(),
         }
     }
 }
@@ -309,6 +320,7 @@ impl<K: ColumnType> Block<K> {
         Ok(Block {
             info,
             columns: new_columns,
+            capacity: self.capacity,
         })
     }
 

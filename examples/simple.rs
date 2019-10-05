@@ -13,7 +13,7 @@ async fn execute(database_url: String) -> Result<(), Box<dyn Error>> {
             account_name Nullable(FixedString(3))
         ) Engine=Memory";
 
-    let mut block = Block::new();
+    let mut block = Block::with_capacity(5);
     block.push(row! { customer_id: 1_u32, amount:  2_u32, account_name: Some("foo") })?;
     block.push(row! { customer_id: 3_u32, amount:  4_u32, account_name: None::<&str> })?;
     block.push(row! { customer_id: 5_u32, amount:  6_u32, account_name: None::<&str> })?;

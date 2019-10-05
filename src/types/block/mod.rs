@@ -33,6 +33,8 @@ mod builder;
 
 const INSERT_BLOCK_SIZE: usize = 1_048_576;
 
+const DEFAULT_CAPACITY: usize = 100;
+
 pub trait ColumnIdx {
     fn get_index(&self, columns: &[Column]) -> ClickhouseResult<usize>;
 }
@@ -42,6 +44,7 @@ pub trait ColumnIdx {
 pub struct Block {
     info: BlockInfo,
     columns: Vec<Column>,
+    capacity: usize,
 }
 
 impl PartialEq<Block> for Block {
@@ -65,6 +68,7 @@ impl Clone for Block {
         Self {
             info: self.info,
             columns: self.columns.iter().map(|c| (*c).clone()).collect(),
+            capacity: self.capacity,
         }
     }
 }
@@ -102,9 +106,18 @@ impl ColumnIdx for String {
 }
 
 impl Block {
-    /// Constructs a new, empty Block.
+    /// Constructs a new, empty `Block`.
     pub fn new() -> Self {
-        Self::default()
+        Self::with_capacity(DEFAULT_CAPACITY)
+    }
+
+    /// Constructs a new, empty `Block` with the specified capacity.
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            info: Default::default(),
+            columns: vec![],
+            capacity
+        }
     }
 
     pub(crate) fn load<R>(reader: &mut R, tz: Tz, compress: bool) -> ClickhouseResult<Self>
@@ -227,6 +240,7 @@ impl Block {
         Ok(Block {
             info,
             columns: new_columns,
+            capacity: self.capacity,
         })
     }
 
@@ -301,6 +315,7 @@ impl Block {
         Self {
             info: first.info,
             columns,
+            capacity: blocks.iter().map(|b| b.capacity).sum()
         }
     }
 

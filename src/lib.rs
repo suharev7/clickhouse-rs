@@ -47,6 +47,7 @@
 //! - `query_timeout` - Timeout for queries (defaults to `180 sec`).
 //! - `query_block_timeout` - Timeout for each block in a query (defaults to `180 sec`).
 //! - `insert_timeout` - Timeout for inserts (defaults to `180 sec`).
+//! - `execute_timeout` - Timeout for execute (defaults to `180 sec`).
 //!
 //! example:
 //! ```url
@@ -368,9 +369,11 @@ impl ClientHandle {
         let release_pool = self.pool.clone();
 
         let query = Query::from(sql);
-        self.wrap_future(|mut c| {
+        self.wrap_future(|mut c| -> BoxFuture<Self> {
             info!("[execute]    {}", query.get_sql());
-            c.inner
+            let timeout = try_opt!(context.options.get()).execute_timeout;
+
+            let future = c.inner
                 .take()
                 .unwrap()
                 .call(Cmd::SendQuery(query, context.clone()))
@@ -391,11 +394,9 @@ impl ClientHandle {
                     }
                     _ => future::err::<_, Error>(Error::Driver(DriverError::UnexpectedPacket)),
                 })
-                .map_err(move |err| {
-                    release_pool.release_conn();
-                    err
-                })
-                .map(Option::unwrap)
+                .map(Option::unwrap);
+
+            with_timeout(future, timeout, release_pool)
         })
     }
 

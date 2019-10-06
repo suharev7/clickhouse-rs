@@ -177,6 +177,9 @@ pub struct Options {
 
     /// Timeout for inserts (defaults to `180 sec`)
     pub(crate) insert_timeout: Option<Duration>,
+
+    /// Timeout for execute (defaults to `180 sec`)
+    pub(crate) execute_timeout: Option<Duration>,
 }
 
 impl Default for Options {
@@ -199,6 +202,7 @@ impl Default for Options {
             query_timeout: Duration::from_secs(180),
             query_block_timeout: Duration::from_secs(180),
             insert_timeout: Some(Duration::from_secs(180)),
+            execute_timeout: Some(Duration::from_secs(180)),
         }
     }
 }
@@ -317,6 +321,11 @@ impl Options {
         /// Timeout for insert (defaults to `180,000 ms`).
         => insert_timeout: Option<Duration>
     }
+
+    property! {
+        /// Timeout for execute (defaults to `180 sec`).
+        => execute_timeout: Option<Duration>
+    }
 }
 
 impl FromStr for Options {
@@ -394,6 +403,9 @@ where
             },
             "insert_timeout" => {
                 options.insert_timeout = parse_param(key, value, parse_opt_duration)?
+            }
+            "execute_timeout" => {
+                options.execute_timeout = parse_param(key, value, parse_opt_duration)?
             }
             "compression" => options.compression = parse_param(key, value, parse_compression)?,
             _ => return Err(UrlError::UnknownParameter { param: key.into() }),

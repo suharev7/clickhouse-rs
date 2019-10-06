@@ -3,7 +3,10 @@ use crate::types::column::ColumnData;
 use crate::{
     binary::{Encoder, ReadEx},
     errors::Error,
-    types::{column::{Either, column_data::BoxColumnData}, SqlType, Value, ValueRef},
+    types::{
+        column::{column_data::BoxColumnData, Either},
+        SqlType, Value, ValueRef,
+    },
 };
 
 use crate::types::column::BoxColumnWrapper;

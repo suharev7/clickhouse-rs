@@ -1,23 +1,20 @@
 use std::{convert, fmt, sync::Arc};
 
-use chrono::{Date, prelude::*};
+use chrono::{prelude::*, Date};
 use chrono_tz::Tz;
 
 use crate::{
     binary::{Encoder, ReadEx},
     errors::Error,
-    types::{DateConverter, Marshal, SqlType, StatBuffer, Unmarshal, Value, ValueRef},
     types::column::{
         array::ArrayColumnData,
-        BoxColumnWrapper,
         column_data::{BoxColumnData, ColumnData},
-        ColumnFrom,
-        ColumnWrapper,
-        Either,
         list::List,
         nullable::NullableColumnData,
-        numeric::save_data
+        numeric::save_data,
+        BoxColumnWrapper, ColumnFrom, ColumnWrapper, Either,
     },
+    types::{DateConverter, Marshal, SqlType, StatBuffer, Unmarshal, Value, ValueRef},
 };
 
 pub struct DateColumnData<T>
@@ -63,7 +60,9 @@ where
         tz: Tz,
     ) -> Result<DateColumnData<T>, Error> {
         let mut data = List::with_capacity(size);
-        unsafe { data.set_len(size); }
+        unsafe {
+            data.set_len(size);
+        }
         reader.read_bytes(data.as_mut())?;
         Ok(DateColumnData { data, tz })
     }
@@ -227,7 +226,7 @@ where
     }
 
     fn clone_instance(&self) -> BoxColumnData {
-        Box::new(Self{
+        Box::new(Self {
             data: self.data.clone(),
             tz: self.tz,
         })

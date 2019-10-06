@@ -300,7 +300,13 @@ mod test {
 
     use tokio::prelude::*;
 
-    use crate::{ClientHandle, errors::Error, io::BoxFuture, test_misc::DATABASE_URL, types::{Block, Options}};
+    use crate::{
+        errors::Error,
+        io::BoxFuture,
+        test_misc::DATABASE_URL,
+        types::{Block, Options},
+        ClientHandle,
+    };
 
     use super::Pool;
 
@@ -472,7 +478,8 @@ mod test {
         let test_db_url = format!("{}{}", DATABASE_URL.as_str(), "&query_timeout=10ms");
         let pool = Pool::new(test_db_url.to_string());
 
-        let done = pool.get_handle()
+        let done = pool
+            .get_handle()
             .and_then(|c| c.query("SELECT sleep(10)").fetch_all());
 
         run(done).unwrap_err();
@@ -487,12 +494,10 @@ mod test {
     fn test_wrong_insert() {
         let pool = Pool::new(DATABASE_URL.as_str());
 
-        let done = pool
-            .get_handle()
-            .and_then(|c| {
-                let block = Block::new();
-                c.insert("unexisting", block)
-            });
+        let done = pool.get_handle().and_then(|c| {
+            let block = Block::new();
+            c.insert("unexisting", block)
+        });
 
         run(done).unwrap_err();
 
@@ -508,9 +513,7 @@ mod test {
 
         let done = pool
             .get_handle()
-            .and_then(|c| {
-                c.execute("DROP TABLE unexisting")
-            });
+            .and_then(|c| c.execute("DROP TABLE unexisting"));
 
         run(done).unwrap_err();
 

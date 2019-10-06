@@ -134,9 +134,7 @@ impl ClickhouseTransport {
                 // Data is consumed
                 let new_len = self.rd.len() - pos;
                 unsafe {
-                    ptr::copy(self.rd.as_ptr().add(pos),
-                              self.rd.as_mut_ptr(),
-                              new_len);
+                    ptr::copy(self.rd.as_ptr().add(pos), self.rd.as_mut_ptr(), new_len);
                     self.rd.set_len(new_len);
                 }
             }

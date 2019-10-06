@@ -208,7 +208,6 @@ macro_rules! row {
     };
 }
 
-#[macro_export]
 macro_rules! try_opt {
     ($expr:expr) => {
         match $expr {
@@ -526,17 +525,19 @@ impl ClientHandle {
     }
 }
 
-fn with_timeout<F>(f: F, timeout: Option<Duration>, release_pool: PoolBinding) -> BoxFuture<F::Item>
+pub(crate) fn with_timeout<F>(
+    f: F,
+    timeout: Option<Duration>,
+    release_pool: PoolBinding,
+) -> BoxFuture<F::Item>
 where
     F: Future<Error = Error> + Send + 'static,
 {
     if let Some(timeout) = timeout {
-        Box::new(f
-            .timeout(timeout)
-            .map_err(move |err| {
-                release_pool.release_conn();
-                err.into()
-            }))
+        Box::new(f.timeout(timeout).map_err(move |err| {
+            release_pool.release_conn();
+            err.into()
+        }))
     } else {
         Box::new(f.map_err(move |err| {
             release_pool.release_conn();

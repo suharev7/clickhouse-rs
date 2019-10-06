@@ -5,12 +5,13 @@ use crate::{
     errors::Error,
     types::{
         column::{
-            BoxColumnWrapper, column_data::BoxColumnData, ColumnFrom, ColumnWrapper, Either,
-            list::List, nullable::NullableColumnData, VectorColumnData, column_data::ColumnData
+            column_data::BoxColumnData, column_data::ColumnData, list::List,
+            nullable::NullableColumnData, BoxColumnWrapper, ColumnFrom, ColumnWrapper, Either,
+            VectorColumnData,
         },
-        Column,
         decimal::{Decimal, NoBits},
-        from_sql::FromSql, SqlType, Value, ValueRef,
+        from_sql::FromSql,
+        Column, SqlType, Value, ValueRef,
     },
 };
 
@@ -180,7 +181,7 @@ impl ColumnData for DecimalColumnData {
             inner: self.inner.clone_instance(),
             precision: self.precision,
             scale: self.scale,
-            nobits: self.nobits
+            nobits: self.nobits,
         })
     }
 }

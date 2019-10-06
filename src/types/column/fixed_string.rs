@@ -3,7 +3,7 @@ use std::cmp;
 use crate::{
     binary::{Encoder, ReadEx},
     errors::Error,
-    types::{from_sql::*, Column, SqlType, Value, ValueRef, column::column_data::BoxColumnData},
+    types::{column::column_data::BoxColumnData, from_sql::*, Column, SqlType, Value, ValueRef},
 };
 
 use super::column_data::ColumnData;

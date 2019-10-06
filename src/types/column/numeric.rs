@@ -11,7 +11,11 @@ use crate::{
     },
 };
 
-use super::{column_data::{ColumnData, BoxColumnData}, list::List, ColumnFrom};
+use super::{
+    column_data::{BoxColumnData, ColumnData},
+    list::List,
+    ColumnFrom,
+};
 
 pub struct VectorColumnData<T>
 where
@@ -158,7 +162,9 @@ where
         size: usize,
     ) -> Result<VectorColumnData<T>, Error> {
         let mut data = List::with_capacity(size);
-        unsafe { data.set_len(size); }
+        unsafe {
+            data.set_len(size);
+        }
         reader.read_bytes(data.as_mut())?;
         Ok(Self { data })
     }
@@ -214,7 +220,9 @@ where
     }
 
     fn clone_instance(&self) -> BoxColumnData {
-        Box::new(Self { data: self.data.clone()})
+        Box::new(Self {
+            data: self.data.clone(),
+        })
     }
 }
 

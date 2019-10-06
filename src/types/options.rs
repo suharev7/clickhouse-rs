@@ -170,10 +170,10 @@ pub struct Options {
     pub(crate) connection_timeout: Duration,
 
     /// Timeout for queries (defaults to `180 sec`)
-    pub(crate) query_timeout: Duration,
+    pub(crate) query_timeout: Option<Duration>,
 
     /// Timeout for each block in a query (defaults to `180 sec`)
-    pub(crate) query_block_timeout: Duration,
+    pub(crate) query_block_timeout: Option<Duration>,
 
     /// Timeout for inserts (defaults to `180 sec`)
     pub(crate) insert_timeout: Option<Duration>,
@@ -199,8 +199,8 @@ impl Default for Options {
             retry_timeout: Duration::from_secs(5),
             ping_timeout: Duration::from_millis(500),
             connection_timeout: Duration::from_millis(500),
-            query_timeout: Duration::from_secs(180),
-            query_block_timeout: Duration::from_secs(180),
+            query_timeout: Some(Duration::from_secs(180)),
+            query_block_timeout: Some(Duration::from_secs(180)),
             insert_timeout: Some(Duration::from_secs(180)),
             execute_timeout: Some(Duration::from_secs(180)),
         }
@@ -394,13 +394,11 @@ where
             "ping_timeout" => options.ping_timeout = parse_param(key, value, parse_duration)?,
             "connection_timeout" => {
                 options.connection_timeout = parse_param(key, value, parse_duration)?
-            },
-            "query_timeout" => {
-                options.query_timeout = parse_param(key, value, parse_duration)?
-            },
+            }
+            "query_timeout" => options.query_timeout = parse_param(key, value, parse_opt_duration)?,
             "query_block_timeout" => {
-                options.query_block_timeout = parse_param(key, value, parse_duration)?
-            },
+                options.query_block_timeout = parse_param(key, value, parse_opt_duration)?
+            }
             "insert_timeout" => {
                 options.insert_timeout = parse_param(key, value, parse_opt_duration)?
             }
@@ -564,7 +562,10 @@ mod test {
 
     #[test]
     fn test_parse_opt_duration() {
-        assert_eq!(parse_opt_duration("3s").unwrap(), Some(Duration::from_secs(3)));
+        assert_eq!(
+            parse_opt_duration("3s").unwrap(),
+            Some(Duration::from_secs(3))
+        );
         assert_eq!(parse_opt_duration("none").unwrap(), None::<Duration>);
     }
 

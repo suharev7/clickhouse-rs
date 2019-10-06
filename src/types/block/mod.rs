@@ -21,15 +21,15 @@ use self::chunk_iterator::ChunkIterator;
 pub(crate) use self::row::BlockRef;
 pub use self::{
     block_info::BlockInfo,
+    builder::{RCons, RNil, RowBuilder},
     row::{Row, Rows},
-    builder::{RowBuilder, RCons, RNil},
 };
 
 mod block_info;
+mod builder;
 mod chunk_iterator;
 mod compressed;
 mod row;
-mod builder;
 
 const INSERT_BLOCK_SIZE: usize = 1_048_576;
 
@@ -116,7 +116,7 @@ impl Block {
         Self {
             info: Default::default(),
             columns: vec![],
-            capacity
+            capacity,
         }
     }
 
@@ -315,7 +315,7 @@ impl Block {
         Self {
             info: first.info,
             columns,
-            capacity: blocks.iter().map(|b| b.capacity).sum()
+            capacity: blocks.iter().map(|b| b.capacity).sum(),
         }
     }
 

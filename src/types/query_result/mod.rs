@@ -10,7 +10,6 @@ use crate::{
         Rows,
     },
     ClientHandle,
-    try_opt,
 };
 
 use self::{either::Either, fold_block::FoldBlock};
@@ -19,12 +18,20 @@ mod either;
 mod fold_block;
 mod stream_blocks;
 
-
 macro_rules! try_opt_stream {
     ($expr:expr) => {
         match $expr {
             Ok(val) => val,
             Err(err) => return Box::new(stream::once(Err(err))),
+        }
+    };
+}
+
+macro_rules! try_opt {
+    ($expr:expr) => {
+        match $expr {
+            Ok(val) => val,
+            Err(err) => return Box::new(future::err(err)),
         }
     };
 }
@@ -84,7 +91,7 @@ impl QueryResult {
                 Ok(blocks)
             })
             .map_err(Error::from)
-            .map(|(h, blocks)| (h, Block::concat(blocks.as_slice())))
+            .map(|(h, blocks)| (h, Block::concat(blocks.as_slice()))),
         )
     }
 
@@ -102,30 +109,38 @@ impl QueryResult {
         let release_pool = self.client.pool.clone();
 
         let acc = (None, init);
-        Box::new(
-            self.fold_packets(acc, move |(h, acc), packet| match packet {
-                Packet::Block(b) => Either::Left(f(acc, b).into_future().map(move |a| (h, a))),
-                Packet::Eof(inner) => Either::Right(future::ok((
-                    Some(ClientHandle {
-                        inner: Some(inner),
-                        context: context.clone(),
-                        pool: pool.clone(),
+
+        let future = self.fold_packets(acc, move |(h, acc), packet| match packet {
+            Packet::Block(b) => Either::Left(f(acc, b).into_future().map(move |a| (h, a))),
+            Packet::Eof(inner) => Either::Right(future::ok((
+                Some(ClientHandle {
+                    inner: Some(inner),
+                    context: context.clone(),
+                    pool: pool.clone(),
+                }),
+                acc,
+            ))),
+            Packet::ProfileInfo(_) | Packet::Progress(_) => Either::Right(future::ok((h, acc))),
+            Packet::Exception(exception) => Either::Right(future::err(Error::Server(exception))),
+            _ => Either::Right(future::err(Error::Driver(DriverError::UnexpectedPacket))),
+        });
+
+        if let Some(timeout) = timeout {
+            Box::new(
+                future
+                    .map(|(c, t)| (c.unwrap(), t))
+                    .timeout(timeout)
+                    .map_err(move |err| {
+                        release_pool.release_conn();
+                        err.into()
                     }),
-                    acc,
-                ))),
-                Packet::ProfileInfo(_) | Packet::Progress(_) => Either::Right(future::ok((h, acc))),
-                Packet::Exception(exception) => {
-                    Either::Right(future::err(Error::Server(exception)))
-                }
-                _ => Either::Right(future::err(Error::Driver(DriverError::UnexpectedPacket))),
-            })
-            .map(|(c, t)| (c.unwrap(), t))
-            .timeout(timeout)
-            .map_err(move |err| {
+            )
+        } else {
+            Box::new(future.map(|(c, t)| (c.unwrap(), t)).map_err(move |err| {
                 release_pool.release_conn();
-                err.into()
-            }),
-        )
+                err
+            }))
+        }
     }
 
     fn fold_packets<F, T, Fut>(self, init: T, f: F) -> BoxFuture<T>
@@ -179,7 +194,7 @@ impl QueryResult {
         let query = self.query;
         let timeout = try_opt_stream!(self.client.context.options.get()).query_block_timeout;
 
-        self.client.wrap_stream(move |mut c| {
+        self.client.wrap_stream(move |mut c| -> BoxStream<Block> {
             info!("[send query] {}", query.get_sql());
 
             c.pool.detach();
@@ -188,21 +203,30 @@ impl QueryResult {
             let pool = c.pool.clone();
             let mut release_pool = Some(c.pool.clone());
 
-            BlockStream::new(
+            let stream = BlockStream::new(
                 c.inner
                     .take()
                     .unwrap()
                     .call(Cmd::SendQuery(query, context.clone())),
                 context,
                 pool,
-            )
-            .timeout(timeout)
-            .map_err(move |err| {
-                if let Some(pool) = release_pool.take() {
-                    pool.release_conn();
-                }
-                err.into()
-            })
+            );
+
+            if let Some(timeout) = timeout {
+                Box::new(stream.timeout(timeout).map_err(move |err| {
+                    if let Some(pool) = release_pool.take() {
+                        pool.release_conn();
+                    }
+                    err.into()
+                }))
+            } else {
+                Box::new(stream.map_err(move |err| {
+                    if let Some(pool) = release_pool.take() {
+                        pool.release_conn();
+                    }
+                    err
+                }))
+            }
         })
     }
 

@@ -6,7 +6,7 @@ use hostname::get_hostname;
 use crate::errors::{Error, ServerError};
 
 pub use self::{
-    block::{Block, Row, Rows, RowBuilder, RCons, RNil},
+    block::{Block, RCons, RNil, Row, RowBuilder, Rows},
     column::Column,
     decimal::Decimal,
     from_sql::FromSql,

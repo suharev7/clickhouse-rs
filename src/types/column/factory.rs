@@ -4,18 +4,10 @@ use crate::{
     binary::ReadEx,
     errors::Error,
     types::column::{
-        array::ArrayColumnData,
-        BoxColumnWrapper,
-        column_data::ColumnData,
-        ColumnWrapper,
-        date::DateColumnData,
-        decimal::DecimalColumnData,
-        fixed_string::FixedStringColumnData,
-        list::List,
-        nullable::NullableColumnData,
-        numeric::VectorColumnData,
-        SqlType,
-        string::StringColumnData
+        array::ArrayColumnData, column_data::ColumnData, date::DateColumnData,
+        decimal::DecimalColumnData, fixed_string::FixedStringColumnData, list::List,
+        nullable::NullableColumnData, numeric::VectorColumnData, string::StringColumnData,
+        BoxColumnWrapper, ColumnWrapper, SqlType,
     },
     types::decimal::NoBits,
 };
@@ -60,7 +52,11 @@ impl dyn ColumnData {
         })
     }
 
-    pub(crate) fn from_type<W: ColumnWrapper>(sql_type: SqlType, timezone: Tz, capacity: usize) -> Result<W::Wrapper, Error> {
+    pub(crate) fn from_type<W: ColumnWrapper>(
+        sql_type: SqlType,
+        timezone: Tz,
+        capacity: usize,
+    ) -> Result<W::Wrapper, Error> {
         Ok(match sql_type {
             SqlType::UInt8 => W::wrap(VectorColumnData::<u8>::with_capacity(capacity)),
             SqlType::UInt16 => W::wrap(VectorColumnData::<u16>::with_capacity(capacity)),
@@ -71,23 +67,21 @@ impl dyn ColumnData {
             SqlType::Int32 => W::wrap(VectorColumnData::<i32>::with_capacity(capacity)),
             SqlType::Int64 => W::wrap(VectorColumnData::<i64>::with_capacity(capacity)),
             SqlType::String => W::wrap(StringColumnData::with_capacity(capacity)),
-            SqlType::FixedString(len) => W::wrap(FixedStringColumnData::with_capacity(capacity, len)),
+            SqlType::FixedString(len) => {
+                W::wrap(FixedStringColumnData::with_capacity(capacity, len))
+            }
             SqlType::Float32 => W::wrap(VectorColumnData::<f32>::with_capacity(capacity)),
             SqlType::Float64 => W::wrap(VectorColumnData::<f64>::with_capacity(capacity)),
             SqlType::Date => W::wrap(DateColumnData::<u16>::with_capacity(capacity, timezone)),
             SqlType::DateTime => W::wrap(DateColumnData::<u32>::with_capacity(capacity, timezone)),
-            SqlType::Nullable(inner_type) => {
-                W::wrap(NullableColumnData {
-                    inner: ColumnData::from_type::<BoxColumnWrapper>(*inner_type, timezone, capacity)?,
-                    nulls: Vec::new(),
-                })
-            },
-            SqlType::Array(inner_type) => {
-                W::wrap(ArrayColumnData {
-                    inner: ColumnData::from_type::<BoxColumnWrapper>(*inner_type, timezone, capacity)?,
-                    offsets: List::with_capacity(capacity),
-                })
-            },
+            SqlType::Nullable(inner_type) => W::wrap(NullableColumnData {
+                inner: ColumnData::from_type::<BoxColumnWrapper>(*inner_type, timezone, capacity)?,
+                nulls: Vec::new(),
+            }),
+            SqlType::Array(inner_type) => W::wrap(ArrayColumnData {
+                inner: ColumnData::from_type::<BoxColumnWrapper>(*inner_type, timezone, capacity)?,
+                offsets: List::with_capacity(capacity),
+            }),
             SqlType::Decimal(precision, scale) => {
                 let nobits = NoBits::from_precision(precision).unwrap();
 
@@ -97,12 +91,14 @@ impl dyn ColumnData {
                 };
 
                 W::wrap(DecimalColumnData {
-                    inner: ColumnData::from_type::<BoxColumnWrapper>(inner_type, timezone, capacity)?,
+                    inner: ColumnData::from_type::<BoxColumnWrapper>(
+                        inner_type, timezone, capacity,
+                    )?,
                     precision,
                     scale,
                     nobits,
                 })
-            },
+            }
         })
     }
 }

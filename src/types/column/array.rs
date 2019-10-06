@@ -2,7 +2,7 @@ use crate::{
     binary::{Encoder, ReadEx},
     errors::Error,
     types::{
-        column::{list::List, BoxColumnWrapper, ColumnData, column_data::BoxColumnData},
+        column::{column_data::BoxColumnData, list::List, BoxColumnWrapper, ColumnData},
         SqlType, Value, ValueRef,
     },
 };

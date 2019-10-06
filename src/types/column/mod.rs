@@ -6,20 +6,20 @@ use crate::{
     binary::{Encoder, ReadEx},
     errors::{Error, FromSqlError},
     types::{
-        ClickhouseResult, column::{
+        column::{
             column_data::ArcColumnData,
             decimal::{DecimalAdapter, NullableDecimalAdapter},
-            fixed_string::{FixedStringAdapter, NullableFixedStringAdapter}, string::StringAdapter
-        }, decimal::NoBits,
-        SqlType,
-        Value,
-        ValueRef
+            fixed_string::{FixedStringAdapter, NullableFixedStringAdapter},
+            string::StringAdapter,
+        },
+        decimal::NoBits,
+        ClickhouseResult, SqlType, Value, ValueRef,
     },
 };
 
-pub use self::{column_data::ColumnData, concat::ConcatColumnData, numeric::VectorColumnData};
 use self::chunk::ChunkColumnData;
 pub(crate) use self::string_pool::StringPool;
+pub use self::{column_data::ColumnData, concat::ConcatColumnData, numeric::VectorColumnData};
 
 mod array;
 mod chunk;
@@ -227,18 +227,20 @@ impl Column {
             match Arc::get_mut(&mut self.data) {
                 None => {
                     self.data = Arc::from(self.data.clone_instance());
-                },
+                }
                 Some(data) => {
                     data.push(value);
                     break;
-                },
+                }
             }
         }
     }
-
 }
 
-pub(crate) fn new_column(name: &str, data: Arc<(dyn ColumnData + Sync + Send + 'static)>) -> Column {
+pub(crate) fn new_column(
+    name: &str,
+    data: Arc<(dyn ColumnData + Sync + Send + 'static)>,
+) -> Column {
     Column {
         name: name.to_string(),
         data,

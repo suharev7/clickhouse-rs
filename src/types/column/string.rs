@@ -12,7 +12,10 @@ use crate::{
     },
 };
 
-use super::{column_data::{ColumnData, BoxColumnData}, ColumnFrom};
+use super::{
+    column_data::{BoxColumnData, ColumnData},
+    ColumnFrom,
+};
 
 pub(crate) struct StringColumnData {
     pool: StringPool,
@@ -184,7 +187,9 @@ impl ColumnData for StringColumnData {
     }
 
     fn clone_instance(&self) -> BoxColumnData {
-        Box::new(Self{ pool: self.pool.clone() })
+        Box::new(Self {
+            pool: self.pool.clone(),
+        })
     }
 }
 

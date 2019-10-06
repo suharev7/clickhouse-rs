@@ -300,10 +300,9 @@ mod test {
 
     use tokio::prelude::*;
 
-    use crate::{errors::Error, io::BoxFuture, test_misc::DATABASE_URL, types::Options};
+    use crate::{ClientHandle, errors::Error, io::BoxFuture, test_misc::DATABASE_URL, types::{Block, Options}};
 
     use super::Pool;
-    use crate::ClientHandle;
 
     /// Same as `tokio::run`, but will panic if future panics and will return the result
     /// of future execution.
@@ -480,5 +479,44 @@ mod test {
 
         let info = pool.info();
         assert_eq!(info.ongoing, 0);
+        assert_eq!(info.tasks_len, 0);
+        assert_eq!(info.idle_len, 0);
+    }
+
+    #[test]
+    fn test_wrong_insert() {
+        let pool = Pool::new(DATABASE_URL.as_str());
+
+        let done = pool
+            .get_handle()
+            .and_then(|c| {
+                let block = Block::new();
+                c.insert("unexisting", block)
+            });
+
+        run(done).unwrap_err();
+
+        let info = pool.info();
+        assert_eq!(info.ongoing, 0);
+        assert_eq!(info.tasks_len, 0);
+        assert_eq!(info.idle_len, 0);
+    }
+
+    #[test]
+    fn test_wrong_execute() {
+        let pool = Pool::new(DATABASE_URL.as_str());
+
+        let done = pool
+            .get_handle()
+            .and_then(|c| {
+                c.execute("DROP TABLE unexisting")
+            });
+
+        run(done).unwrap_err();
+
+        let info = pool.info();
+        assert_eq!(info.ongoing, 0);
+        assert_eq!(info.tasks_len, 0);
+        assert_eq!(info.idle_len, 0);
     }
 }

@@ -363,6 +363,8 @@ impl ClientHandle {
     {
         let context = self.context.clone();
         let pool = self.pool.clone();
+        let release_pool = self.pool.clone();
+
         let query = Query::from(sql);
         self.wrap_future(|mut c| {
             info!("[execute]    {}", query.get_sql());
@@ -387,6 +389,10 @@ impl ClientHandle {
                     }
                     _ => future::err::<_, Error>(Error::Driver(DriverError::UnexpectedPacket)),
                 })
+                .map_err(move |err| {
+                    release_pool.release_conn();
+                    err
+                })
                 .map(Option::unwrap)
         })
     }
@@ -409,6 +415,7 @@ impl ClientHandle {
 
         let context = self.context.clone();
         let pool = self.pool.clone();
+        let release_pool = self.pool.clone();
 
         self.wrap_future(|mut c| {
             info!("[insert]     {}", query.get_sql());
@@ -438,6 +445,10 @@ impl ClientHandle {
                             .read_block(context, pool)
                             .map(|(c, _)| c),
                     )
+                })
+                .map_err(move |err| {
+                    release_pool.release_conn();
+                    err
                 })
         })
     }

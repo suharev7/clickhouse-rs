@@ -52,6 +52,7 @@ parameters:
 
 - `query_timeout` - Timeout for queries (defaults to `180 sec`).
 - `query_block_timeout` - Timeout for each block in a query (defaults to `180 sec`).
+- `insert_timeout` - Timeout for inserts (defaults to `180 sec`).
 
 example:
 ```url

@@ -174,6 +174,9 @@ pub struct Options {
 
     /// Timeout for each block in a query (defaults to `180 sec`)
     pub(crate) query_block_timeout: Duration,
+
+    /// Timeout for inserts (defaults to `180 sec`)
+    pub(crate) insert_timeout: Option<Duration>,
 }
 
 impl Default for Options {
@@ -195,6 +198,7 @@ impl Default for Options {
             connection_timeout: Duration::from_millis(500),
             query_timeout: Duration::from_secs(180),
             query_block_timeout: Duration::from_secs(180),
+            insert_timeout: Some(Duration::from_secs(180)),
         }
     }
 }
@@ -308,6 +312,11 @@ impl Options {
         /// Timeout for each block in a query (defaults to `180,000 ms`).
         => query_block_timeout: Duration
     }
+
+    property! {
+        /// Timeout for insert (defaults to `180,000 ms`).
+        => insert_timeout: Option<Duration>
+    }
 }
 
 impl FromStr for Options {
@@ -383,6 +392,9 @@ where
             "query_block_timeout" => {
                 options.query_block_timeout = parse_param(key, value, parse_duration)?
             },
+            "insert_timeout" => {
+                options.insert_timeout = parse_param(key, value, parse_opt_duration)?
+            }
             "compression" => options.compression = parse_param(key, value, parse_compression)?,
             _ => return Err(UrlError::UnknownParameter { param: key.into() }),
         };
@@ -460,6 +472,10 @@ fn parse_duration(source: &str) -> std::result::Result<Duration, ()> {
 }
 
 fn parse_opt_duration(source: &str) -> std::result::Result<Option<Duration>, ()> {
+    if source == "none" {
+        return Ok(None);
+    }
+
     let duration = parse_duration(source)?;
     Ok(Some(duration))
 }
@@ -474,9 +490,7 @@ fn parse_compression(source: &str) -> std::result::Result<bool, ()> {
 
 #[cfg(test)]
 mod test {
-    use std::time::Duration;
-
-    use super::{from_url, parse_compression, parse_duration, Options};
+    use super::*;
 
     #[test]
     fn test_parse_default() {
@@ -534,6 +548,12 @@ mod test {
 
         assert_eq!(parse_duration("ms").unwrap_err(), ());
         assert_eq!(parse_duration("1ss").unwrap_err(), ());
+    }
+
+    #[test]
+    fn test_parse_opt_duration() {
+        assert_eq!(parse_opt_duration("3s").unwrap(), Some(Duration::from_secs(3)));
+        assert_eq!(parse_opt_duration("none").unwrap(), None::<Duration>);
     }
 
     #[test]

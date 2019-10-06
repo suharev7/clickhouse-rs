@@ -46,6 +46,7 @@
 //!
 //! - `query_timeout` - Timeout for queries (defaults to `180 sec`).
 //! - `query_block_timeout` - Timeout for each block in a query (defaults to `180 sec`).
+//! - `insert_timeout` - Timeout for inserts (defaults to `180 sec`).
 //!
 //! example:
 //! ```url
@@ -134,6 +135,7 @@ use crate::{
     retry_guard::RetryGuard,
     types::{Block, Cmd, Context, IntoOptions, Options, OptionsSource, Packet, Query, QueryResult},
 };
+use failure::_core::time::Duration;
 
 mod binary;
 mod client_info;
@@ -417,9 +419,11 @@ impl ClientHandle {
         let pool = self.pool.clone();
         let release_pool = self.pool.clone();
 
-        self.wrap_future(|mut c| {
+        self.wrap_future(|mut c| -> BoxFuture<Self> {
             info!("[insert]     {}", query.get_sql());
-            c.inner
+            let timeout = try_opt!(context.options.get()).insert_timeout;
+
+            let future = c.inner
                 .take()
                 .unwrap()
                 .call(Cmd::SendQuery(query, context.clone()))
@@ -445,11 +449,9 @@ impl ClientHandle {
                             .read_block(context, pool)
                             .map(|(c, _)| c),
                     )
-                })
-                .map_err(move |err| {
-                    release_pool.release_conn();
-                    err
-                })
+                });
+
+            with_timeout(future, timeout, release_pool)
         })
     }
 
@@ -520,6 +522,25 @@ impl ClientHandle {
                 },
             ),
         )
+    }
+}
+
+fn with_timeout<F>(f: F, timeout: Option<Duration>, release_pool: PoolBinding) -> BoxFuture<F::Item>
+where
+    F: Future<Error = Error> + Send + 'static,
+{
+    if let Some(timeout) = timeout {
+        Box::new(f
+            .timeout(timeout)
+            .map_err(move |err| {
+                release_pool.release_conn();
+                err.into()
+            }))
+    } else {
+        Box::new(f.map_err(move |err| {
+            release_pool.release_conn();
+            err
+        }))
     }
 }
 

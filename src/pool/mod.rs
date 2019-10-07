@@ -3,8 +3,7 @@ use std::{
     sync::{Arc, Mutex, MutexGuard},
 };
 
-use tokio::prelude::task::{self, Task};
-use tokio::prelude::*;
+use tokio::prelude::{*, task::{self, Task}};
 
 use crate::{
     io::BoxFuture,
@@ -257,7 +256,7 @@ impl Pool {
         })
     }
 
-    fn release_conn(&mut self) {
+    pub(crate) fn release_conn(&mut self) {
         self.with_inner(|mut inner| {
             inner.ongoing -= 1;
 
@@ -481,6 +480,30 @@ mod test {
         let done = pool
             .get_handle()
             .and_then(|c| c.query("SELECT sleep(10)").fetch_all());
+
+        run(done).unwrap_err();
+
+        let info = pool.info();
+        assert_eq!(info.ongoing, 0);
+        assert_eq!(info.tasks_len, 0);
+        assert_eq!(info.idle_len, 0);
+    }
+
+    #[test]
+    fn test_query_stream_timeout() {
+        let test_db_url = format!("{}{}", DATABASE_URL.as_str(), "&query_block_timeout=10ms");
+        let pool = Pool::new(test_db_url.to_string());
+
+        let done = pool
+            .get_handle()
+            .and_then(|c| {
+                c.query("SELECT sleep(10)")
+                    .stream_blocks()
+                    .for_each(|block| {
+                        println!("{:?}\nblock counts: {} rows", block, block.row_count());
+                        Ok(())
+                    })
+            });
 
         run(done).unwrap_err();
 

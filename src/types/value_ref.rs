@@ -130,8 +130,8 @@ impl<'a> convert::From<ValueRef<'a>> for SqlType {
             ValueRef::Date(_, _) => SqlType::Date,
             ValueRef::DateTime(_, _) => SqlType::DateTime,
             ValueRef::Nullable(u) => match u {
-                Either::Left(sql_type) => sql_type.to_owned(),
-                Either::Right(value_ref) => SqlType::from(*value_ref),
+                Either::Left(sql_type) => SqlType::Nullable(sql_type),
+                Either::Right(value_ref) => SqlType::Nullable(SqlType::from(*value_ref).into()),
             },
             ValueRef::Array(t, _) => SqlType::Array(t),
             ValueRef::Decimal(v) => SqlType::Decimal(v.precision, v.scale),
@@ -345,11 +345,178 @@ mod test {
         );
 
         assert_eq!("text".to_string(), format!("{}", ValueRef::String(b"text")));
+
+        assert_eq!("42".to_string(), format!("{}", ValueRef::UInt8(42)));
+        assert_eq!("42".to_string(), format!("{}", ValueRef::UInt16(42)));
+        assert_eq!("42".to_string(), format!("{}", ValueRef::UInt32(42)));
+        assert_eq!("42".to_string(), format!("{}", ValueRef::UInt64(42)));
+
+        assert_eq!("42".to_string(), format!("{}", ValueRef::Int8(42)));
+        assert_eq!("42".to_string(), format!("{}", ValueRef::Int16(42)));
+        assert_eq!("42".to_string(), format!("{}", ValueRef::Int32(42)));
+        assert_eq!("42".to_string(), format!("{}", ValueRef::Int64(42)));
+
+        assert_eq!("42".to_string(), format!("{}", ValueRef::Float32(42.0)));
+        assert_eq!("42".to_string(), format!("{}", ValueRef::Float64(42.0)));
+
+        assert_eq!(
+            "NULL".to_string(),
+            format!(
+                "{}",
+                ValueRef::Nullable(Either::Left(SqlType::UInt8.into()))
+            )
+        );
+
+        assert_eq!(
+            "42".to_string(),
+            format!(
+                "{}",
+                ValueRef::Nullable(Either::Right(Box::new(ValueRef::UInt8(42))))
+            )
+        );
+
+        assert_eq!(
+            "[1, 2, 3]".to_string(),
+            format!(
+                "{}",
+                ValueRef::Array(
+                    SqlType::Int32.into(),
+                    Arc::new(vec![
+                        ValueRef::Int32(1),
+                        ValueRef::Int32(2),
+                        ValueRef::Int32(3)
+                    ])
+                )
+            )
+        );
+
+        assert_eq!(
+            "1970-01-01".to_string(),
+            format!("{}", ValueRef::Date(0, Tz::Zulu))
+        );
+
+        assert_eq!(
+            "1970-01-01UTC".to_string(),
+            format!("{:#}", ValueRef::Date(0, Tz::Zulu))
+        );
+
+        assert_eq!(
+            "1970-01-01 00:00:00 UTC".to_string(),
+            format!("{}", ValueRef::DateTime(0, Tz::Zulu))
+        );
+
+        assert_eq!(
+            "Thu, 01 Jan 1970 00:00:00 +0000".to_string(),
+            format!("{:#}", ValueRef::DateTime(0, Tz::Zulu))
+        );
+
+        assert_eq!(
+            "2.00".to_string(),
+            format!("{}", ValueRef::Decimal(Decimal::of(2.0_f64, 2)))
+        )
     }
 
     #[test]
     fn test_size_of() {
         use std::mem;
         assert_eq!(24, mem::size_of::<[ValueRef<'_>; 1]>());
+    }
+
+    #[test]
+    fn test_value_from_ref() {
+        assert_eq!(Value::from(ValueRef::UInt8(42)), Value::UInt8(42));
+        assert_eq!(Value::from(ValueRef::UInt16(42)), Value::UInt16(42));
+        assert_eq!(Value::from(ValueRef::UInt32(42)), Value::UInt32(42));
+        assert_eq!(Value::from(ValueRef::UInt64(42)), Value::UInt64(42));
+
+        assert_eq!(Value::from(ValueRef::Int8(42)), Value::Int8(42));
+        assert_eq!(Value::from(ValueRef::Int16(42)), Value::Int16(42));
+        assert_eq!(Value::from(ValueRef::Int32(42)), Value::Int32(42));
+        assert_eq!(Value::from(ValueRef::Int64(42)), Value::Int64(42));
+
+        assert_eq!(Value::from(ValueRef::Float32(42.0)), Value::Float32(42.0));
+        assert_eq!(Value::from(ValueRef::Float64(42.0)), Value::Float64(42.0));
+
+        assert_eq!(
+            Value::from(ValueRef::Date(42, Tz::Zulu)),
+            Value::Date(42, Tz::Zulu)
+        );
+        assert_eq!(
+            Value::from(ValueRef::DateTime(42, Tz::Zulu)),
+            Value::DateTime(42, Tz::Zulu)
+        );
+
+        assert_eq!(
+            Value::from(ValueRef::Decimal(Decimal::of(2.0_f64, 4))),
+            Value::Decimal(Decimal::of(2.0_f64, 4))
+        );
+
+        assert_eq!(
+            Value::from(ValueRef::Array(
+                SqlType::Int32.into(),
+                Arc::new(vec![
+                    ValueRef::Int32(1),
+                    ValueRef::Int32(2),
+                    ValueRef::Int32(3)
+                ])
+            )),
+            Value::Array(
+                SqlType::Int32.into(),
+                Arc::new(vec![Value::Int32(1), Value::Int32(2), Value::Int32(3)])
+            )
+        )
+    }
+
+    #[test]
+    fn test_get_sql_type() {
+        assert_eq!(SqlType::from(ValueRef::UInt8(42)), SqlType::UInt8);
+        assert_eq!(SqlType::from(ValueRef::UInt16(42)), SqlType::UInt16);
+        assert_eq!(SqlType::from(ValueRef::UInt32(42)), SqlType::UInt32);
+        assert_eq!(SqlType::from(ValueRef::UInt64(42)), SqlType::UInt64);
+
+        assert_eq!(SqlType::from(ValueRef::Int8(42)), SqlType::Int8);
+        assert_eq!(SqlType::from(ValueRef::Int16(42)), SqlType::Int16);
+        assert_eq!(SqlType::from(ValueRef::Int32(42)), SqlType::Int32);
+        assert_eq!(SqlType::from(ValueRef::Int64(42)), SqlType::Int64);
+
+        assert_eq!(SqlType::from(ValueRef::Float32(42.0)), SqlType::Float32);
+        assert_eq!(SqlType::from(ValueRef::Float64(42.0)), SqlType::Float64);
+
+        assert_eq!(SqlType::from(ValueRef::String(&[])), SqlType::String);
+
+        assert_eq!(SqlType::from(ValueRef::Date(42, Tz::Zulu)), SqlType::Date);
+        assert_eq!(
+            SqlType::from(ValueRef::DateTime(42, Tz::Zulu)),
+            SqlType::DateTime
+        );
+
+        assert_eq!(
+            SqlType::from(ValueRef::Decimal(Decimal::of(2.0_f64, 4))),
+            SqlType::Decimal(18, 4)
+        );
+
+        assert_eq!(
+            SqlType::from(ValueRef::Array(
+                SqlType::Int32.into(),
+                Arc::new(vec![
+                    ValueRef::Int32(1),
+                    ValueRef::Int32(2),
+                    ValueRef::Int32(3)
+                ])
+            )),
+            SqlType::Array(SqlType::Int32.into())
+        );
+
+        assert_eq!(
+            SqlType::from(ValueRef::Nullable(Either::Left(SqlType::UInt8.into()))),
+            SqlType::Nullable(SqlType::UInt8.into())
+        );
+
+        assert_eq!(
+            SqlType::from(ValueRef::Nullable(Either::Right(Box::new(ValueRef::Int8(
+                42
+            ))))),
+            SqlType::Nullable(SqlType::Int8.into())
+        );
     }
 }

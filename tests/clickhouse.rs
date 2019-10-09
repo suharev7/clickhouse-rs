@@ -1,4 +1,4 @@
-use std::{env, f64::EPSILON, fmt};
+use std::{env, f64::EPSILON, fmt, sync::{Arc, atomic::{Ordering, AtomicUsize}}};
 
 use chrono::prelude::*;
 use chrono_tz::Tz;
@@ -793,4 +793,30 @@ async fn test_column_iter() -> Result<(), Error> {
     }
 
     Ok(())
+}
+
+#[test]
+fn test_reconnect() {
+    let url = format!("{}{}", database_url(), "&pool_max=1&pool_min=1");
+    let pool = Pool::new(url);
+
+    let counter = Arc::new(AtomicUsize::new(0));
+
+    for _ in 0..2 {
+        let pool = pool.clone();
+        let counter = counter.clone();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let ret: Result<(), Error> = rt.block_on(async move {
+            let mut client = pool.get_handle().await?;
+
+            let block = client.query("SELECT 1").fetch_all().await?;
+            let value: u8 = block.get(0, 0)?;
+            counter.fetch_add(value as usize, Ordering::SeqCst);
+
+            Ok(())
+        });
+        ret.unwrap()
+    }
+
+    assert_eq!(2, counter.load(Ordering::SeqCst))
 }

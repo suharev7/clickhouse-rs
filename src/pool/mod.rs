@@ -19,7 +19,7 @@ use log::error;
 
 mod futures;
 
-struct Inner {
+pub(crate) struct Inner {
     new: Option<BoxFuture<'static, Result<ClientHandle>>>,
     idle: Vec<ClientHandle>,
     tasks: Vec<Waker>,
@@ -27,6 +27,14 @@ struct Inner {
 }
 
 impl Inner {
+    pub(crate) fn release_conn(inner: &Mutex<Inner>) {
+        let mut guard = inner.lock().unwrap();
+        guard.ongoing -= 1;
+        while let Some(task) = guard.tasks.pop() {
+            task.wake()
+        }
+    }
+
     fn conn_count(&self) -> usize {
         self.new.is_some() as usize + self.idle.len() + self.ongoing
     }
@@ -92,7 +100,7 @@ impl PoolBinding {
 #[derive(Clone)]
 pub struct Pool {
     options: OptionsSource,
-    inner: Arc<Mutex<Inner>>,
+    pub(crate) inner: Arc<Mutex<Inner>>,
     min: usize,
     max: usize,
 }
@@ -203,7 +211,8 @@ impl Pool {
 
     fn new_connection(&self) -> BoxFuture<'static, Result<ClientHandle>> {
         let source = self.options.clone();
-        Box::pin(async move { Client::open(&source).await })
+        let pool = Some(self.clone());
+        Box::pin(async move { Client::open(&source, pool).await })
     }
 
     fn handle_futures(&mut self, cx: &mut Context<'_>) -> Result<()> {
@@ -233,6 +242,7 @@ impl Pool {
         self.with_inner(|mut inner| {
             if let Some(mut client) = inner.idle.pop() {
                 client.pool = PoolBinding::Attached(self.clone());
+                client.set_inside(false);
                 inner.ongoing += 1;
                 Some(client)
             } else {
@@ -245,12 +255,14 @@ impl Pool {
         let min = self.min;
 
         self.with_inner(|mut inner| {
-            inner.ongoing -= 1;
-            if inner.idle.len() < min && client.pool.is_attached() {
+            let is_attached = client.pool.is_attached();
+            client.pool = PoolBinding::None;
+            client.set_inside(true);
+
+            if inner.idle.len() < min && is_attached {
                 inner.idle.push(client);
-            } else {
-                client.pool = PoolBinding::None;
             }
+            inner.ongoing -= 1;
 
             while let Some(task) = inner.tasks.pop() {
                 task.wake()
@@ -292,7 +304,7 @@ mod test {
     use futures_util::future;
     use tokio::runtime::current_thread::Runtime;
 
-    use crate::{errors::Result, test_misc::DATABASE_URL, Options};
+    use crate::{errors::Result, test_misc::DATABASE_URL, Options, Block};
 
     use super::Pool;
 
@@ -406,5 +418,34 @@ mod test {
                 Err(e) => panic!(e),
             }
         }
+    }
+
+    #[tokio::test]
+    async fn test_wrong_insert() -> Result<()> {
+        let pool = Pool::new(DATABASE_URL.as_str());
+        {
+            let block = Block::new();
+            let mut c = pool.get_handle().await?;
+            c.insert("unexisting", block).await.unwrap_err();
+        }
+        let info = pool.info();
+        assert_eq!(info.ongoing, 0);
+        assert_eq!(info.tasks_len, 0);
+        assert_eq!(info.idle_len, 0);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_wrong_execute() -> Result<()> {
+        let pool = Pool::new(DATABASE_URL.as_str());
+        {
+            let mut c = pool.get_handle().await?;
+            c.execute("DROP TABLE unexisting").await.unwrap_err();
+        }
+        let info = pool.info();
+        assert_eq!(info.ongoing, 0);
+        assert_eq!(info.tasks_len, 0);
+        assert_eq!(info.idle_len, 0);
+        Ok(())
     }
 }

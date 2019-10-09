@@ -4,11 +4,12 @@ use tokio::timer::Interval;
 
 use log::warn;
 
-use crate::{errors::Result, types::OptionsSource, Client, ClientHandle};
+use crate::{errors::Result, types::OptionsSource, Client, ClientHandle, Pool};
 
 pub(crate) async fn retry_guard(
     handle: &mut ClientHandle,
     source: &OptionsSource,
+    pool: Option<Pool>,
     max_attempt: usize,
     duration: Duration,
 ) -> Result<()> {
@@ -29,7 +30,7 @@ pub(crate) async fn retry_guard(
             }
         }
 
-        match reconnect(handle, source).await {
+        match reconnect(handle, source, pool.clone()).await {
             Ok(()) => continue,
             Err(err) => {
                 skip_check = true;
@@ -50,9 +51,12 @@ async fn check(c: &mut ClientHandle) -> Result<()> {
     c.ping().await
 }
 
-async fn reconnect(c: &mut ClientHandle, source: &OptionsSource) -> Result<()> {
+async fn reconnect(c: &mut ClientHandle, source: &OptionsSource, pool: Option<Pool>) -> Result<()> {
     warn!("[reconnect]");
-    let mut nc = Client::open(&source).await?;
+    let mut nc = match pool {
+        None => Client::open(&source, pool).await?,
+        Some(p) => p.get_handle().await?,
+    };
     mem::swap(c, &mut nc);
     Ok(())
 }

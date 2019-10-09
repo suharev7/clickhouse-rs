@@ -4,6 +4,7 @@ use std::{
     pin::Pin,
     ptr,
     task::{self, Poll},
+    sync::{self, Arc, atomic::{AtomicBool, Ordering}},
 };
 
 use chrono_tz::Tz;
@@ -17,6 +18,7 @@ use crate::{
     errors::{DriverError, Error, Result},
     io::read_to_end::read_to_end,
     types::{Block, Cmd, Packet},
+    pool::{Pool, Inner},
 };
 
 /// Line transport
@@ -40,6 +42,7 @@ pub(crate) struct ClickhouseTransport {
     compress: bool,
     // Whether there are unread packets
     pub(crate) inconsistent: bool,
+    status: Arc<TransportStatus>,
 }
 
 enum PacketStreamState {
@@ -49,6 +52,11 @@ enum PacketStreamState {
     Done,
 }
 
+pub(crate) struct TransportStatus {
+    inside: AtomicBool,
+    pool: sync::Weak<sync::Mutex<Inner>>,
+}
+
 pub(crate) struct PacketStream {
     inner: Option<ClickhouseTransport>,
     state: PacketStreamState,
@@ -56,7 +64,7 @@ pub(crate) struct PacketStream {
 }
 
 impl ClickhouseTransport {
-    pub fn new(inner: TcpStream, compress: bool) -> Self {
+    pub fn new(inner: TcpStream, compress: bool, pool: Option<Pool>) -> Self {
         ClickhouseTransport {
             inner,
             done: false,
@@ -67,10 +75,15 @@ impl ClickhouseTransport {
             timezone: None,
             compress,
             inconsistent: false,
+            status: Arc::new(TransportStatus::new(pool)),
         }
     }
 
-    pub(crate) async fn clear(self) -> Result<ClickhouseTransport> {
+    pub(crate) fn set_inside(&self, value: bool) {
+        self.status.inside.store(value, Ordering::Relaxed);
+    }
+
+    pub(crate) async fn clear(self) -> Result<Self> {
         if !self.inconsistent {
             return Ok(self);
         }
@@ -93,6 +106,34 @@ impl ClickhouseTransport {
         let mut transport = h.unwrap();
         transport.inconsistent = false;
         Ok(transport)
+    }
+}
+
+impl Drop for TransportStatus {
+    fn drop(&mut self) {
+        let inside = self.inside.load(Ordering::Relaxed);
+
+        if inside {
+            return;
+        }
+
+        if let Some(pool_inner) = self.pool.upgrade() {
+            Inner::release_conn(&pool_inner);
+        }
+    }
+}
+
+impl TransportStatus {
+    fn new(pool: Option<Pool>) -> TransportStatus {
+        let pool = match pool {
+            None => sync::Weak::new(),
+            Some(p) => Arc::downgrade(&p.inner),
+        };
+
+        TransportStatus {
+            inside: AtomicBool::new(true),
+            pool,
+        }
     }
 }
 

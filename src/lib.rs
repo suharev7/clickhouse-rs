@@ -221,12 +221,11 @@ impl Client {
     #[deprecated(since = "0.1.4", note = "please use Pool to connect")]
     pub async fn connect(options: Options) -> Result<ClientHandle> {
         let source = options.into_options_src();
-        Self::open(&source).await
+        Self::open(&source, None).await
     }
 
-    pub(crate) async fn open(source: &OptionsSource) -> Result<ClientHandle> {
+    pub(crate) async fn open(source: &OptionsSource, pool: Option<Pool>) -> Result<ClientHandle> {
         let options = try_opt!(source.get());
-
         let compress = options.compression;
         let timeout = options.connection_timeout;
 
@@ -241,11 +240,14 @@ impl Client {
                 stream.set_nodelay(options.nodelay)?;
                 stream.set_keepalive(options.keepalive)?;
 
-                let transport = ClickhouseTransport::new(stream, compress);
+                let transport = ClickhouseTransport::new(stream, compress, pool.clone());
                 let mut handle = ClientHandle {
                     inner: Some(transport),
                     context,
-                    pool: PoolBinding::None,
+                    pool: match pool {
+                        None => PoolBinding::None,
+                        Some(p) => PoolBinding::Detached(p),
+                    },
                 };
 
                 handle.hello().await?;
@@ -472,19 +474,28 @@ impl ClientHandle {
         self.pool.detach();
 
         let source = self.context.options.clone();
+        let pool = self.pool.clone();
 
         let (send_retries, retry_timeout) = {
             let options = try_opt!(source.get());
             (options.send_retries, options.retry_timeout)
         };
 
-        retry_guard(self, &source, send_retries, retry_timeout).await?;
+        retry_guard(self, &source, pool.into(), send_retries, retry_timeout).await?;
 
         if !self.pool.is_attached() && self.pool.is_some() {
             self.pool.attach();
         }
 
         Ok(())
+    }
+
+    pub(crate) fn set_inside(&self, value: bool) {
+        if let Some(ref inner) = self.inner {
+            inner.set_inside(value);
+        } else {
+            unreachable!()
+        }
     }
 }
 

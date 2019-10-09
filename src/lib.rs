@@ -239,10 +239,10 @@ impl fmt::Debug for ClientHandle {
 impl Client {
     #[deprecated(since = "0.1.4", note = "please use Pool to connect")]
     pub fn connect(options: Options) -> BoxFuture<ClientHandle> {
-        Self::open(&options.into_options_src())
+        Self::open(&options.into_options_src(), None)
     }
 
-    pub(crate) fn open(source: &OptionsSource) -> BoxFuture<ClientHandle> {
+    pub(crate) fn open(source: &OptionsSource, pool: Option<Pool>) -> BoxFuture<ClientHandle> {
         let options = try_opt!(source.get()).as_ref().to_owned();
         let compress = options.compression;
         let timeout = options.connection_timeout;
@@ -258,7 +258,7 @@ impl Client {
                     stream.set_nodelay(options.nodelay)?;
                     stream.set_keepalive(options.keepalive)?;
 
-                    let transport = ClickhouseTransport::new(stream, compress);
+                    let transport = ClickhouseTransport::new(stream, compress, pool);
                     Ok(ClientHandle {
                         inner: Some(transport),
                         context,
@@ -365,14 +365,14 @@ impl ClientHandle {
     {
         let context = self.context.clone();
         let pool = self.pool.clone();
-        let release_pool = self.pool.clone();
 
         let query = Query::from(sql);
         self.wrap_future(|mut c| -> BoxFuture<Self> {
             info!("[execute]    {}", query.get_sql());
             let timeout = try_opt!(context.options.get()).execute_timeout;
 
-            let future = c.inner
+            let future = c
+                .inner
                 .take()
                 .unwrap()
                 .call(Cmd::SendQuery(query, context.clone()))
@@ -395,7 +395,7 @@ impl ClientHandle {
                 })
                 .map(Option::unwrap);
 
-            with_timeout(future, timeout, release_pool)
+            with_timeout(future, timeout)
         })
     }
 
@@ -417,13 +417,13 @@ impl ClientHandle {
 
         let context = self.context.clone();
         let pool = self.pool.clone();
-        let release_pool = self.pool.clone();
 
         self.wrap_future(|mut c| -> BoxFuture<Self> {
             info!("[insert]     {}", query.get_sql());
             let timeout = try_opt!(context.options.get()).insert_timeout;
 
-            let future = c.inner
+            let future = c
+                .inner
                 .take()
                 .unwrap()
                 .call(Cmd::SendQuery(query, context.clone()))
@@ -451,7 +451,7 @@ impl ClientHandle {
                     )
                 });
 
-            with_timeout(future, timeout, release_pool)
+            with_timeout(future, timeout)
         })
     }
 
@@ -507,7 +507,7 @@ impl ClientHandle {
         let reconnect = move || -> BoxFuture<Self> {
             warn!("[reconnect]");
             match pool.clone() {
-                None => Client::open(&source),
+                None => Client::open(&source, None),
                 Some(p) => Box::new(p.get_handle()),
             }
         };
@@ -523,26 +523,24 @@ impl ClientHandle {
             ),
         )
     }
+
+    pub(crate) fn set_inside(&self, value: bool) {
+        if let Some(ref inner) = self.inner {
+            inner.set_inside(value);
+        } else {
+            unreachable!()
+        }
+    }
 }
 
-pub(crate) fn with_timeout<F>(
-    f: F,
-    timeout: Option<Duration>,
-    release_pool: PoolBinding,
-) -> BoxFuture<F::Item>
+pub(crate) fn with_timeout<F>(f: F, timeout: Option<Duration>) -> BoxFuture<F::Item>
 where
     F: Future<Error = Error> + Send + 'static,
 {
     if let Some(timeout) = timeout {
-        Box::new(f.timeout(timeout).map_err(move |err| {
-            release_pool.release_conn();
-            err.into()
-        }))
+        Box::new(f.timeout(timeout).map_err(|err| err.into()))
     } else {
-        Box::new(f.map_err(move |err| {
-            release_pool.release_conn();
-            err
-        }))
+        Box::new(f)
     }
 }
 

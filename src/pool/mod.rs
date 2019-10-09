@@ -14,7 +14,7 @@ use crate::{
 
 mod futures;
 
-struct Inner {
+pub(crate) struct Inner {
     new: Option<BoxFuture<ClientHandle>>,
     idle: Vec<ClientHandle>,
     tasks: Vec<Task>,
@@ -22,6 +22,14 @@ struct Inner {
 }
 
 impl Inner {
+    pub(crate) fn release_conn(inner: &Mutex<Inner>) {
+        let mut guard = inner.lock().unwrap();
+        guard.ongoing -= 1;
+        while let Some(task) = guard.tasks.pop() {
+            task.notify()
+        }
+    }
+
     fn conn_count(&self) -> usize {
         self.new.is_some() as usize + self.idle.len() + self.ongoing
     }
@@ -51,12 +59,6 @@ impl PoolBinding {
     fn return_conn(self, client: ClientHandle) {
         if let Some(mut pool) = self.into() {
             Pool::return_conn(&mut pool, client);
-        }
-    }
-
-    pub(crate) fn release_conn(self) {
-        if let Some(mut pool) = self.into() {
-            Pool::release_conn(&mut pool);
         }
     }
 
@@ -93,7 +95,7 @@ impl PoolBinding {
 #[derive(Clone)]
 pub struct Pool {
     options: OptionsSource,
-    inner: Arc<Mutex<Inner>>,
+    pub(crate) inner: Arc<Mutex<Inner>>,
     min: usize,
     max: usize,
 }
@@ -201,7 +203,7 @@ impl Pool {
     }
 
     fn new_connection(&self) -> BoxFuture<ClientHandle> {
-        Client::open(&self.options)
+        Client::open(&self.options, Some(self.clone()))
     }
 
     fn handle_futures(&mut self) -> ClickhouseResult<()> {
@@ -231,6 +233,7 @@ impl Pool {
         self.with_inner(|mut inner| {
             if let Some(mut client) = inner.idle.pop() {
                 client.pool = PoolBinding::Attached(self.clone());
+                client.set_inside(false);
                 inner.ongoing += 1;
                 Some(client)
             } else {
@@ -243,21 +246,13 @@ impl Pool {
         let min = self.min;
 
         self.with_inner(|mut inner| {
-            inner.ongoing -= 1;
-            if inner.idle.len() < min && client.pool.is_attached() {
+            let is_attached = client.pool.is_attached();
+            client.pool = PoolBinding::None;
+            client.set_inside(true);
+
+            if inner.idle.len() < min && is_attached {
                 inner.idle.push(client);
-            } else {
-                client.pool = PoolBinding::None;
             }
-
-            while let Some(task) = inner.tasks.pop() {
-                task.notify()
-            }
-        })
-    }
-
-    pub(crate) fn release_conn(&mut self) {
-        self.with_inner(|mut inner| {
             inner.ongoing -= 1;
 
             while let Some(task) = inner.tasks.pop() {

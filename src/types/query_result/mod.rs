@@ -106,7 +106,6 @@ impl QueryResult {
         let timeout = try_opt!(self.client.context.options.get()).query_timeout;
         let context = self.client.context.clone();
         let pool = self.client.pool.clone();
-        let release_pool = self.client.pool.clone();
 
         let acc = (None, init);
 
@@ -130,16 +129,10 @@ impl QueryResult {
                 future
                     .map(|(c, t)| (c.unwrap(), t))
                     .timeout(timeout)
-                    .map_err(move |err| {
-                        release_pool.release_conn();
-                        err.into()
-                    }),
+                    .map_err(move |err| err.into()),
             )
         } else {
-            Box::new(future.map(|(c, t)| (c.unwrap(), t)).map_err(move |err| {
-                release_pool.release_conn();
-                err
-            }))
+            Box::new(future.map(|(c, t)| (c.unwrap(), t)))
         }
     }
 
@@ -201,7 +194,6 @@ impl QueryResult {
 
             let context = c.context.clone();
             let pool = c.pool.clone();
-            let mut release_pool = Some(c.pool.clone());
 
             let stream = BlockStream::new(
                 c.inner
@@ -213,19 +205,9 @@ impl QueryResult {
             );
 
             if let Some(timeout) = timeout {
-                Box::new(stream.timeout(timeout).map_err(move |err| {
-                    if let Some(pool) = release_pool.take() {
-                        pool.release_conn();
-                    }
-                    err.into()
-                }))
+                Box::new(stream.timeout(timeout).map_err(|err| err.into()))
             } else {
-                Box::new(stream.map_err(move |err| {
-                    if let Some(pool) = release_pool.take() {
-                        pool.release_conn();
-                    }
-                    err
-                }))
+                Box::new(stream)
             }
         })
     }

@@ -3,7 +3,15 @@ extern crate chrono_tz;
 extern crate clickhouse_rs;
 extern crate tokio;
 
-use std::{env, f64::EPSILON, fmt::Debug};
+use std::{
+    env,
+    f64::EPSILON,
+    fmt::Debug,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
+};
 
 use chrono::prelude::*;
 use chrono_tz::Tz::{self, UTC};
@@ -692,4 +700,29 @@ fn test_decimal() {
         });
 
     run(done).unwrap();
+}
+
+#[test]
+fn test_reconnect() {
+    let counter = Arc::new(AtomicUsize::new(0));
+
+    let url = format!("{}{}", database_url(), "&pool_max=1&pool_min=1");
+    let pool = Pool::new(url);
+
+    for _ in 0..2 {
+        let counter = counter.clone();
+        let done = pool
+            .get_handle()
+            .and_then(move |c| c.query("SELECT 1").fetch_all())
+            .and_then(move |(_, block)| {
+                let value: u8 = block.get(0, 0)?;
+                counter.fetch_add(value as usize, Ordering::SeqCst);
+                Ok(())
+            })
+            .map_err(|err| eprintln!("database error: {}", err));
+
+        run(done).unwrap();
+    }
+
+    assert_eq!(2, counter.load(Ordering::SeqCst))
 }

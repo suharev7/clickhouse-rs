@@ -2,6 +2,11 @@ use std::{
     collections::VecDeque,
     io::{self, Cursor},
     ptr,
+    sync::{
+        self,
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
 };
 
 use chrono_tz::Tz;
@@ -12,9 +17,9 @@ use crate::{
     binary::Parser,
     errors::{DriverError, Error},
     io::BoxFuture,
-    pool::PoolBinding,
+    pool::{Inner, PoolBinding},
     types::{Block, Cmd, Context, Packet},
-    ClientHandle,
+    ClientHandle, Pool,
 };
 
 /// Line transport
@@ -34,6 +39,7 @@ pub(crate) struct ClickhouseTransport {
     // Server time zone
     timezone: Option<Tz>,
     compress: bool,
+    status: Arc<TransportStatus>,
 }
 
 enum PacketStreamState {
@@ -43,6 +49,11 @@ enum PacketStreamState {
     Done,
 }
 
+pub(crate) struct TransportStatus {
+    inside: AtomicBool,
+    pool: sync::Weak<sync::Mutex<Inner>>,
+}
+
 pub(crate) struct PacketStream {
     inner: Option<ClickhouseTransport>,
     state: PacketStreamState,
@@ -50,7 +61,7 @@ pub(crate) struct PacketStream {
 }
 
 impl ClickhouseTransport {
-    pub fn new(inner: TcpStream, compress: bool) -> Self {
+    pub fn new(inner: TcpStream, compress: bool, pool: Option<Pool>) -> Self {
         ClickhouseTransport {
             inner,
             done: false,
@@ -60,6 +71,39 @@ impl ClickhouseTransport {
             cmds: VecDeque::new(),
             timezone: None,
             compress,
+            status: Arc::new(TransportStatus::new(pool)),
+        }
+    }
+
+    pub(crate) fn set_inside(&self, value: bool) {
+        self.status.inside.store(value, Ordering::Relaxed);
+    }
+}
+
+impl Drop for TransportStatus {
+    fn drop(&mut self) {
+        let inside = self.inside.load(Ordering::Relaxed);
+
+        if inside {
+            return;
+        }
+
+        if let Some(pool_inner) = self.pool.upgrade() {
+            Inner::release_conn(&pool_inner);
+        }
+    }
+}
+
+impl TransportStatus {
+    fn new(pool: Option<Pool>) -> TransportStatus {
+        let pool = match pool {
+            None => sync::Weak::new(),
+            Some(p) => Arc::downgrade(&p.inner),
+        };
+
+        TransportStatus {
+            inside: AtomicBool::new(true),
+            pool,
         }
     }
 }

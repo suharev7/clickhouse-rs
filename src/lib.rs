@@ -73,9 +73,9 @@
 //!         ) Engine=Memory";
 //!
 //!     let block = Block::new()
-//!         .add_column("customer_id",  vec![1_u32,  3,  5,  7,  9])
-//!         .add_column("amount",       vec![2_u32,  4,  6,  8, 10])
-//!         .add_column("account_name", vec![Some("foo"), None, None, None, Some("bar")]);
+//!         .column("customer_id",  vec![1_u32,  3,  5,  7,  9])
+//!         .column("amount",       vec![2_u32,  4,  6,  8, 10])
+//!         .column("account_name", vec![Some("foo"), None, None, None, Some("bar")]);
 //!
 //!     # let database_url = env::var("DATABASE_URL").unwrap_or("tcp://localhost:9000?compression=lz4".into());
 //!     let pool = Pool::new(database_url);
@@ -137,6 +137,7 @@ use crate::{
     types::{Block, Cmd, Context, IntoOptions, Options, OptionsSource, Packet, Query, QueryResult},
 };
 use failure::_core::time::Duration;
+use crate::types::Complex;
 
 mod binary;
 mod client_info;
@@ -351,7 +352,7 @@ impl ClientHandle {
 
     /// Fetch data from table. It returns a block that contains all rows.
     #[deprecated(since = "0.1.7", note = "please use query(sql).fetch_all() instead")]
-    pub fn query_all<Q>(self, sql: Q) -> BoxFuture<(Self, Block)>
+    pub fn query_all<Q>(self, sql: Q) -> BoxFuture<(Self, Block<Complex>)>
     where
         Query: From<Q>,
     {

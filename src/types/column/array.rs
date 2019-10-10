@@ -1,6 +1,6 @@
 use crate::{
     binary::{Encoder, ReadEx},
-    errors::Error,
+    errors::Result,
     types::{
         column::{column_data::BoxColumnData, list::List, BoxColumnWrapper, ColumnData},
         SqlType, Value, ValueRef,
@@ -20,7 +20,7 @@ impl ArrayColumnData {
         type_name: &str,
         rows: usize,
         tz: Tz,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self> {
         let mut offsets = List::with_capacity(rows);
         offsets.resize(rows, 0_u64);
         reader.read_bytes(offsets.as_mut())?;
@@ -97,17 +97,27 @@ impl ColumnData for ArrayColumnData {
             offsets: self.offsets.clone(),
         })
     }
+
+    unsafe fn get_internal(&self, pointers: &[*mut *const u8], level: u8) -> Result<()> {
+        if level == self.sql_type().level() {
+            *pointers[0] = self.offsets.as_ptr() as *const u8;
+            *(pointers[1] as *mut usize) = self.offsets.len();
+            Ok(())
+        } else {
+            self.inner.get_internal(pointers, level)
+        }
+    }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::types::Block;
+    use crate::types::{Block, Simple};
     use std::io::Cursor;
 
     #[test]
     fn test_write_and_read() {
-        let block = Block::new().add_column(
+        let block = Block::<Simple>::new().column(
             "vals",
             vec![vec![7_u32, 8], vec![9, 1, 2], vec![3, 4, 5, 6]],
         );

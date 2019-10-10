@@ -2,7 +2,7 @@ use chrono_tz::Tz;
 
 use crate::{
     binary::ReadEx,
-    errors::Error,
+    errors::Result,
     types::column::{
         array::ArrayColumnData, column_data::ColumnData, date::DateColumnData,
         decimal::DecimalColumnData, fixed_string::FixedStringColumnData, list::List,
@@ -18,7 +18,7 @@ impl dyn ColumnData {
         type_name: &str,
         size: usize,
         tz: Tz,
-    ) -> Result<W::Wrapper, Error> {
+    ) -> Result<W::Wrapper> {
         Ok(match type_name {
             "UInt8" => W::wrap(VectorColumnData::<u8>::load(reader, size)?),
             "UInt16" => W::wrap(VectorColumnData::<u16>::load(reader, size)?),
@@ -56,7 +56,7 @@ impl dyn ColumnData {
         sql_type: SqlType,
         timezone: Tz,
         capacity: usize,
-    ) -> Result<W::Wrapper, Error> {
+    ) -> Result<W::Wrapper> {
         Ok(match sql_type {
             SqlType::UInt8 => W::wrap(VectorColumnData::<u8>::with_capacity(capacity)),
             SqlType::UInt16 => W::wrap(VectorColumnData::<u16>::with_capacity(capacity)),

@@ -5,7 +5,8 @@ use crate::{
     types::block::{Block, BlockRef, Row, Rows},
 };
 
-use std::{mem, sync::Arc};
+use std::{mem, sync::Arc, marker};
+use crate::types::Simple;
 
 enum State<T, Fut> {
     Empty,
@@ -15,19 +16,19 @@ enum State<T, Fut> {
 
 pub(super) struct FoldBlock<T, F, Fut>
 where
-    F: Fn(T, Row) -> Fut + Send + 'static,
+    F: Fn(T, Row<Simple>) -> Fut + Send + 'static,
     Fut: IntoFuture<Item = T, Error = Error> + Send + 'static,
     Fut::Future: Send,
     T: Send + 'static,
 {
     state: State<T, Fut::Future>,
     f: Arc<F>,
-    rows: Rows<'static>,
+    rows: Rows<'static, Simple>,
 }
 
 impl<T, F, Fut> FoldBlock<T, F, Fut>
 where
-    F: Fn(T, Row) -> Fut + Send + 'static,
+    F: Fn(T, Row<Simple>) -> Fut + Send + 'static,
     Fut: IntoFuture<Item = T, Error = Error> + Send + 'static,
     Fut::Future: Send,
     T: Send + 'static,
@@ -44,7 +45,7 @@ where
 
 impl<T, F, Fut> Future for FoldBlock<T, F, Fut>
 where
-    F: Fn(T, Row) -> Fut + Send + 'static,
+    F: Fn(T, Row<Simple>) -> Fut + Send + 'static,
     Fut: IntoFuture<Item = T, Error = Error> + Send + 'static,
     Fut::Future: Send,
     T: Send + 'static,
@@ -78,9 +79,10 @@ where
     }
 }
 
-fn rows(block: Arc<Block>) -> Rows<'static> {
+fn rows(block: Arc<Block>) -> Rows<'static, Simple> {
     Rows {
         row: 0,
         block_ref: BlockRef::Owned(block),
+        kind: marker::PhantomData,
     }
 }

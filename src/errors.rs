@@ -1,4 +1,4 @@
-use std::{borrow::Cow, io, mem, str::Utf8Error, string::FromUtf8Error};
+use std::{borrow::Cow, io, mem, str::Utf8Error, string::FromUtf8Error, result};
 
 use failure::*;
 use tokio::prelude::*;
@@ -7,6 +7,9 @@ use tokio_timer::Error as TimerError;
 use url::ParseError;
 
 use crate::types::Packet;
+
+/// Result type alias for this library.
+pub type Result<T> = result::Result<T, Error>;
 
 /// This type enumerates library errors.
 #[derive(Debug, Fail)]
@@ -92,6 +95,9 @@ pub enum FromSqlError {
 
     #[fail(display = "Out of range.")]
     OutOfRange,
+
+    #[fail(display = "Unsupported operation.")]
+    UnsupportedOperation,
 }
 
 impl From<DriverError> for Error {

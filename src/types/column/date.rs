@@ -5,7 +5,7 @@ use chrono_tz::Tz;
 
 use crate::{
     binary::{Encoder, ReadEx},
-    errors::Error,
+    errors::Result,
     types::column::{
         array::ArrayColumnData,
         column_data::{BoxColumnData, ColumnData},
@@ -58,7 +58,7 @@ where
         reader: &mut R,
         size: usize,
         tz: Tz,
-    ) -> Result<DateColumnData<T>, Error> {
+    ) -> Result<DateColumnData<T>> {
         let mut data = List::with_capacity(size);
         unsafe {
             data.set_len(size);
@@ -230,6 +230,14 @@ where
             data: self.data.clone(),
             tz: self.tz,
         })
+    }
+
+    unsafe fn get_internal(&self, pointers: &[*mut *const u8], level: u8) -> Result<()> {
+        assert_eq!(level, 0);
+        *pointers[0] = self.data.as_ptr() as *const u8;
+        *pointers[1] = &self.tz as *const Tz as *const u8;
+        *(pointers[2] as *mut usize) = self.len();
+        Ok(())
     }
 }
 

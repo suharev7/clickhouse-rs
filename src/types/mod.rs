@@ -3,11 +3,11 @@ use std::{borrow::Cow, collections::HashMap, fmt, sync::Mutex};
 use chrono_tz::Tz;
 use hostname::get_hostname;
 
-use crate::errors::{Error, ServerError};
+use crate::errors::ServerError;
 
 pub use self::{
     block::{Block, RCons, RNil, Row, RowBuilder, Rows},
-    column::Column,
+    column::{Column, ColumnType, Simple, Complex},
     decimal::Decimal,
     from_sql::FromSql,
     options::Options,
@@ -235,6 +235,14 @@ impl SqlType {
             }
         }
     }
+
+    pub(crate) fn level(&self) -> u8 {
+        match self {
+            SqlType::Nullable(inner) => 1 + inner.level(),
+            SqlType::Array(inner) => 1 + inner.level(),
+            _ => 0,
+        }
+    }
 }
 
 impl fmt::Display for SqlType {
@@ -256,6 +264,3 @@ fn test_to_string() {
     let actual = SqlType::Nullable(&SqlType::UInt8).to_string();
     assert_eq!(expected, actual)
 }
-
-/// Library generic result type.
-pub(crate) type ClickhouseResult<T> = Result<T, Error>;

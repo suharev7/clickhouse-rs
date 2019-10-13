@@ -122,22 +122,32 @@ extern crate tokio;
 extern crate tokio_timer;
 extern crate url;
 
-use std::fmt;
+#[cfg(ssl)]
+extern crate tokio_tls;
+
+#[cfg(ssl)]
+extern crate native_tls;
+
+use std::{fmt, time::Duration};
 
 use futures::{Future, Stream};
 use tokio::prelude::*;
 
+#[cfg(feature = "ssl")]
+use crate::errors::UrlError;
 pub use crate::pool::Pool;
+
 use crate::{
     connecting_stream::ConnectingStream,
     errors::{DriverError, Error},
-    io::{BoxFuture, BoxStream, ClickhouseTransport},
+    io::{io_stream::IoStream, BoxFuture, BoxStream, ClickhouseTransport},
     pool::PoolBinding,
     retry_guard::RetryGuard,
-    types::{Block, Cmd, Context, IntoOptions, Options, OptionsSource, Packet, Query, QueryResult},
+    types::{
+        either::Either, Block, Cmd, Complex, Context, IntoOptions, Options, OptionsSource, Packet,
+        Query, QueryResult,
+    },
 };
-use failure::_core::time::Duration;
-use crate::types::Complex;
 
 mod binary;
 mod client_info;
@@ -213,7 +223,7 @@ macro_rules! try_opt {
     ($expr:expr) => {
         match $expr {
             Ok(val) => val,
-            Err(err) => return Box::new(future::err(err)),
+            Err(err) => return Either::Left(future::err(err)),
         }
     };
 }
@@ -239,11 +249,11 @@ impl fmt::Debug for ClientHandle {
 
 impl Client {
     #[deprecated(since = "0.1.4", note = "please use Pool to connect")]
-    pub fn connect(options: Options) -> BoxFuture<ClientHandle> {
+    pub fn connect(options: Options) -> impl Future<Item=ClientHandle, Error=Error> {
         Self::open(&options.into_options_src(), None)
     }
 
-    pub(crate) fn open(source: &OptionsSource, pool: Option<Pool>) -> BoxFuture<ClientHandle> {
+    pub(crate) fn open(source: &OptionsSource, pool: Option<Pool>) -> impl Future<Item=ClientHandle, Error=Error> {
         let options = try_opt!(source.get()).as_ref().to_owned();
         let compress = options.compression;
         let timeout = options.connection_timeout;
@@ -253,8 +263,8 @@ impl Client {
             ..Context::default()
         };
 
-        Box::new(
-            ConnectingStream::new(&options.addr)
+        Either::Right(
+            Self::dial(options.clone())
                 .and_then(move |stream| {
                     stream.set_nodelay(options.nodelay)?;
                     stream.set_keepalive(options.keepalive)?;
@@ -272,47 +282,72 @@ impl Client {
                 .map_err(Error::from),
         )
     }
+
+    #[cfg(feature = "ssl")]
+    fn dial(options: Options) -> impl Future<Item = IoStream, Error = Error> {
+        ConnectingStream::new(&options.addr)
+            .map_err(Error::from)
+            .and_then(move |stream| {
+                let stream = IoStream::from(stream);
+                if options.secure {
+                    match options.addr.host() {
+                        None => {
+                            let err = Error::Url(UrlError::Invalid);
+                            Either::Right(future::err(err))
+                        }
+                        Some(host) => Either::Left(stream.make_secure(host, &options)),
+                    }
+                } else {
+                    Either::Right(future::ok(stream))
+                }
+            })
+    }
+
+    #[cfg(not(feature = "ssl"))]
+    fn dial(options: Options) -> impl Future<Item = IoStream, Error = Error> {
+        ConnectingStream::new(&options.addr)
+            .map_err(Error::from)
+            .map(IoStream::from)
+    }
 }
 
 impl ClientHandle {
-    fn hello(mut self) -> BoxFuture<Self> {
+    fn hello(mut self) -> impl Future<Item = Self, Error = Error> {
         let context = self.context.clone();
         let pool = self.pool.clone();
         info!("[hello] -> {:?}", &context);
-        Box::new(
-            self.inner
-                .take()
-                .unwrap()
-                .call(Cmd::Hello(context.clone()))
-                .fold(None, move |_, packet| match packet {
-                    Packet::Hello(inner, server_info) => {
-                        info!("[hello] <- {:?}", &server_info);
-                        let context = Context {
-                            server_info,
-                            ..context.clone()
-                        };
-                        let client = Self {
-                            inner: Some(inner),
-                            context,
-                            pool: pool.clone(),
-                        };
-                        future::ok::<_, Error>(Some(client))
-                    }
-                    Packet::Exception(e) => future::err::<_, Error>(Error::Server(e)),
-                    _ => future::err::<_, Error>(Error::Driver(DriverError::UnexpectedPacket)),
-                })
-                .map(Option::unwrap),
-        )
+
+        self.inner
+            .take()
+            .unwrap()
+            .call(Cmd::Hello(context.clone()))
+            .fold(None, move |_, packet| match packet {
+                Packet::Hello(inner, server_info) => {
+                    info!("[hello] <- {:?}", &server_info);
+                    let context = Context {
+                        server_info,
+                        ..context.clone()
+                    };
+                    let client = Self {
+                        inner: Some(inner),
+                        context,
+                        pool: pool.clone(),
+                    };
+                    future::ok::<_, Error>(Some(client))
+                }
+                Packet::Exception(e) => future::err::<_, Error>(Error::Server(e)),
+                _ => future::err::<_, Error>(Error::Driver(DriverError::UnexpectedPacket)),
+            })
+            .map(Option::unwrap)
     }
 
-    pub fn ping(mut self) -> BoxFuture<Self> {
+    pub fn ping(mut self) -> impl Future<Item=Self, Error=Error> {
         let context = self.context.clone();
-
         let timeout = try_opt!(self.context.options.get()).ping_timeout;
 
         let pool = self.pool.clone();
         info!("[ping]");
-        Box::new(
+        let fut =
             self.inner
                 .take()
                 .unwrap()
@@ -334,8 +369,9 @@ impl ClientHandle {
                 })
                 .map(Option::unwrap)
                 .timeout(timeout)
-                .map_err(Error::from),
-        )
+                .map_err(Error::from);
+
+        Either::Right(fut)
     }
 
     /// Executes Clickhouse `query` on Conn.
@@ -356,21 +392,21 @@ impl ClientHandle {
     where
         Query: From<Q>,
     {
-        self.query(sql).fetch_all()
+        Box::new(self.query(sql).fetch_all())
     }
 
     /// Convenience method to prepare and execute a single SQL statement.
-    pub fn execute<Q>(self, sql: Q) -> BoxFuture<Self>
+    pub fn execute<Q>(self, sql: Q) -> impl Future<Item = Self, Error = Error>
     where
         Query: From<Q>,
     {
         let context = self.context.clone();
         let pool = self.pool.clone();
+        let timeout = try_opt!(context.options.get()).execute_timeout;
 
         let query = Query::from(sql);
-        self.wrap_future(|mut c| -> BoxFuture<Self> {
+        let fut = self.wrap_future(move |mut c| {
             info!("[execute]    {}", query.get_sql());
-            let timeout = try_opt!(context.options.get()).execute_timeout;
 
             let future = c
                 .inner
@@ -397,11 +433,13 @@ impl ClientHandle {
                 .map(Option::unwrap);
 
             with_timeout(future, timeout)
-        })
+        });
+
+        Either::Right(fut)
     }
 
     /// Convenience method to insert block of data.
-    pub fn insert<Q>(self, table: Q, block: Block) -> BoxFuture<Self>
+    pub fn insert<Q>(self, table: Q, block: Block) -> impl Future<Item = Self, Error = Error>
     where
         Query: From<Q>,
     {
@@ -418,10 +456,10 @@ impl ClientHandle {
 
         let context = self.context.clone();
         let pool = self.pool.clone();
+        let timeout = try_opt!(context.options.get()).insert_timeout;
 
-        self.wrap_future(|mut c| -> BoxFuture<Self> {
+        let fut = self.wrap_future(move |mut c| {
             info!("[insert]     {}", query.get_sql());
-            let timeout = try_opt!(context.options.get()).insert_timeout;
 
             let future = c
                 .inner
@@ -453,10 +491,12 @@ impl ClientHandle {
                 });
 
             with_timeout(future, timeout)
-        })
+        });
+
+        Either::Right(fut)
     }
 
-    pub(crate) fn wrap_future<T, R, F>(self, f: F) -> BoxFuture<T>
+    pub(crate) fn wrap_future<T, R, F>(self, f: F) -> impl Future<Item = T, Error = Error>
     where
         F: FnOnce(Self) -> R + Send + 'static,
         R: Future<Item = T, Error = Error> + Send + 'static,
@@ -464,11 +504,13 @@ impl ClientHandle {
     {
         let ping_before_query = try_opt!(self.context.options.get()).ping_before_query;
 
-        if ping_before_query {
-            Box::new(self.check_connection().and_then(move |c| Box::new(f(c))))
+        let fut = if ping_before_query {
+            Either::Left(self.check_connection().and_then(move |c| Box::new(f(c))))
         } else {
-            Box::new(f(self))
-        }
+            Either::Right(f(self))
+        };
+
+        Either::Right(fut)
     }
 
     pub(crate) fn wrap_stream<T, R, F>(self, f: F) -> BoxStream<T>
@@ -494,35 +536,34 @@ impl ClientHandle {
     }
 
     /// Check connection and try to reconnect if necessary.
-    pub fn check_connection(mut self) -> BoxFuture<Self> {
+    pub fn check_connection(mut self) -> impl Future<Item = Self, Error = Error> {
         let pool: Option<Pool> = self.pool.clone().into();
         self.pool.detach();
 
         let source = self.context.options.clone();
 
-        let (send_retries, retry_timeout) = {
-            let options = try_opt!(source.get());
-            (options.send_retries, options.retry_timeout)
+        let (send_retries, retry_timeout) = match source.get() {
+            Ok(val) => (val.send_retries, val.retry_timeout),
+            Err(err) => return Either::Left(future::err(err)),
         };
 
         let reconnect = move || -> BoxFuture<Self> {
             warn!("[reconnect]");
             match pool.clone() {
-                None => Client::open(&source, None),
+                None => Box::new(Client::open(&source, None)),
                 Some(p) => Box::new(p.get_handle()),
             }
         };
 
-        Box::new(
-            RetryGuard::new(self, |c| c.ping(), reconnect, send_retries, retry_timeout).and_then(
-                |mut c| {
-                    if !c.pool.is_attached() && c.pool.is_some() {
-                        c.pool.attach();
-                    }
-                    Ok(c)
-                },
-            ),
-        )
+        let fut = RetryGuard::new(self, |c| Box::new(c.ping()), reconnect, send_retries, retry_timeout)
+            .and_then(|mut c| {
+                if !c.pool.is_attached() && c.pool.is_some() {
+                    c.pool.attach();
+                }
+                Ok(c)
+            });
+
+        Either::Right(fut)
     }
 
     pub(crate) fn set_inside(&self, value: bool) {
@@ -534,14 +575,17 @@ impl ClientHandle {
     }
 }
 
-pub(crate) fn with_timeout<F>(f: F, timeout: Option<Duration>) -> BoxFuture<F::Item>
+pub(crate) fn with_timeout<F>(
+    f: F,
+    timeout: Option<Duration>,
+) -> impl Future<Item = F::Item, Error = Error>
 where
     F: Future<Error = Error> + Send + 'static,
 {
     if let Some(timeout) = timeout {
-        Box::new(f.timeout(timeout).map_err(|err| err.into()))
+        Either::Left(f.timeout(timeout).map_err(|err| err.into()))
     } else {
-        Box::new(f)
+        Either::Right(f)
     }
 }
 

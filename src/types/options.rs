@@ -1,3 +1,6 @@
+#[cfg(feature = "ssl")]
+use std::convert;
+
 use std::{
     borrow::Cow,
     fmt, io,
@@ -8,10 +11,32 @@ use std::{
     vec,
 };
 
-use crate::{
-    errors::{Error, UrlError, Result},
-};
+use crate::errors::{Error, Result, UrlError};
+#[cfg(feature = "ssl")]
+use failure::_core::fmt::Formatter;
+#[cfg(feature = "ssl")]
+use native_tls;
 use url::Url;
+
+macro_rules! property {
+    ( $k:ident: $t:ty ) => {
+        pub fn $k(self, $k: $t) -> Self {
+            Self {
+                $k: $k.into(),
+                ..self
+            }
+        }
+    };
+    ( $(#[$attr:meta])* => $k:ident: $t:ty ) => {
+        $(#[$attr])*
+        pub fn $k(self, $k: $t) -> Self {
+            Self {
+                $k: $k.into(),
+                ..self
+            }
+        }
+    }
+}
 
 const DEFAULT_MIN_CONNS: usize = 10;
 
@@ -101,6 +126,30 @@ pub enum Address {
     SocketAddr(SocketAddr),
 }
 
+impl Address {
+    pub fn host(&self) -> Option<String> {
+        match self {
+            Address::Url(url_str) => {
+                println!("url_str: {:?}", url_str);
+                match Url::parse(url_str) {
+                    Ok(url) => match url.host_str() {
+                        None => {
+                            let hostname = url_str.chars().take_while(|c| *c != ':');
+                            Some(hostname.collect())
+                        }
+                        Some(s) => Some(s.to_string()),
+                    },
+                    Err(err) => {
+                        println!("{:?}", err);
+                        None
+                    }
+                }
+            }
+            Address::SocketAddr(addr) => Some(format!("{}", addr.ip())),
+        }
+    }
+}
+
 impl From<SocketAddr> for Address {
     fn from(addr: SocketAddr) -> Self {
         Address::SocketAddr(addr)
@@ -130,8 +179,55 @@ impl ToSocketAddrs for Address {
     }
 }
 
+/// An X509 certificate.
+#[cfg(feature = "ssl")]
+#[derive(Clone)]
+pub struct Certificate(Arc<native_tls::Certificate>);
+
+#[cfg(feature = "ssl")]
+impl Certificate {
+    /// Parses a DER-formatted X509 certificate.
+    pub fn from_der(der: &[u8]) -> Result<Certificate> {
+        let inner = match native_tls::Certificate::from_der(der) {
+            Ok(certificate) => certificate,
+            Err(err) => return Err(Error::Other(err.into())),
+        };
+        Ok(Certificate(Arc::new(inner)))
+    }
+
+    /// Parses a PEM-formatted X509 certificate.
+    pub fn from_pem(der: &[u8]) -> Result<Certificate> {
+        let inner = match native_tls::Certificate::from_pem(der) {
+            Ok(certificate) => certificate,
+            Err(err) => return Err(Error::Other(err.into())),
+        };
+        Ok(Certificate(Arc::new(inner)))
+    }
+}
+
+#[cfg(feature = "ssl")]
+impl fmt::Debug for Certificate {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "[Certificate]")
+    }
+}
+
+#[cfg(feature = "ssl")]
+impl PartialEq for Certificate {
+    fn eq(&self, _other: &Self) -> bool {
+        true
+    }
+}
+
+#[cfg(feature = "ssl")]
+impl convert::From<Certificate> for native_tls::Certificate {
+    fn from(value: Certificate) -> Self {
+        value.0.as_ref().clone()
+    }
+}
+
 /// Clickhouse connection options.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct Options {
     /// Address of clickhouse server (defaults to `127.0.0.1:9000`).
     pub(crate) addr: Address,
@@ -156,29 +252,41 @@ pub struct Options {
     /// TCP keep alive timeout in milliseconds (defaults to `None`).
     pub(crate) keepalive: Option<Duration>,
 
-    /// Ping server every time before execute any query. (defaults to `true`)
+    /// Ping server every time before execute any query. (defaults to `true`).
     pub(crate) ping_before_query: bool,
-    /// Count of retry to send request to server. (defaults to `3`)
+    /// Count of retry to send request to server. (defaults to `3`).
     pub(crate) send_retries: usize,
-    /// Amount of time to wait before next retry. (defaults to `5 sec`)
+    /// Amount of time to wait before next retry. (defaults to `5 sec`).
     pub(crate) retry_timeout: Duration,
-    /// Timeout for ping (defaults to `500 ms`)
+    /// Timeout for ping (defaults to `500 ms`).
     pub(crate) ping_timeout: Duration,
 
-    /// Timeout for connection (defaults to `500 ms`)
+    /// Timeout for connection (defaults to `500 ms`).
     pub(crate) connection_timeout: Duration,
 
-    /// Timeout for queries (defaults to `180 sec`)
+    /// Timeout for queries (defaults to `180 sec`).
     pub(crate) query_timeout: Option<Duration>,
 
-    /// Timeout for each block in a query (defaults to `180 sec`)
+    /// Timeout for each block in a query (defaults to `180 sec`).
     pub(crate) query_block_timeout: Option<Duration>,
 
-    /// Timeout for inserts (defaults to `180 sec`)
+    /// Timeout for inserts (defaults to `180 sec`).
     pub(crate) insert_timeout: Option<Duration>,
 
-    /// Timeout for execute (defaults to `180 sec`)
+    /// Timeout for execute (defaults to `180 sec`).
     pub(crate) execute_timeout: Option<Duration>,
+
+    /// Establish secure connection (default is false).
+    #[cfg(feature = "ssl")]
+    pub(crate) secure: bool,
+
+    /// Skip certificate verification (default is false).
+    #[cfg(feature = "ssl")]
+    pub(crate) skip_verify: bool,
+
+    /// An X509 certificate.
+    #[cfg(feature = "ssl")]
+    pub(crate) certificate: Option<Certificate>,
 }
 
 impl Default for Options {
@@ -202,26 +310,12 @@ impl Default for Options {
             query_block_timeout: Some(Duration::from_secs(180)),
             insert_timeout: Some(Duration::from_secs(180)),
             execute_timeout: Some(Duration::from_secs(180)),
-        }
-    }
-}
-
-macro_rules! property {
-    ( $k:ident: $t:ty ) => {
-        pub fn $k(self, $k: $t) -> Self {
-            Self {
-                $k: $k.into(),
-                ..self
-            }
-        }
-    };
-    ( $(#[$attr:meta])* => $k:ident: $t:ty ) => {
-        $(#[$attr])*
-        pub fn $k(self, $k: $t) -> Self {
-            Self {
-                $k: $k.into(),
-                ..self
-            }
+            #[cfg(feature = "ssl")]
+            secure: false,
+            #[cfg(feature = "ssl")]
+            skip_verify: false,
+            #[cfg(feature = "ssl")]
+            certificate: None,
         }
     }
 }
@@ -325,6 +419,24 @@ impl Options {
         /// Timeout for execute (defaults to `180 sec`).
         => execute_timeout: Option<Duration>
     }
+
+    #[cfg(feature = "ssl")]
+    property! {
+        /// Establish secure connection (default is false).
+        => secure: bool
+    }
+
+    #[cfg(feature = "ssl")]
+    property! {
+        /// Skip certificate verification (default is false).
+        => skip_verify: bool
+    }
+
+    #[cfg(feature = "ssl")]
+    property! {
+        /// An X509 certificate.
+        => certificate: Option<Certificate>
+    }
 }
 
 impl FromStr for Options {
@@ -405,6 +517,10 @@ where
                 options.execute_timeout = parse_param(key, value, parse_opt_duration)?
             }
             "compression" => options.compression = parse_param(key, value, parse_compression)?,
+            #[cfg(feature = "ssl")]
+            "secure" => options.secure = parse_param(key, value, bool::from_str)?,
+            #[cfg(feature = "ssl")]
+            "skip_verify" => options.skip_verify = parse_param(key, value, bool::from_str)?,
             _ => return Err(UrlError::UnknownParameter { param: key.into() }),
         };
     }
@@ -573,5 +689,23 @@ mod test {
         assert_eq!(parse_compression("none").unwrap(), false);
         assert_eq!(parse_compression("lz4").unwrap(), true);
         assert_eq!(parse_compression("?").unwrap_err(), ());
+    }
+
+    #[test]
+    fn test_url_address_host() {
+        let address = Address::Url("tcp://host1:9440?foo=123".to_string());
+        assert_eq!(Some("host1".to_string()), address.host())
+    }
+
+    #[test]
+    fn test_localhost_host() {
+        let address = Address::Url("localhost:9440".to_string());
+        assert_eq!(Some("localhost".to_string()), address.host())
+    }
+
+    #[test]
+    fn test_socket_address_host() {
+        let address = Address::SocketAddr("127.0.0.1:8080".parse().unwrap());
+        assert_eq!(Some("127.0.0.1".to_string()), address.host())
     }
 }

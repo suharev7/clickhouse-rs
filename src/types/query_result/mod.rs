@@ -6,16 +6,14 @@ use crate::{
     errors::{DriverError, Error},
     io::{BoxFuture, BoxStream, ClickhouseTransport},
     types::{
-        block::BlockRef, query_result::stream_blocks::BlockStream, Block, Cmd, Packet, Query, Row,
-        Rows, Complex,
+        block::BlockRef, query_result::stream_blocks::BlockStream, Block, Cmd,
+        Complex, Packet, Query, Row, Rows, Simple, either::Either,
     },
     ClientHandle,
 };
 
-use self::{either::Either, fold_block::FoldBlock};
-use crate::types::Simple;
+use self::fold_block::FoldBlock;
 
-mod either;
 mod fold_block;
 mod stream_blocks;
 
@@ -32,7 +30,7 @@ macro_rules! try_opt {
     ($expr:expr) => {
         match $expr {
             Ok(val) => val,
-            Err(err) => return Box::new(future::err(err)),
+            Err(err) => return Either::Left(future::err(err)),
         }
     };
 }
@@ -68,7 +66,7 @@ impl QueryResult {
     /// #   .map_err(|err| eprintln!("database error: {}", err));
     /// # tokio::run(done)
     /// ```
-    pub fn fold<F, T, Fut>(self, init: T, f: F) -> BoxFuture<(ClientHandle, T)>
+    pub fn fold<F, T, Fut>(self, init: T, f: F) -> impl Future<Item=(ClientHandle, T), Error=Error>
     where
         F: Fn(T, Row<Simple>) -> Fut + Send + Sync + 'static,
         Fut: IntoFuture<Item = T, Error = Error> + Send + 'static,
@@ -77,14 +75,12 @@ impl QueryResult {
     {
         let func_ptr = Arc::new(f);
 
-        self.fold_blocks(init, move |acc, block| {
-            wrap_future(FoldBlock::new(block, acc, func_ptr.clone()))
-        })
+        self.fold_blocks(init, move |acc, block| FoldBlock::new(block, acc, func_ptr.clone()))
     }
 
     /// Fetch data from table. It returns a block that contains all rows.
     pub fn fetch_all(self) -> BoxFuture<(ClientHandle, Block<Complex>)> {
-        wrap_future(
+        Box::new(
             self.fold_blocks(Vec::new(), |mut blocks, block| {
                 if !block.is_empty() {
                     blocks.push(block);
@@ -97,7 +93,7 @@ impl QueryResult {
     }
 
     /// Method that applies a function to each block, producing a single, final value.
-    pub fn fold_blocks<F, T, Fut>(self, init: T, f: F) -> BoxFuture<(ClientHandle, T)>
+    pub fn fold_blocks<F, T, Fut>(self, init: T, f: F) -> impl Future<Item=(ClientHandle, T), Error=Error>
     where
         F: Fn(T, Block) -> Fut + Send + 'static,
         Fut: IntoFuture<Item = T, Error = Error> + Send + 'static,
@@ -117,7 +113,7 @@ impl QueryResult {
                 } else {
                     Either::Left(f(acc, b).into_future().map(move |a| (h, a)))
                 }
-            },
+            }
             Packet::Eof(inner) => Either::Right(future::ok((
                 Some(ClientHandle {
                     inner: Some(inner),
@@ -131,19 +127,21 @@ impl QueryResult {
             _ => Either::Right(future::err(Error::Driver(DriverError::UnexpectedPacket))),
         });
 
-        if let Some(timeout) = timeout {
-            Box::new(
+        let fut = if let Some(timeout) = timeout {
+            Either::Left(
                 future
                     .map(|(c, t)| (c.unwrap(), t))
                     .timeout(timeout)
                     .map_err(move |err| err.into()),
             )
         } else {
-            Box::new(future.map(|(c, t)| (c.unwrap(), t)))
-        }
+            Either::Right(future.map(|(c, t)| (c.unwrap(), t)))
+        };
+
+        Either::Right(fut)
     }
 
-    fn fold_packets<F, T, Fut>(self, init: T, f: F) -> BoxFuture<T>
+    fn fold_packets<F, T, Fut>(self, init: T, f: F) -> impl Future<Item=T, Error=Error>
     where
         F: Fn(T, Packet<ClickhouseTransport>) -> Fut + Send + 'static,
         Fut: IntoFuture<Item = T, Error = Error> + Send + 'static,
@@ -226,16 +224,13 @@ impl QueryResult {
                 .map(Arc::new)
                 .map(|block| {
                     let block_ref = BlockRef::Owned(block);
-                    stream::iter_ok(Rows { row: 0, block_ref, kind: marker::PhantomData })
+                    stream::iter_ok(Rows {
+                        row: 0,
+                        block_ref,
+                        kind: marker::PhantomData,
+                    })
                 })
                 .flatten(),
         )
     }
-}
-
-fn wrap_future<T, F>(future: F) -> BoxFuture<T>
-where
-    F: Future<Item = T, Error = Error> + Send + 'static,
-{
-    Box::new(future)
 }

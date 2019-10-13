@@ -38,7 +38,7 @@ parameters:
     * `none`
     * `lz4`
 
-- `connection_timeout` - Timeout for connection (defaults to `500 ms`)
+- `connection_timeout` - Timeout for connection (defaults to `500 ms`).
 - `keepalive` - TCP keep alive timeout in milliseconds.
 - `nodelay` - Whether to enable `TCP_NODELAY` (defaults to `true`).
  
@@ -54,6 +54,11 @@ parameters:
 - `query_block_timeout` - Timeout for each block in a query (defaults to `180 sec`).
 - `insert_timeout` - Timeout for inserts (defaults to `180 sec`).
 - `execute_timeout` - Timeout for execute (defaults to `180 sec`).
+
+SSL/TLS parameters:
+
+- `secure` - establish secure connection (default is false).
+- `skip_verify` - skip certificate verification (default is false).
 
 example:
 ```url

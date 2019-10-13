@@ -15,6 +15,10 @@ pub use self::{
     query_result::QueryResult,
     value::Value,
 };
+
+#[cfg(feature = "ssl")]
+pub use self::options::Certificate;
+
 pub(crate) use self::{
     cmd::Cmd,
     date_converter::DateConverter,
@@ -43,6 +47,8 @@ mod query_result;
 
 mod decimal;
 mod options;
+
+pub(crate) mod either;
 
 #[derive(Copy, Clone, Debug, Default, PartialEq)]
 pub(crate) struct Progress {

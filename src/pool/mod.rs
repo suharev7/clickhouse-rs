@@ -204,7 +204,7 @@ impl Pool {
     }
 
     fn new_connection(&self) -> BoxFuture<ClientHandle> {
-        Client::open(&self.options, Some(self.clone()))
+        Box::new(Client::open(&self.options, Some(self.clone())))
     }
 
     fn handle_futures(&mut self) -> Result<()> {

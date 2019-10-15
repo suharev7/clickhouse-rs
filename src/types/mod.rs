@@ -7,7 +7,7 @@ use crate::errors::ServerError;
 
 pub use self::{
     block::{Block, RCons, RNil, Row, RowBuilder, Rows},
-    column::{Column, ColumnType, Complex, Simple},
+    column::{Column, ColumnType, Complex, Simple, iter::Iterable},
     decimal::Decimal,
     from_sql::FromSql,
     options::Options,
@@ -15,6 +15,10 @@ pub use self::{
     query_result::QueryResult,
     value::Value,
 };
+
+#[cfg(feature = "ssl")]
+pub use self::options::Certificate;
+
 pub(crate) use self::{
     cmd::Cmd,
     date_converter::DateConverter,
@@ -48,7 +52,7 @@ mod query_result;
 mod decimal;
 mod options;
 
-mod either;
+pub(crate) mod either;
 
 #[derive(Copy, Clone, Debug, Default, PartialEq)]
 pub(crate) struct Progress {

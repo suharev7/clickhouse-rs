@@ -11,7 +11,7 @@ use crate::{
             decimal::{DecimalAdapter, NullableDecimalAdapter},
             fixed_string::{FixedStringAdapter, NullableFixedStringAdapter},
             string::StringAdapter,
-            iter::SimpleIterable,
+            iter::Iterable,
         },
         decimal::NoBits,
         SqlType, Value, ValueRef,
@@ -30,7 +30,7 @@ mod date;
 mod decimal;
 mod factory;
 pub(crate) mod fixed_string;
-mod iter;
+pub(crate) mod iter;
 mod list;
 mod nullable;
 mod numeric;
@@ -132,7 +132,9 @@ impl Column<Simple> {
             }
         }
     }
+}
 
+impl<K: ColumnType> Column<K> {
     /// Returns an iterator over the column.
     ///
     /// ### Example
@@ -167,11 +169,8 @@ impl Column<Simple> {
     ///       .map_err(|err| eprintln!("database error: {}", err));
     /// # tokio::run(done)
     /// ```
-    pub fn iter<'a, T>(&'a self) -> Result<T::Iter>
-    where
-        T: SimpleIterable<'a>,
-    {
-        T::iter(self, self.sql_type())
+    pub fn iter<'a, T: Iterable<'a, K>>(&'a self) -> Result<T::Iter> {
+        <T as Iterable<'a, K>>::iter(self, self.sql_type())
     }
 }
 

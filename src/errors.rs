@@ -1,4 +1,4 @@
-use std::{borrow::Cow, io, mem, str::Utf8Error, string::FromUtf8Error, result};
+use std::{borrow::Cow, io, mem, result, str::Utf8Error, string::FromUtf8Error};
 
 use failure::*;
 use tokio::prelude::*;
@@ -55,6 +55,7 @@ pub enum ConnectionError {
     #[fail(display = "Input/output error: `{}`", _0)]
     IoError(#[cause] io::Error),
 
+    #[cfg(feature = "tls")]
     #[fail(display = "TLS connection error: `{}`", _0)]
     TlsError(#[cause] native_tls::Error),
 }

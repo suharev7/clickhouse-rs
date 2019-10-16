@@ -5,14 +5,18 @@ use tokio::net::{tcp::ConnectFuture, TcpStream};
 use tokio::prelude::*;
 use url::Url;
 
+#[cfg(feature = "tls")]
 use native_tls::TlsConnector;
+#[cfg(feature = "tls")]
 use tokio_tls::TlsStream;
 
 use crate::{
     errors::ConnectionError,
     io::Stream as InnerStream,
+    types::Options,
 };
 
+#[cfg(feature = "tls")]
 type ConnectingFuture<T> = Box<dyn Future<Item = T, Error = ConnectionError> + Send>;
 
 impl From<io::Error> for ConnectionError {
@@ -21,6 +25,7 @@ impl From<io::Error> for ConnectionError {
     }
 }
 
+#[cfg(feature = "tls")]
 impl From<native_tls::Error> for ConnectionError {
     fn from(e: native_tls::Error) -> Self {
         Self::TlsError(e)
@@ -32,6 +37,7 @@ enum TcpState {
     Fail(FutureResult<TcpStream, ConnectionError>),
 }
 
+#[cfg(feature = "tls")]
 enum TlsState {
     Wait(ConnectingFuture<TlsStream<TcpStream>>),
     Fail(FutureResult<TlsStream<TcpStream>, ConnectionError>),
@@ -39,6 +45,7 @@ enum TlsState {
 
 enum State {
     Tcp(TcpState),
+    #[cfg(feature = "tls")]
     Tls(TlsState),
 }
 
@@ -58,6 +65,7 @@ impl State {
                     },
                 }
             },
+            #[cfg(feature = "tls")]
             Self::Tls(state) => {
                 match state {
                     TlsState::Wait(ref mut inner) => match inner.poll() {
@@ -78,6 +86,7 @@ impl State {
         Self::Tcp(TcpState::Fail(future::err(e.into())))
     }
 
+    #[cfg(feature = "tls")]
     fn tls_host_err() -> Self {
         Self::Tls(TlsState::Fail(future::err(ConnectionError::TlsHostNotProvided)))
     }
@@ -86,6 +95,7 @@ impl State {
         Self::Tcp(TcpState::Wait(s))
     }
 
+    #[cfg(feature = "tls")]
     fn tls_wait(s: ConnectingFuture<TlsStream<TcpStream>>) -> Self {
         Self::Tls(TlsState::Wait(s))
     }
@@ -95,8 +105,9 @@ pub(crate) struct ConnectingStream {
     state: State,
 }
 
+#[cfg(feature = "tls")]
 impl ConnectingStream {
-    pub(crate) fn new(addr: &Url, secure: bool) -> Self
+    pub(crate) fn new(addr: &Url, options: &Options) -> Self
     where
     {
         match addr.socket_addrs(|| None) {
@@ -118,7 +129,7 @@ impl ConnectingStream {
 
                 let socket = future::select_ok(streams);
 
-                if !secure {
+                if !options.secure {
                     return Self {
                         state: State::tcp_wait(socket),
                     };
@@ -131,12 +142,19 @@ impl ConnectingStream {
                         }
                     },
                     Some(host) => {
+                        let mut builder = TlsConnector::builder();
+                        builder.danger_accept_invalid_certs(options.skip_verify);
+                        if let Some(certificate) = options.certificate.clone() {
+                            let native_cert = native_tls::Certificate::from(certificate);
+                            builder.add_root_certificate(native_cert);
+                        }
+
                         Self {
                             state: State::tls_wait(
                                 Box::new(
                                     socket
                                         .from_err::<ConnectionError>()
-                                        .join(TlsConnector::builder().build().into_future().from_err())
+                                        .join(builder.build().into_future().from_err())
                                         .and_then(move |((s, _), cx)| {
                                             let cx = tokio_tls::TlsConnector::from(cx);
 
@@ -146,6 +164,41 @@ impl ConnectingStream {
                         }
                     },
                 }
+            }
+            Err(err) => Self {
+                state: State::tcp_err(err),
+            },
+        }
+    }
+}
+
+#[cfg(not(feature = "tls"))]
+impl ConnectingStream {
+    pub(crate) fn new(addr: &Url, _options: &Options) -> Self
+        where
+    {
+        match addr.socket_addrs(|| None) {
+            Ok(addresses) => {
+                let streams: Vec<_> = addresses
+                    .iter()
+                    .map(|address| TcpStream::connect(address))
+                    .collect();
+
+                if streams.is_empty() {
+                    let err = io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "Could not resolve to any address.",
+                    );
+                    return Self {
+                        state: State::tcp_err(err),
+                    };
+                }
+
+                let socket = future::select_ok(streams);
+
+                return Self {
+                    state: State::tcp_wait(socket),
+                };
             }
             Err(err) => Self {
                 state: State::tcp_err(err),

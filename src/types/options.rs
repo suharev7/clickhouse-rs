@@ -1,3 +1,6 @@
+#[cfg(feature = "tls")]
+use std::convert;
+
 use std::{
     borrow::Cow,
     fmt,
@@ -6,9 +9,11 @@ use std::{
     time::Duration,
 };
 
-use crate::{
-    errors::{Error, UrlError, Result},
-};
+use crate::errors::{Error, Result, UrlError};
+#[cfg(feature = "tls")]
+use failure::_core::fmt::Formatter;
+#[cfg(feature = "tls")]
+use native_tls;
 use url::Url;
 
 const DEFAULT_MIN_CONNS: usize = 10;
@@ -93,6 +98,53 @@ impl IntoOptions for String {
     }
 }
 
+/// An X509 certificate.
+#[cfg(feature = "tls")]
+#[derive(Clone)]
+pub struct Certificate(Arc<native_tls::Certificate>);
+
+#[cfg(feature = "tls")]
+impl Certificate {
+    /// Parses a DER-formatted X509 certificate.
+    pub fn from_der(der: &[u8]) -> Result<Certificate> {
+        let inner = match native_tls::Certificate::from_der(der) {
+            Ok(certificate) => certificate,
+            Err(err) => return Err(Error::Other(err.into())),
+        };
+        Ok(Certificate(Arc::new(inner)))
+    }
+
+    /// Parses a PEM-formatted X509 certificate.
+    pub fn from_pem(der: &[u8]) -> Result<Certificate> {
+        let inner = match native_tls::Certificate::from_pem(der) {
+            Ok(certificate) => certificate,
+            Err(err) => return Err(Error::Other(err.into())),
+        };
+        Ok(Certificate(Arc::new(inner)))
+    }
+}
+
+#[cfg(feature = "tls")]
+impl fmt::Debug for Certificate {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "[Certificate]")
+    }
+}
+
+#[cfg(feature = "tls")]
+impl PartialEq for Certificate {
+    fn eq(&self, _other: &Self) -> bool {
+        true
+    }
+}
+
+#[cfg(feature = "tls")]
+impl convert::From<Certificate> for native_tls::Certificate {
+    fn from(value: Certificate) -> Self {
+        value.0.as_ref().clone()
+    }
+}
+
 /// Clickhouse connection options.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Options {
@@ -144,7 +196,16 @@ pub struct Options {
     pub(crate) execute_timeout: Option<Duration>,
 
     /// Enable TLS encryption (defaults to `false`)
+    #[cfg(feature = "tls")]
     pub(crate) secure: bool,
+
+    /// Skip certificate verification (default is `false`).
+    #[cfg(feature = "tls")]
+    pub(crate) skip_verify: bool,
+
+    /// An X509 certificate.
+    #[cfg(feature = "tls")]
+    pub(crate) certificate: Option<Certificate>,
 }
 
 impl Default for Options {
@@ -168,7 +229,12 @@ impl Default for Options {
             query_block_timeout: Some(Duration::from_secs(180)),
             insert_timeout: Some(Duration::from_secs(180)),
             execute_timeout: Some(Duration::from_secs(180)),
+            #[cfg(feature = "tls")]
             secure: false,
+            #[cfg(feature = "tls")]
+            skip_verify: false,
+            #[cfg(feature = "tls")]
+            certificate: None,
         }
     }
 }
@@ -292,6 +358,24 @@ impl Options {
         /// Timeout for execute (defaults to `180 sec`).
         => execute_timeout: Option<Duration>
     }
+
+    #[cfg(feature = "tls")]
+    property! {
+        /// Establish secure connection (default is `false`).
+        => secure: bool
+    }
+
+    #[cfg(feature = "tls")]
+    property! {
+        /// Skip certificate verification (default is `false`).
+        => skip_verify: bool
+    }
+
+    #[cfg(feature = "tls")]
+    property! {
+        /// An X509 certificate.
+        => certificate: Option<Certificate>
+    }
 }
 
 impl FromStr for Options {
@@ -373,7 +457,10 @@ where
                 options.execute_timeout = parse_param(key, value, parse_opt_duration)?
             }
             "compression" => options.compression = parse_param(key, value, parse_compression)?,
+            #[cfg(feature = "tls")]
             "secure" => options.secure = parse_param(key, value, bool::from_str)?,
+            #[cfg(feature = "tls")]
+            "skip_verify" => options.skip_verify = parse_param(key, value, bool::from_str)?,
             _ => return Err(UrlError::UnknownParameter { param: key.into() }),
         };
     }
@@ -480,7 +567,8 @@ mod test {
     }
 
     #[test]
-    fn test_parse_options() {
+    #[cfg(feature = "tls")]
+    fn test_parse_secure_options() {
         let url = "tcp://username:password@host1:9001/database?ping_timeout=42ms&keepalive=99s&compression=lz4&connection_timeout=10s&secure=true";
         assert_eq!(
             Options {
@@ -492,7 +580,25 @@ mod test {
                 ping_timeout: Duration::from_millis(42),
                 connection_timeout: Duration::from_secs(10),
                 compression: true,
-                secure: true,
+                ..Options::default()
+            },
+            from_url(url).unwrap(),
+        );
+    }
+
+    #[test]
+    fn test_parse_options() {
+        let url = "tcp://username:password@host1:9001/database?ping_timeout=42ms&keepalive=99s&compression=lz4&connection_timeout=10s";
+        assert_eq!(
+            Options {
+                username: "username".into(),
+                password: "password".into(),
+                addr: Url::parse("tcp://username:password@host1:9001").unwrap(),
+                database: "database".into(),
+                keepalive: Some(Duration::from_secs(99)),
+                ping_timeout: Duration::from_millis(42),
+                connection_timeout: Duration::from_secs(10),
+                compression: true,
                 ..Options::default()
             },
             from_url(url).unwrap(),

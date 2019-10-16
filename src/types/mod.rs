@@ -7,7 +7,7 @@ use crate::errors::ServerError;
 
 pub use self::{
     block::{Block, RCons, RNil, Row, RowBuilder, Rows},
-    column::{Column, ColumnType, Simple, Complex},
+    column::{Column, ColumnType, Complex, Simple},
     decimal::Decimal,
     from_sql::FromSql,
     options::Options,
@@ -23,7 +23,11 @@ pub(crate) use self::{
     stat_buffer::StatBuffer,
     unmarshal::Unmarshal,
     value_ref::ValueRef,
+    either::Either,
 };
+
+#[cfg(feature = "tls")]
+pub use self::options::Certificate;
 
 pub(crate) mod column;
 mod marshal;
@@ -43,6 +47,8 @@ mod query_result;
 
 mod decimal;
 mod options;
+
+mod either;
 
 #[derive(Copy, Clone, Debug, Default, PartialEq)]
 pub(crate) struct Progress {

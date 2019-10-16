@@ -1,7 +1,7 @@
 use crate::errors::Error;
 use tokio::prelude::*;
 
-pub(super) enum Either<T, L, R>
+pub(crate) enum Either<T, L, R>
 where
     L: Future<Item = T, Error = Error> + Send,
     R: Future<Item = T, Error = Error> + Send,

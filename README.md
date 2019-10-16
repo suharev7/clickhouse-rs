@@ -55,6 +55,11 @@ parameters:
 - `insert_timeout` - Timeout for inserts (defaults to `180 sec`).
 - `execute_timeout` - Timeout for execute (defaults to `180 sec`).
 
+SSL/TLS parameters:
+
+- `secure` - establish secure connection (defaults is `false`).
+- `skip_verify` - skip certificate verification (defaults is `false`).
+
 example:
 ```url
 tcp://user:password@host:9000/clicks?compression=lz4&ping_timeout=42ms

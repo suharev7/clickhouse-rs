@@ -14,8 +14,7 @@ edition = "2018"
 exclude = ["test/*"]
 
 [features]
-default = ["tls"]
-
+default = []
 tls = ["tokio-tls", "native-tls"]
 
 [dependencies]

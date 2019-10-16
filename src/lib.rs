@@ -254,8 +254,8 @@ impl Client {
         };
 
         Box::new(
-            ConnectingStream::new(&options.addr)
-                .and_then(move |stream| {
+            ConnectingStream::new(&options.addr, options.secure)
+                .and_then(move |mut stream| {
                     stream.set_nodelay(options.nodelay)?;
                     stream.set_keepalive(options.keepalive)?;
 

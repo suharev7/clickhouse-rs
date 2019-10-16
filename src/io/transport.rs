@@ -11,12 +11,12 @@ use std::{
 
 use chrono_tz::Tz;
 use futures::{Async, Poll, Stream};
-use tokio::{net::TcpStream, prelude::*};
+use tokio::prelude::*;
 
 use crate::{
     binary::Parser,
     errors::{DriverError, Error},
-    io::BoxFuture,
+    io::{BoxFuture, Stream as InnerStream},
     pool::{Inner, PoolBinding},
     types::{Block, Cmd, Context, Packet},
     ClientHandle, Pool,
@@ -25,7 +25,7 @@ use crate::{
 /// Line transport
 pub(crate) struct ClickhouseTransport {
     // Inner socket
-    inner: TcpStream,
+    inner: InnerStream,
     // Set to true when inner.read returns Ok(0);
     done: bool,
     // Buffered read data
@@ -61,7 +61,7 @@ pub(crate) struct PacketStream {
 }
 
 impl ClickhouseTransport {
-    pub fn new(inner: TcpStream, compress: bool, pool: Option<Pool>) -> Self {
+    pub fn new(inner: InnerStream, compress: bool, pool: Option<Pool>) -> Self {
         ClickhouseTransport {
             inner,
             done: false,

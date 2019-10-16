@@ -1,11 +1,9 @@
 use std::{
     borrow::Cow,
-    fmt, io,
-    net::{SocketAddr, ToSocketAddrs},
+    fmt,
     str::FromStr,
     sync::{Arc, Mutex},
     time::Duration,
-    vec,
 };
 
 use crate::{
@@ -95,46 +93,11 @@ impl IntoOptions for String {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum Address {
-    Url(String),
-    SocketAddr(SocketAddr),
-}
-
-impl From<SocketAddr> for Address {
-    fn from(addr: SocketAddr) -> Self {
-        Address::SocketAddr(addr)
-    }
-}
-
-impl From<String> for Address {
-    fn from(url: String) -> Self {
-        Address::Url(url)
-    }
-}
-
-impl From<&str> for Address {
-    fn from(url: &str) -> Self {
-        Address::Url(url.to_string())
-    }
-}
-
-impl ToSocketAddrs for Address {
-    type Iter = vec::IntoIter<SocketAddr>;
-
-    fn to_socket_addrs(&self) -> io::Result<Self::Iter> {
-        match self {
-            Address::SocketAddr(addr) => Ok(vec![*addr].into_iter()),
-            Address::Url(url) => url.to_socket_addrs(),
-        }
-    }
-}
-
 /// Clickhouse connection options.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Options {
     /// Address of clickhouse server (defaults to `127.0.0.1:9000`).
-    pub(crate) addr: Address,
+    pub(crate) addr: Url,
 
     /// Database name. (defaults to `default`).
     pub(crate) database: String,
@@ -179,12 +142,15 @@ pub struct Options {
 
     /// Timeout for execute (defaults to `180 sec`)
     pub(crate) execute_timeout: Option<Duration>,
+
+    /// Enable TLS encryption (defaults to `false`)
+    pub(crate) secure: bool,
 }
 
 impl Default for Options {
     fn default() -> Self {
         Self {
-            addr: Address::SocketAddr("127.0.0.1:9000".parse().unwrap()),
+            addr: Url::parse("tcp://default@127.0.0.1:9000").unwrap(),
             database: "default".into(),
             username: "default".into(),
             password: "".into(),
@@ -202,6 +168,7 @@ impl Default for Options {
             query_block_timeout: Some(Duration::from_secs(180)),
             insert_timeout: Some(Duration::from_secs(180)),
             execute_timeout: Some(Duration::from_secs(180)),
+            secure: false,
         }
     }
 }
@@ -230,10 +197,10 @@ impl Options {
     /// Constructs a new Options.
     pub fn new<A>(addr: A) -> Self
     where
-        Address: From<A>,
+        A: Into<Url>,
     {
         Self {
-            addr: From::from(addr),
+            addr: addr.into(),
             ..Self::default()
         }
     }
@@ -359,12 +326,13 @@ fn from_url(url_str: &str) -> Result<Options> {
         options.password = password.into()
     }
 
-    let host = url
-        .host_str()
-        .map_or_else(|| "127.0.0.1".into(), String::from);
+    let mut addr = url.clone();
+    addr.set_path("");
+    addr.set_query(None);
 
-    let port = url.port().unwrap_or(9000);
-    options.addr = format!("{}:{}", host, port).into();
+    let port = url.port().or(Some(9000));
+    addr.set_port(port).map_err(|_| UrlError::Invalid)?;
+    options.addr = addr;
 
     if let Some(database) = get_database_from_url(&url)? {
         options.database = database.into();
@@ -405,6 +373,7 @@ where
                 options.execute_timeout = parse_param(key, value, parse_opt_duration)?
             }
             "compression" => options.compression = parse_param(key, value, parse_compression)?,
+            "secure" => options.secure = parse_param(key, value, bool::from_str)?,
             _ => return Err(UrlError::UnknownParameter { param: key.into() }),
         };
     }
@@ -512,17 +481,18 @@ mod test {
 
     #[test]
     fn test_parse_options() {
-        let url = "tcp://username:password@host1:9001/database?ping_timeout=42ms&keepalive=99s&compression=lz4&connection_timeout=10s";
+        let url = "tcp://username:password@host1:9001/database?ping_timeout=42ms&keepalive=99s&compression=lz4&connection_timeout=10s&secure=true";
         assert_eq!(
             Options {
                 username: "username".into(),
                 password: "password".into(),
-                addr: "host1:9001".into(),
+                addr: Url::parse("tcp://username:password@host1:9001").unwrap(),
                 database: "database".into(),
                 keepalive: Some(Duration::from_secs(99)),
                 ping_timeout: Duration::from_millis(42),
                 connection_timeout: Duration::from_secs(10),
                 compression: true,
+                secure: true,
                 ..Options::default()
             },
             from_url(url).unwrap(),

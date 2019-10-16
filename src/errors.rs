@@ -20,6 +20,9 @@ pub enum Error {
     #[fail(display = "Input/output error: `{}`", _0)]
     Io(#[cause] io::Error),
 
+    #[fail(display = "Connections error: `{}`", _0)]
+    Connection(#[cause] ConnectionError),
+
     #[fail(display = "Other error: `{}`", _0)]
     Other(#[cause] failure::Error),
 
@@ -41,6 +44,19 @@ pub struct ServerError {
     pub name: String,
     pub message: String,
     pub stack_trace: String,
+}
+
+/// This type enumerates connection errors.
+#[derive(Debug, Fail)]
+pub enum ConnectionError {
+    #[fail(display = "TLS connection requires hostname to be provided")]
+    TlsHostNotProvided,
+
+    #[fail(display = "Input/output error: `{}`", _0)]
+    IoError(#[cause] io::Error),
+
+    #[fail(display = "TLS connection error: `{}`", _0)]
+    TlsError(#[cause] native_tls::Error),
 }
 
 /// This type enumerates connection URL errors.
@@ -166,6 +182,12 @@ impl From<TimeoutError<Error>> for Error {
 impl From<Utf8Error> for Error {
     fn from(err: Utf8Error) -> Self {
         Error::Driver(DriverError::Utf8Error(err))
+    }
+}
+
+impl From<ConnectionError> for Error {
+    fn from(err: ConnectionError) -> Self {
+        Error::Connection(err)
     }
 }
 

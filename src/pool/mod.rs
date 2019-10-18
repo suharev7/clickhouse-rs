@@ -286,7 +286,7 @@ mod test {
     use std::{
         str::FromStr,
         sync::{
-            atomic::{AtomicBool, Ordering},
+            atomic::{AtomicBool, AtomicUsize, Ordering},
             Arc,
         },
         thread::spawn,
@@ -487,8 +487,8 @@ mod test {
 
     #[test]
     fn test_query_stream_timeout() {
-        let test_db_url = format!("{}{}", DATABASE_URL.as_str(), "&query_block_timeout=10ms");
-        let pool = Pool::new(test_db_url.to_string());
+        let url = format!("{}{}", DATABASE_URL.as_str(), "&query_block_timeout=10ms");
+        let pool = Pool::new(url.to_string());
 
         let done = pool
             .get_handle()
@@ -540,5 +540,43 @@ mod test {
         assert_eq!(info.ongoing, 0);
         assert_eq!(info.tasks_len, 0);
         assert_eq!(info.idle_len, 0);
+    }
+
+    #[test]
+    fn test_wrong_ping() {
+        let counter = Arc::new(AtomicUsize::new(0));
+
+        let url = format!("{}{}", DATABASE_URL.as_str(), "&query_block_timeout=10ms");
+        let pool = Pool::new(url.to_string());
+
+        for i in 0..4 {
+            let counter = counter.clone();
+            let done = pool
+                .get_handle()
+                .and_then(move |c| c.ping())
+                .and_then(move |_|{
+                    counter.fetch_add(1, Ordering::Relaxed);
+                    Ok(())
+                })
+                .map_err(|err| eprintln!("database error: {}", err));
+
+            if i % 2 == 0 {
+                run(done).unwrap();
+
+                let info = pool.info();
+                assert_eq!(info.ongoing, 0);
+                assert_eq!(info.tasks_len, 0);
+                assert_eq!(info.idle_len, 1);
+            } else {
+                run(done).unwrap_err();
+
+                let info = pool.info();
+                assert_eq!(info.ongoing, 0);
+                assert_eq!(info.tasks_len, 0);
+                assert_eq!(info.idle_len, 0);
+            }
+        }
+
+        assert_eq!(2, counter.load(Ordering::Acquire))
     }
 }

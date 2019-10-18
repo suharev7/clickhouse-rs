@@ -10,13 +10,16 @@ use chrono_tz::Tz;
 
 use crate::{
     errors::{Error, FromSqlError, Result},
-    types::{column::StringPool, decimal::NoBits, Column, Decimal, SqlType, Simple},
+    types::{
+        column::{StringPool, column_data::ArcColumnData},
+        decimal::NoBits, Column, Decimal, SqlType, Simple, Complex, ColumnType,
+    },
 };
 
 macro_rules! simple_num_iterable {
     ( $($t:ty: $k:ident),* ) => {
         $(
-            impl<'a> SimpleIterable<'a> for $t {
+            impl<'a> Iterable<'a, Simple> for $t {
                 type Iter = slice::Iter<'a, $t>;
 
                 fn iter(column: &'a Column<Simple>, column_type: SqlType) -> Result<Self::Iter> {
@@ -49,7 +52,10 @@ simple_num_iterable! {
     i8: Int8,
     i16: Int16,
     i32: Int32,
-    i64: Int64
+    i64: Int64,
+
+    f32: Float32,
+    f64: Float64
 }
 
 macro_rules! iterator {
@@ -110,10 +116,10 @@ macro_rules! exact_size_iterator {
     };
 }
 
-pub trait SimpleIterable<'a> {
-    type Iter: Iterator + 'a;
+pub trait Iterable<'a, K: ColumnType> {
+    type Iter: Iterator;
 
-    fn iter(column: &'a Column<Simple>, column_type: SqlType) -> Result<Self::Iter>;
+    fn iter(column: &'a Column<K>, column_type: SqlType) -> Result<Self::Iter>;
 }
 
 enum StringInnerIterator<'a> {
@@ -412,7 +418,7 @@ impl<'a, I: Iterator> Iterator for ArrayIterator<'a, I> {
 
 impl<'a, I: Iterator> FusedIterator for ArrayIterator<'a, I> {}
 
-impl<'a> SimpleIterable<'a> for &[u8] {
+impl<'a> Iterable<'a, Simple> for &[u8] {
     type Iter = StringIterator<'a>;
 
     fn iter(column: &'a Column<Simple>, column_type: SqlType) -> Result<Self::Iter> {
@@ -459,7 +465,7 @@ impl<'a> SimpleIterable<'a> for &[u8] {
     }
 }
 
-impl<'a> SimpleIterable<'a> for Decimal {
+impl<'a> Iterable<'a, Simple> for Decimal {
     type Iter = DecimalIterator<'a>;
 
     fn iter(column: &'a Column<Simple>, column_type: SqlType) -> Result<Self::Iter> {
@@ -506,7 +512,7 @@ impl<'a> SimpleIterable<'a> for Decimal {
     }
 }
 
-impl<'a> SimpleIterable<'a> for DateTime<Tz> {
+impl<'a> Iterable<'a, Simple> for DateTime<Tz> {
     type Iter = DateTimeIterator<'a>;
 
     fn iter(column: &'a Column<Simple>, column_type: SqlType) -> Result<Self::Iter> {
@@ -520,7 +526,7 @@ impl<'a> SimpleIterable<'a> for DateTime<Tz> {
     }
 }
 
-impl<'a> SimpleIterable<'a> for Date<Tz> {
+impl<'a> Iterable<'a, Simple> for Date<Tz> {
     type Iter = DateIterator<'a>;
 
     fn iter(column: &'a Column<Simple>, column_type: SqlType) -> Result<Self::Iter> {
@@ -567,9 +573,9 @@ fn date_iter<T>(
     Ok((ptr, end, *tz))
 }
 
-impl<'a, T> SimpleIterable<'a> for Option<T>
+impl<'a, T> Iterable<'a, Simple> for Option<T>
 where
-    T: SimpleIterable<'a>,
+    T: Iterable<'a, Simple>,
 {
     type Iter = NullableIterator<'a, T::Iter>;
 
@@ -604,9 +610,9 @@ where
     }
 }
 
-impl<'a, T> SimpleIterable<'a> for Vec<T>
+impl<'a, T> Iterable<'a, Simple> for Vec<T>
 where
-    T: SimpleIterable<'a>,
+    T: Iterable<'a, Simple>,
 {
     type Iter = ArrayIterator<'a, T::Iter>;
 
@@ -637,5 +643,112 @@ where
             index: 0,
             size,
         })
+    }
+}
+
+
+pub struct ComplexIterator<'a, T>
+where
+    T: Iterable<'a, Simple>,
+{
+    column_type: SqlType,
+
+    data: &'a Vec<ArcColumnData>,
+
+    current_index: usize,
+    current: Option<<T as Iterable<'a, Simple>>::Iter>,
+
+    _marker: marker::PhantomData<T>,
+}
+
+impl<'a, T> Iterator for ComplexIterator<'a, T>
+where
+    T: Iterable<'a, Simple>,
+{
+    type Item = <<T as Iterable<'a, Simple>>::Iter as Iterator>::Item;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current_index == self.data.len() && self.current.is_none() {
+            return None;
+        }
+
+        if self.current.is_none() {
+            let column: Column<Simple> = Column {
+                name: String::new(),
+                data: self.data[self.current_index].clone(),
+                _marker: marker::PhantomData
+            };
+
+            let iter = unsafe {
+                T::iter(mem::transmute(&column), self.column_type)
+            }.unwrap();
+
+            self.current = Some(iter);
+            self.current_index += 1;
+        }
+
+        let ret = match self.current {
+            None => None,
+            Some(ref mut iter) => iter.next(),
+        };
+
+        match ret {
+            None => {
+                self.current = None;
+                self.next()
+            }
+            Some(r) => {
+                Some(r)
+            }
+        }
+    }
+}
+
+impl<'a, T> Iterable<'a, Complex> for T
+where
+    T: Iterable<'a, Simple> + 'a,
+{
+    type Iter = ComplexIterator<'a, T>;
+
+    fn iter(column: &Column<Complex>, column_type: SqlType) -> Result<Self::Iter> {
+
+        let data: &Vec<ArcColumnData> = unsafe {
+            let mut data: *const Vec<ArcColumnData> = ptr::null();
+
+            column.get_internal(&[
+                &mut data as *mut *const Vec<ArcColumnData> as *mut *const u8,
+            ], 0xff)?;
+
+            &*data
+        };
+
+        Ok(ComplexIterator {
+            column_type,
+            data,
+
+            current_index: 0,
+            current: None,
+
+            _marker: marker::PhantomData,
+        })
+    }
+}
+
+
+#[cfg(test)]
+mod test {
+    use crate::types::Block;
+
+    #[test]
+    fn test_complex_iter() {
+        let lo = Block::new().column("?", vec![1_u32, 2]);
+        let hi = Block::new().column("?", vec![3_u32, 4, 5]);
+
+        let block = Block::concat(&[lo, hi]);
+
+        let columns = block.columns()[0].iter::<u32>().unwrap();
+        let actual: Vec<_> = columns.collect();
+
+        assert_eq!(actual, vec![&1_u32, &2, &3, &4, &5])
     }
 }

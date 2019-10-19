@@ -1,6 +1,6 @@
 [package]
 name = "clickhouse-rs"
-version = "0.1.17"
+version = "0.1.18"
 authors = ["Mikhail Sukharev <suharev7@gmail.com>"]
 license = "MIT"
 homepage = "https://github.com/suharev7/clickhouse-rs"

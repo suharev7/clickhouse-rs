@@ -1,6 +1,6 @@
 use std::{
-    fmt, mem,
-    sync::{Arc, Mutex, MutexGuard},
+    fmt, mem, sync::atomic::{self, Ordering},
+    sync::Arc,
 };
 
 use tokio::prelude::{*, task::{self, Task}};
@@ -16,23 +16,25 @@ use crate::{
 mod futures;
 
 pub(crate) struct Inner {
-    new: Option<BoxFuture<ClientHandle>>,
-    idle: Vec<ClientHandle>,
-    tasks: Vec<Task>,
-    ongoing: usize,
+    new: crossbeam::queue::ArrayQueue<BoxFuture<ClientHandle>>,
+    idle: crossbeam::queue::ArrayQueue<ClientHandle>,
+    tasks: crossbeam::queue::SegQueue<Task>,
+    ongoing: atomic::AtomicUsize,
 }
 
 impl Inner {
-    pub(crate) fn release_conn(inner: &Mutex<Inner>) {
-        let mut guard = inner.lock().unwrap();
-        guard.ongoing -= 1;
-        while let Some(task) = guard.tasks.pop() {
+    pub(crate) fn release_conn(&self) {
+        self.ongoing.fetch_sub(1, Ordering::AcqRel);
+        while let Ok(task) = self.tasks.pop() {
             task.notify()
         }
     }
 
     fn conn_count(&self) -> usize {
-        self.new.is_some() as usize + self.idle.len() + self.ongoing
+        let is_new_some = self.new.len();
+        let ongoing = self.ongoing.load(Ordering::Acquire);
+        let idle_count = self.idle.len();
+        is_new_some + idle_count + ongoing
     }
 }
 
@@ -96,7 +98,7 @@ impl PoolBinding {
 #[derive(Clone)]
 pub struct Pool {
     options: OptionsSource,
-    pub(crate) inner: Arc<Mutex<Inner>>,
+    pub(crate) inner: Arc<Inner>,
     min: usize,
     max: usize,
 }
@@ -129,13 +131,6 @@ impl Pool {
     where
         O: IntoOptions,
     {
-        let inner = Arc::new(Mutex::new(Inner {
-            new: None,
-            idle: Vec::new(),
-            tasks: Vec::new(),
-            ongoing: 0,
-        }));
-
         let options_src = options.into_options_src();
 
         let mut min = 5;
@@ -149,6 +144,13 @@ impl Pool {
             Err(err) => error!("{}", err),
         }
 
+        let inner = Arc::new(Inner {
+            new: crossbeam::queue::ArrayQueue::new(1),
+            idle: crossbeam::queue::ArrayQueue::new(max),
+            tasks: crossbeam::queue::SegQueue::new(),
+            ongoing: atomic::AtomicUsize::new(0),
+        });
+
         Self {
             options: options_src,
             inner,
@@ -158,25 +160,17 @@ impl Pool {
     }
 
     fn info(&self) -> PoolInfo {
-        self.with_inner(|inner| PoolInfo {
-            new_len: inner.new.is_some() as usize,
-            idle_len: inner.idle.len(),
-            tasks_len: inner.tasks.len(),
-            ongoing: inner.ongoing,
-        })
+        PoolInfo {
+            new_len: self.inner.new.len(),
+            idle_len: self.inner.idle.len(),
+            tasks_len: self.inner.tasks.len(),
+            ongoing: self.inner.ongoing.load(Ordering::Acquire),
+        }
     }
 
     /// Returns future that resolves to `ClientHandle`.
     pub fn get_handle(&self) -> GetHandle {
         GetHandle::new(self)
-    }
-
-    fn with_inner<F, T>(&self, fun: F) -> T
-    where
-        F: FnOnce(MutexGuard<Inner>) -> T,
-        T: 'static,
-    {
-        fun(self.inner.lock().unwrap())
     }
 
     fn poll(&mut self) -> Result<Async<ClientHandle>> {
@@ -185,15 +179,17 @@ impl Pool {
         match self.take_conn() {
             Some(client) => Ok(Async::Ready(client)),
             None => {
-                let new_conn_created = self.with_inner(|mut inner| {
-                    if inner.new.is_none() && inner.conn_count() < self.max {
-                        inner.new.replace(self.new_connection());
+                let new_conn_created = {
+                    let conn_count = self.inner.conn_count();
+
+                    if self.inner.new.is_empty() && conn_count < self.max {
+                        let _ = self.inner.new.push(self.new_connection());
                         true
                     } else {
-                        inner.tasks.push(task::current());
+                        self.inner.tasks.push(task::current());
                         false
                     }
-                });
+                };
                 if new_conn_created {
                     self.poll()
                 } else {
@@ -208,58 +204,50 @@ impl Pool {
     }
 
     fn handle_futures(&mut self) -> Result<()> {
-        self.with_inner(|mut inner| {
-            let result = match inner.new {
-                None => return Ok(()),
-                Some(ref mut new) => new.poll(),
-            };
-
-            match result {
+        let inner = &self.inner;
+        if let Ok(mut new) = self.inner.new.pop() {
+            match new.poll() {
                 Ok(Async::Ready(client)) => {
-                    inner.new = None;
-                    inner.idle.push(client);
+                    inner.idle.push(client).unwrap();
                 }
-                Ok(Async::NotReady) => (),
+                Ok(Async::NotReady) => {
+                    let _ = self.inner.new.push(new);
+                },
                 Err(err) => {
-                    inner.new = None;
                     return Err(err);
                 }
             }
+        }
 
-            Ok(())
-        })
+        Ok(())
     }
 
     fn take_conn(&mut self) -> Option<ClientHandle> {
-        self.with_inner(|mut inner| {
-            if let Some(mut client) = inner.idle.pop() {
-                client.pool = PoolBinding::Attached(self.clone());
-                client.set_inside(false);
-                inner.ongoing += 1;
-                Some(client)
-            } else {
-                None
-            }
-        })
+        if let Ok(mut client) = self.inner.idle.pop() {
+            client.pool = PoolBinding::Attached(self.clone());
+            client.set_inside(false);
+            self.inner.ongoing.fetch_add(1, Ordering::AcqRel);
+            Some(client)
+        } else {
+            None
+        }
     }
 
     fn return_conn(&mut self, mut client: ClientHandle) {
         let min = self.min;
 
-        self.with_inner(|mut inner| {
-            let is_attached = client.pool.is_attached();
-            client.pool = PoolBinding::None;
-            client.set_inside(true);
+        let is_attached = client.pool.is_attached();
+        client.pool = PoolBinding::None;
+        client.set_inside(true);
 
-            if inner.idle.len() < min && is_attached {
-                inner.idle.push(client);
-            }
-            inner.ongoing -= 1;
+        if self.inner.idle.len() < min && is_attached {
+            let _ = self.inner.idle.push(client);
+        }
+        self.inner.ongoing.fetch_sub(1, Ordering::AcqRel);
 
-            while let Some(task) = inner.tasks.pop() {
-                task.notify()
-            }
-        })
+        while let Ok(task) = self.inner.tasks.pop() {
+            task.notify()
+        }
     }
 }
 
@@ -326,7 +314,9 @@ mod test {
 
         let done = pool
             .get_handle()
-            .and_then(|c| c.ping().map(|_| ()))
+            .and_then(|c| {
+                c.ping().map(|_| ())
+            })
             .and_then(move |_| {
                 let info = pool.info();
                 assert_eq!(info.ongoing, 0);

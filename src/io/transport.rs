@@ -51,7 +51,7 @@ enum PacketStreamState {
 
 pub(crate) struct TransportStatus {
     inside: AtomicBool,
-    pool: sync::Weak<sync::Mutex<Inner>>,
+    pool: sync::Weak<Inner>,
 }
 
 pub(crate) struct PacketStream {
@@ -76,20 +76,20 @@ impl ClickhouseTransport {
     }
 
     pub(crate) fn set_inside(&self, value: bool) {
-        self.status.inside.store(value, Ordering::Relaxed);
+        self.status.inside.store(value, Ordering::Release);
     }
 }
 
 impl Drop for TransportStatus {
     fn drop(&mut self) {
-        let inside = self.inside.load(Ordering::Relaxed);
+        let inside = self.inside.load(Ordering::Acquire);
 
         if inside {
             return;
         }
 
         if let Some(pool_inner) = self.pool.upgrade() {
-            Inner::release_conn(&pool_inner);
+            pool_inner.clone().release_conn();
         }
     }
 }

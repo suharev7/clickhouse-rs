@@ -36,6 +36,7 @@ url="^2"
 lazy_static = "1.4.0"
 
 log = { version = "0.4.8", features = ["std", "serde"] }
+crossbeam = "0.7"
 
 [dev-dependencies]
 env_logger = "^0.6"

@@ -3,8 +3,12 @@ use std::{
     io::{self, Cursor},
     pin::Pin,
     ptr,
+    sync::{
+        self,
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     task::{self, Poll},
-    sync::{self, Arc, atomic::{AtomicBool, Ordering}},
 };
 
 use chrono_tz::Tz;
@@ -17,7 +21,6 @@ use crate::{
     errors::{DriverError, Error, Result},
     io::{read_to_end::read_to_end, Stream as InnerStream},
     types::{Block, Cmd, Packet},
-    pool::{Pool, Inner},
 };
 use futures_core::Stream;
 use futures_util::StreamExt;
@@ -222,6 +225,7 @@ impl ClickhouseTransport {
             Poll::Pending => Ok(false),
         }
     }
+}
 
     fn send(&mut self, cx: &mut task::Context) -> Poll<Result<()>> {
         loop {
@@ -239,6 +243,19 @@ impl ClickhouseTransport {
             if !self.wr_flush(cx)? {
                 return Poll::Pending;
             }
+        }
+    }
+}
+
+struct Guard<'a> {
+    buf: &'a mut Vec<u8>,
+    len: usize,
+}
+
+impl Drop for Guard<'_> {
+    fn drop(&mut self) {
+        unsafe {
+            self.buf.set_len(self.len);
         }
     }
 }

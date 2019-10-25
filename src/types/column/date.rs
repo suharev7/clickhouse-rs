@@ -110,7 +110,7 @@ impl ColumnFrom for Vec<Vec<Date<Tz>>> {
                 let value: Value = Value::Date(days, v.timezone());
                 inner.push(value);
             }
-            data.push(Value::Array(sql_type.into(), Arc::new(inner)));
+            data.push(Value::Array(sql_type.clone().into(), Arc::new(inner)));
         }
 
         W::wrap(data)
@@ -134,7 +134,7 @@ impl ColumnFrom for Vec<Vec<DateTime<Tz>>> {
                 let value: Value = Value::DateTime(v.timestamp() as u32, v.timezone());
                 inner.push(value);
             }
-            data.push(Value::Array(sql_type.into(), Arc::new(inner)));
+            data.push(Value::Array(sql_type.clone().into(), Arc::new(inner)));
         }
 
         W::wrap(data)

@@ -1,4 +1,4 @@
-use std::{convert, fmt, mem, str, sync::Arc, net::{Ipv4Addr, Ipv6Addr}}; 
+use std::{convert, fmt, mem, str, sync::Arc, net::{Ipv4Addr, Ipv6Addr}};
 
 use chrono::prelude::*;
 use chrono_tz::Tz;
@@ -6,7 +6,7 @@ use chrono_tz::Tz;
 use crate::types::{
     column::Either,
     decimal::{Decimal, NoBits},
-    DateConverter, SqlType,
+    DateConverter, Enum16, Enum8, SqlType,
 };
 
 use uuid::Uuid;
@@ -36,6 +36,8 @@ pub enum Value {
     Nullable(Either<&'static SqlType, Box<Value>>),
     Array(&'static SqlType, Arc<Vec<Value>>),
     Decimal(Decimal),
+    Enum8(Vec<(String, i8)>, Enum8),
+    Enum16(Vec<(String, i16)>, Enum16),
 }
 
 impl PartialEq for Value {
@@ -65,6 +67,9 @@ impl PartialEq for Value {
             (Value::Nullable(a), Value::Nullable(b)) => *a == *b,
             (Value::Array(ta, a), Value::Array(tb, b)) => *ta == *tb && *a == *b,
             (Value::Decimal(a), Value::Decimal(b)) => *a == *b,
+            (Value::Enum16(values_a, val_a), Value::Enum16(values_b, val_b)) => {
+                *values_a == *values_b && *val_a == *val_b
+            }
             _ => false,
         }
     }
@@ -98,6 +103,8 @@ impl Value {
             SqlType::Ipv4 => Value::Ipv4([0_u8; 4]),
             SqlType::Ipv6 => Value::Ipv6([0_u8; 16]),
             SqlType::Uuid => Value::Uuid([0_u8; 16]),
+            SqlType::Enum8(values) => Value::Enum8(values, Enum8(0)),
+            SqlType::Enum16(values) => Value::Enum16(values, Enum16(0)),
         }
     }
 }
@@ -158,6 +165,8 @@ impl fmt::Display for Value {
                     Err(e) => write!(f, "{}", e),
                 }
             }
+            Value::Enum8(ref _v1, ref v2) => write!(f, "Enum8, {}", v2),
+            Value::Enum16(ref _v1, ref v2) => write!(f, "Enum16, {}", v2),
         }
     }
 }
@@ -190,6 +199,8 @@ impl convert::From<Value> for SqlType {
             Value::Ipv4(_) => SqlType::Ipv4,
             Value::Ipv6(_) => SqlType::Ipv6,
             Value::Uuid(_) => SqlType::Uuid,
+            Value::Enum8(values, _) => SqlType::Enum8(values),
+            Value::Enum16(values, _) => SqlType::Enum16(values),
         }
     }
 }
@@ -226,6 +237,17 @@ macro_rules! value_from {
 impl convert::From<AppDate> for Value {
     fn from(v: AppDate) -> Value {
         Value::Date(u16::get_days(v), v.timezone())
+    }
+}
+
+impl convert::From<Enum8> for Value {
+    fn from(v: Enum8) -> Value {
+        Value::Enum8 { 0: vec![], 1: v }
+    }
+}
+impl convert::From<Enum16> for Value {
+    fn from(v: Enum16) -> Value {
+        Value::Enum16 { 0: vec![], 1: v }
     }
 }
 
@@ -540,6 +562,6 @@ mod test {
     #[test]
     fn test_size_of() {
         use std::mem;
-        assert_eq!(24, mem::size_of::<[Value; 1]>());
+        assert_eq!(32, mem::size_of::<[Value; 1]>());
     }
 }

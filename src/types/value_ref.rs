@@ -3,6 +3,7 @@ use std::{convert, fmt, str, sync::Arc, net::{Ipv4Addr, Ipv6Addr}};
 use chrono::prelude::*;
 use chrono_tz::Tz;
 
+use crate::types::{Enum16, Enum8};
 use crate::{
     errors::{Error, FromSqlError, Result},
     types::{
@@ -35,7 +36,9 @@ pub enum ValueRef<'a> {
     Decimal(Decimal),
     Ipv4([u8; 4]),
     Ipv6([u8; 16]),
-    Uuid([u8; 16])
+    Uuid([u8; 16]),
+    Enum16(Vec<(String, i16)>, Enum16),
+    Enum8(Vec<(String, i8)>, Enum8),
 }
 
 impl<'a> PartialEq for ValueRef<'a> {
@@ -65,6 +68,8 @@ impl<'a> PartialEq for ValueRef<'a> {
             (ValueRef::Nullable(a), ValueRef::Nullable(b)) => *a == *b,
             (ValueRef::Array(ta, a), ValueRef::Array(tb, b)) => *ta == *tb && *a == *b,
             (ValueRef::Decimal(a), ValueRef::Decimal(b)) => *a == *b,
+            (ValueRef::Enum8(a0, a1), ValueRef::Enum8(b0, b1)) => *a1 == *b1 && *a0 == *b0,
+            (ValueRef::Enum16(a0, a1), ValueRef::Enum16(b0, b1)) => *a1 == *b1 && *a0 == *b0,
             _ => false,
         }
     }
@@ -126,6 +131,8 @@ impl<'a> fmt::Display for ValueRef<'a> {
                     Err(e) => write!(f, "{}", e),
                 }
             }
+            ValueRef::Enum8(_, v) => fmt::Display::fmt(v, f),
+            ValueRef::Enum16(_, v) => fmt::Display::fmt(v, f),
         }
     }
 }
@@ -152,6 +159,8 @@ impl<'a> convert::From<ValueRef<'a>> for SqlType {
             },
             ValueRef::Array(t, _) => SqlType::Array(t),
             ValueRef::Decimal(v) => SqlType::Decimal(v.precision, v.scale),
+            ValueRef::Enum8(values, _) => SqlType::Enum8(values),
+            ValueRef::Enum16(values, _) => SqlType::Enum16(values),
             ValueRef::Ipv4(_) => SqlType::Ipv4,
             ValueRef::Ipv6(_) => SqlType::Ipv6,
             ValueRef::Uuid(_) => SqlType::Uuid,
@@ -205,7 +214,7 @@ impl<'a> From<ValueRef<'a>> for Value {
             ValueRef::Date(v, tz) => Value::Date(v, tz),
             ValueRef::DateTime(v, tz) => Value::DateTime(v, tz),
             ValueRef::Nullable(u) => match u {
-                Either::Left(sql_type) => Value::Nullable(Either::Left((*sql_type).into())),
+                Either::Left(sql_type) => Value::Nullable(Either::Left((sql_type.clone()).into())),
                 Either::Right(v) => {
                     let value: Value = (*v).into();
                     Value::Nullable(Either::Right(Box::new(value)))
@@ -220,6 +229,8 @@ impl<'a> From<ValueRef<'a>> for Value {
                 Value::Array(t, Arc::new(value_list))
             }
             ValueRef::Decimal(v) => Value::Decimal(v),
+            ValueRef::Enum8(e_v, v) => Value::Enum8(e_v, v),
+            ValueRef::Enum16(e_v, v) => Value::Enum16(e_v, v),
             ValueRef::Ipv4(v) => Value::Ipv4(v),
             ValueRef::Ipv6(v) => Value::Ipv6(v),
             ValueRef::Uuid(v) => Value::Uuid(v),
@@ -298,9 +309,11 @@ impl<'a> From<&'a Value> for ValueRef<'a> {
                 ValueRef::Array(*t, Arc::new(ref_vec))
             }
             Value::Decimal(v) => ValueRef::Decimal(v.clone()),
+            Value::Enum8(values, v) => ValueRef::Enum8(values.to_vec(), *v),
+            Value::Enum16(values, v) => ValueRef::Enum16(values.to_vec(), *v),
             Value::Ipv4(v) => ValueRef::Ipv4(*v),
             Value::Ipv6(v) => ValueRef::Ipv6(*v),
-            Value::Uuid(v) => ValueRef::Uuid(*v)
+            Value::Uuid(v) => ValueRef::Uuid(*v),
         }
     }
 }
@@ -445,7 +458,7 @@ mod test {
     #[test]
     fn test_size_of() {
         use std::mem;
-        assert_eq!(24, mem::size_of::<[ValueRef<'_>; 1]>());
+        assert_eq!(32, mem::size_of::<[ValueRef<'_>; 1]>());
     }
 
     #[test]

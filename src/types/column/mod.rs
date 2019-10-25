@@ -2,6 +2,9 @@ use std::{fmt, ops, sync::Arc, marker, net::{Ipv4Addr, Ipv6Addr}};
 
 use chrono_tz::Tz;
 
+use crate::types::column::enums::{
+    Enum16Adapter, Enum8Adapter, NullableEnum16Adapter, NullableEnum8Adapter,
+};
 use crate::{
     binary::{Encoder, ReadEx},
     errors::{Error, FromSqlError, Result},
@@ -10,7 +13,7 @@ use crate::{
             column_data::ArcColumnData,
             decimal::{DecimalAdapter, NullableDecimalAdapter},
             fixed_string::{FixedStringAdapter, NullableFixedStringAdapter},
-            ip::{Ipv6, IpColumnData, Ipv4},
+            ip::{IpColumnData, Ipv4, Ipv6},
             string::StringAdapter,
             iter::Iterable,
         },
@@ -29,6 +32,7 @@ mod column_data;
 mod concat;
 mod date;
 mod decimal;
+mod enums;
 mod factory;
 pub(crate) mod fixed_string;
 mod ip;
@@ -232,7 +236,7 @@ impl<K: ColumnType> Column<K> {
             return Ok(self);
         }
 
-        match (dst_type, src_type) {
+        match (dst_type.clone(), src_type.clone()) {
             (SqlType::FixedString(str_len), SqlType::String) => {
                 let name = self.name().to_owned();
                 let adapter = FixedStringAdapter {
@@ -281,6 +285,62 @@ impl<K: ColumnType> Column<K> {
                     precision: dst_p,
                     scale: dst_s,
                     nobits,
+                };
+                Ok(Column {
+                    name,
+                    data: Arc::new(adapter),
+                    _marker: marker::PhantomData,
+                })
+            }
+            (SqlType::Enum8(enum_values), SqlType::Enum8(_)) => {
+                let name = self.name().to_owned();
+                let adapter = Enum8Adapter {
+                    column: self,
+                    enum_values,
+                };
+                Ok(Column {
+                    name,
+                    data: Arc::new(adapter),
+                    _marker: marker::PhantomData,
+                })
+            }
+            (SqlType::Enum16(enum_values), SqlType::Enum16(_)) => {
+                let name = self.name().to_owned();
+                let adapter = Enum16Adapter {
+                    column: self,
+                    enum_values,
+                };
+                Ok(Column {
+                    name,
+                    data: Arc::new(adapter),
+                    _marker: marker::PhantomData,
+                })
+            }
+            (
+                SqlType::Nullable(SqlType::Enum8(enum_values)),
+                SqlType::Nullable(SqlType::Enum8(_)),
+            ) => {
+                let name = self.name().to_owned();
+                let enum_values = enum_values.clone();
+                let adapter = NullableEnum8Adapter {
+                    column: self,
+                    enum_values,
+                };
+                Ok(Column {
+                    name,
+                    data: Arc::new(adapter),
+                    _marker: marker::PhantomData,
+                })
+            }
+            (
+                SqlType::Nullable(SqlType::Enum16(enum_values)),
+                SqlType::Nullable(SqlType::Enum16(_)),
+            ) => {
+                let name = self.name().to_owned();
+                let enum_values = enum_values.clone();
+                let adapter = NullableEnum16Adapter {
+                    column: self,
+                    enum_values,
                 };
                 Ok(Column {
                     name,

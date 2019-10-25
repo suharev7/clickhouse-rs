@@ -114,7 +114,7 @@ fn make_array_of_array<W: ColumnWrapper, S: StringSource>(
             let value: Value = v.to_value();
             inner.push(value)
         }
-        data.push(Value::Array(sql_type.into(), Arc::new(inner)));
+        data.push(Value::Array(sql_type.clone().into(), Arc::new(inner)));
     }
 
     W::wrap(data)

@@ -752,7 +752,7 @@ where
 
     fn iter(column: &'a Column<Simple>, column_type: SqlType) -> Result<Self::Iter> {
         let inner = if let SqlType::Nullable(inner_type) = column_type {
-            T::iter(column, *inner_type)?
+            T::iter(column, inner_type.clone())?
         } else {
             return Err(Error::FromSql(FromSqlError::InvalidType {
                 src: column_type.to_string(),
@@ -789,7 +789,7 @@ where
 
     fn iter(column: &'a Column<Simple>, column_type: SqlType) -> Result<Self::Iter> {
         let inner = if let SqlType::Array(inner_type) = column_type {
-            T::iter(column, *inner_type)?
+            T::iter(column, inner_type.clone())?
         } else {
             return Err(Error::FromSql(FromSqlError::InvalidType {
                 src: column_type.to_string(),
@@ -850,7 +850,7 @@ where
             };
 
             let iter = unsafe {
-                T::iter(mem::transmute(&column), self.column_type)
+                T::iter(mem::transmute(&column), self.column_type.clone())
             }.unwrap();
 
             self.current = Some(iter);
@@ -903,7 +903,6 @@ where
         })
     }
 }
-
 
 #[cfg(test)]
 mod test {

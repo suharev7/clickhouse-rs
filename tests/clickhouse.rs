@@ -19,7 +19,9 @@ use chrono_tz::Tz::{self, UCT, UTC};
 use tokio::prelude::*;
 
 use clickhouse_rs::{
-    errors::{codes, Error}, types::Block, types::Decimal, types::FromSql, ClientHandle, Pool,
+    errors::{codes, Error},
+    types::{Block, Decimal, FromSql, Enum16, Enum8,},
+    ClientHandle, Pool,
 };
 use uuid::Uuid;
 
@@ -697,6 +699,133 @@ fn test_binary_string() {
             assert_eq!([0, 159, 146, 150].as_ref(), fx_text);
             assert_eq!(Some([0, 159, 146, 150].as_ref()), opt_text);
             assert_eq!(Some([0, 159, 146, 150].as_ref()), fx_opt_text);
+
+            Ok(())
+        });
+
+    run(done).unwrap();
+}
+
+#[test]
+fn test_enum_16_not_nullable() {
+    let ddl = "
+        CREATE TABLE IF NOT EXISTS clickhouse_enum16_non_nul (
+            enum_16_row        Enum16(
+                                'zero' = 5,
+                                'first' = 6
+                          )
+        ) Engine=Memory";
+
+    let query = "
+        SELECT
+            enum_16_row
+        FROM clickhouse_enum16_non_nul";
+
+    let block = Block::new().column("enum_16_row", vec![Enum16::of(5), Enum16::of(6)]);
+
+    let pool = Pool::new(database_url());
+    let done = pool
+        .get_handle()
+        .and_then(|c| c.execute("DROP TABLE IF EXISTS clickhouse_enum16_non_nul"))
+        .and_then(move |c| c.execute(ddl))
+        .and_then(move |c| c.insert("clickhouse_enum16_non_nul", block))
+        .and_then(move |c| c.query(query).fetch_all())
+        .and_then(move |(_, block)| {
+            let enum_16_a: Enum16 = block.get(0, "enum_16_row")?;
+            let enum_16_b: Enum16 = block.get(1, "enum_16_row")?;
+
+            assert_eq!(2, block.row_count());
+            assert_eq!(
+                vec!([Enum16::of(5), Enum16::of(6)]),
+                vec!([enum_16_a, enum_16_b])
+            );
+
+            Ok(())
+        });
+
+    run(done).unwrap();
+}
+
+#[test]
+fn test_enum_16_nullable() {
+    let ddl = "
+        CREATE TABLE IF NOT EXISTS clickhouse_enum (
+            enum_16_row        Nullable(Enum16(
+                                'zero' = 5,
+                                'first' = 6
+                          ))
+        ) Engine=Memory";
+
+    let query = "
+        SELECT
+            enum_16_row
+        FROM clickhouse_enum";
+
+    let block = Block::new().column(
+        "enum_16_row",
+        vec![
+            Some(Enum16::of(5)),
+            Some(Enum16::of(6)),
+            Option::<Enum16>::None,
+        ],
+    );
+
+    let pool = Pool::new(database_url());
+    let done = pool
+        .get_handle()
+        .and_then(|c| c.execute("DROP TABLE IF EXISTS clickhouse_enum"))
+        .and_then(move |c| c.execute(ddl))
+        .and_then(move |c| c.insert("clickhouse_enum", block))
+        .and_then(move |c| c.query(query).fetch_all())
+        .and_then(move |(_, block)| {
+            let enum_16_a: Option<Enum16> = block.get(0, "enum_16_row")?;
+            let enum_16_b: Option<Enum16> = block.get(1, "enum_16_row")?;
+
+            assert_eq!(3, block.row_count());
+            assert_eq!(
+                vec!([Some(Enum16::of(5)), Some(Enum16::of(6))]),
+                vec!([enum_16_a, enum_16_b])
+            );
+
+            Ok(())
+        });
+
+    run(done).unwrap();
+}
+
+#[test]
+fn test_enum8() {
+    let ddl = "
+        CREATE TABLE IF NOT EXISTS clickhouse_Enum (
+            enum_8_row        Enum8(
+                                'zero' = 1,
+                                'first' = 2
+                          )
+        ) Engine=Memory";
+
+    let query = "
+        SELECT
+            enum_8_row
+        FROM clickhouse_Enum";
+
+    let block = Block::new().column("enum_8_row", vec![Enum8::of(1), Enum8::of(2)]);
+
+    let pool = Pool::new(database_url());
+    let done = pool
+        .get_handle()
+        .and_then(|c| c.execute("DROP TABLE IF EXISTS clickhouse_Enum"))
+        .and_then(move |c| c.execute(ddl))
+        .and_then(move |c| c.insert("clickhouse_Enum", block))
+        .and_then(move |c| c.query(query).fetch_all())
+        .and_then(move |(_, block)| {
+            let enum_8_a: Enum8 = block.get(0, "enum_8_row")?;
+            let enum_8_b: Enum8 = block.get(1, "enum_8_row")?;
+
+            assert_eq!(2, block.row_count());
+            assert_eq!(
+                vec!([Enum8::of(1), Enum8::of(2)]),
+                vec!([enum_8_a, enum_8_b])
+            );
 
             Ok(())
         });

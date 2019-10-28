@@ -66,6 +66,10 @@ impl dyn ColumnData {
                     W::wrap(DecimalColumnData::load(
                         reader, precision, scale, nobits, size, tz,
                     )?)
+                } else if let Some(_items) = parse_enum8(type_name) {
+                    W::wrap(VectorColumnData::<i8>::load(reader, size)?)
+                } else if let Some(_items) = parse_enum16(type_name) {
+                    W::wrap(VectorColumnData::<i16>::load(reader, size)?)
                 } else {
                     let message = format!("Unsupported column type \"{}\".", type_name);
                     return Err(message.into());
@@ -249,6 +253,28 @@ fn parse_decimal(source: &str) -> Option<(u8, u8, NoBits)> {
         }
         _ => None,
     }
+}
+
+fn parse_enum8(source: &str) -> Option<Vec<(String, i8)>> {
+    let prefix = "Enum8(";
+    let suffix = ")";
+    if !source.starts_with(prefix) || !source.ends_with(suffix) {
+        return None;
+    }
+    let _source = &source[prefix.len()..source.len() - suffix.len()];
+
+    Some(vec![]) // TODO
+}
+
+fn parse_enum16(source: &str) -> Option<Vec<(String, i8)>> {
+    let prefix = "Enum16(";
+    let suffix = ")";
+    if !source.starts_with(prefix) || !source.ends_with(suffix) {
+        return None;
+    }
+    let _source = &source[prefix.len()..source.len() - suffix.len()];
+
+    Some(vec![]) // TODO
 }
 
 #[cfg(test)]

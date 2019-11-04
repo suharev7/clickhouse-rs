@@ -23,7 +23,7 @@ enum State {
 
 impl State {
     #[project]
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<TcpStream>> {
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<TcpStream>> {
         #[project]
         match self.project() {
             State::Wait(ref mut inner) => match inner.poll_unpin(cx) {
@@ -79,7 +79,7 @@ impl ConnectingStream {
 impl Future for ConnectingStream {
     type Output = io::Result<TcpStream>;
 
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         self.project().state.poll(cx)
     }
 }

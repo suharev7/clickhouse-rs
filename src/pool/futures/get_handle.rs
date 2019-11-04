@@ -6,6 +6,7 @@ use pin_project::pin_project;
 
 use crate::{errors::Result, pool::Pool, ClientHandle};
 
+/// Future that resolves to a `ClientHandle`.
 #[pin_project]
 pub struct GetHandle {
     #[pin]
@@ -13,7 +14,7 @@ pub struct GetHandle {
 }
 
 impl GetHandle {
-    pub fn new(pool: &Pool) -> Self {
+    pub(crate) fn new(pool: &Pool) -> Self {
         Self { pool: pool.clone() }
     }
 }

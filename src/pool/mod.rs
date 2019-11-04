@@ -12,9 +12,10 @@ use tokio::prelude::*;
 use crate::{
     Client,
     ClientHandle,
-    errors::Result,
-    pool::futures::GetHandle, types::{IntoOptions, OptionsSource},
+    errors::Result, types::{IntoOptions, OptionsSource},
 };
+
+pub use self::futures::GetHandle;
 
 mod futures;
 

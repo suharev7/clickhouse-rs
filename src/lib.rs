@@ -87,13 +87,6 @@
 //! }
 //! ```
 
-#![feature(
-    type_ascription,
-    async_closure,
-    exact_size_is_empty,
-    trusted_len,
-    core_intrinsics
-)]
 #![recursion_limit = "1024"]
 
 use std::{fmt, future::Future, time::Duration};

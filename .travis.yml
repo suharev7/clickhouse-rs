@@ -11,6 +11,7 @@ addons:
     sources:
       - kalakris-cmake
 rust:
+  - beta
   - nightly
 matrix:
   allow_failures:

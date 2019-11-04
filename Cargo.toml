@@ -14,12 +14,12 @@ edition = "2018"
 exclude = ["tests/*", "examples/*"]
 
 [dependencies]
-futures-core-preview = "=0.3.0-alpha.18"
-futures-sink-preview = "=0.3.0-alpha.18"
-futures-util-preview = { version = "=0.3.0-alpha.18", features = ["sink"] }
+futures-core-preview = "=0.3.0-alpha.19"
+futures-sink-preview = "=0.3.0-alpha.19"
+futures-util-preview = { version = "=0.3.0-alpha.19", features = ["sink"] }
 
-tokio = { version = "0.2.0-alpha.4", default-features = false, features = ["io", "net", "sync", "rt-full"] }
-pin-project = { version = "0.4.0-alpha.11", features = ["project_attr"] }
+tokio = { version = "0.2.0-alpha.5", default-features = false, features = ["io", "net", "sync", "rt-full"] }
+pin-project = "0.4.5"
 
 hostname = "^0.1"
 

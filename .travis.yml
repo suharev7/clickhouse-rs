@@ -22,14 +22,14 @@ before_install:
   - docker --version
   - docker-compose --version
   - docker-compose up -d
-  - rustup toolchain install nightly-2019-09-11
-  - cargo +nightly-2019-09-11 build
-  - rustup default nightly-2019-09-11
+  - rustup toolchain install nightly-2019-10-30
+  - cargo +nightly-2019-10-30 build
+  - rustup default nightly-2019-10-30
   - rustup component add clippy
   - cargo install -f cargo-travis;
   - export PATH=$HOME/.cargo/bin:$PATH;
 script:
-  - cargo test --all --verbose
+  - RUST_BACKTRACE=1 cargo test --all --verbose
   - cargo clippy --all-targets --all-features -- -D warnings;
 after_success:
   - cargo coveralls --exclude-pattern target,clickhouse-rs-cityhash-sys,tests;

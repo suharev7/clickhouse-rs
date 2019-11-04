@@ -5,7 +5,10 @@ use std::{
 };
 
 use futures_core::ready;
-use tokio::prelude::*;
+
+use crate::{
+    io::Stream as InnerStream,
+};
 
 struct Guard<'a> {
     buf: &'a mut Vec<u8>,
@@ -20,8 +23,8 @@ impl Drop for Guard<'_> {
     }
 }
 
-pub(crate) fn read_to_end<R: AsyncRead + ?Sized>(
-    mut rd: Pin<&mut R>,
+pub(crate) fn read_to_end(
+    mut rd: Pin<&mut InnerStream>,
     cx: &mut Context<'_>,
     buf: &mut Vec<u8>,
 ) -> Poll<io::Result<usize>> {

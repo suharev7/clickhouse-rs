@@ -54,7 +54,7 @@ async fn check(c: &mut ClientHandle) -> Result<()> {
 async fn reconnect(c: &mut ClientHandle, source: &OptionsSource, pool: Option<Pool>) -> Result<()> {
     warn!("[reconnect]");
     let mut nc = match pool {
-        None => Client::open(&source, pool).await?,
+        None => Client::open(source.clone(), pool).await?,
         Some(p) => p.get_handle().await?,
     };
     mem::swap(c, &mut nc);

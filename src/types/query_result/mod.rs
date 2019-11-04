@@ -83,7 +83,7 @@ impl<'a> QueryResult<'a> {
                     .inner
                     .take()
                     .unwrap()
-                    .call(Cmd::SendQuery(query, context.clone()));
+                    .call(Cmd::SendQuery(query, context));
 
                 BlockStream::<'a>::new(c, inner)
             })

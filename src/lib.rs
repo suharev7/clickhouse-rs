@@ -222,10 +222,10 @@ impl Client {
     #[deprecated(since = "0.1.4", note = "please use Pool to connect")]
     pub async fn connect(options: Options) -> Result<ClientHandle> {
         let source = options.into_options_src();
-        Self::open(&source, None).await
+        Self::open(source, None).await
     }
 
-    pub(crate) async fn open(source: &OptionsSource, pool: Option<Pool>) -> Result<ClientHandle> {
+    pub(crate) async fn open(source: OptionsSource, pool: Option<Pool>) -> Result<ClientHandle> {
         let options = try_opt!(source.get());
         let compress = options.compression;
         let timeout = options.connection_timeout;
@@ -237,7 +237,7 @@ impl Client {
 
         with_timeout(
             async move {
-                let stream = ConnectingStream::new(&options.addr).await?;
+                let mut stream = ConnectingStream::new(&options.addr, &options).await?;
                 stream.set_nodelay(options.nodelay)?;
                 stream.set_keepalive(options.keepalive)?;
 

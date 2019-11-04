@@ -9,14 +9,14 @@ use std::{
 
 use chrono_tz::Tz;
 use log::trace;
-use tokio::{net::TcpStream, prelude::*};
+use tokio::prelude::*;
 
 use pin_project::{pin_project, project};
 
 use crate::{
     binary::Parser,
     errors::{DriverError, Error, Result},
-    io::read_to_end::read_to_end,
+    io::{read_to_end::read_to_end, Stream as InnerStream},
     types::{Block, Cmd, Packet},
     pool::{Pool, Inner},
 };
@@ -26,7 +26,7 @@ use crate::{
 pub(crate) struct ClickhouseTransport {
     // Inner socket
     #[pin]
-    inner: TcpStream,
+    inner: InnerStream,
     // Set to true when inner.read returns Ok(0);
     done: bool,
     // Buffered read data
@@ -64,7 +64,7 @@ pub(crate) struct PacketStream {
 }
 
 impl ClickhouseTransport {
-    pub fn new(inner: TcpStream, compress: bool, pool: Option<Pool>) -> Self {
+    pub fn new(inner: InnerStream, compress: bool, pool: Option<Pool>) -> Self {
         ClickhouseTransport {
             inner,
             done: false,
@@ -118,7 +118,7 @@ impl Drop for TransportStatus {
         }
 
         if let Some(pool_inner) = self.pool.upgrade() {
-            pool_inner.clone().release_conn();
+            pool_inner.release_conn();
         }
     }
 }

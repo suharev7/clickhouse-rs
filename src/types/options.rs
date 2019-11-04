@@ -1,14 +1,19 @@
+#[cfg(feature = "tls")]
+use std::convert;
+
 use std::{
     borrow::Cow,
-    fmt, io,
-    net::{SocketAddr, ToSocketAddrs},
+    fmt,
     str::FromStr,
     sync::{Arc, Mutex},
     time::Duration,
-    vec,
 };
 
 use crate::errors::{Error, Result, UrlError};
+#[cfg(feature = "tls")]
+use failure::_core::fmt::Formatter;
+#[cfg(feature = "tls")]
+use native_tls;
 use url::Url;
 
 const DEFAULT_MIN_CONNS: usize = 10;
@@ -16,6 +21,7 @@ const DEFAULT_MIN_CONNS: usize = 10;
 const DEFAULT_MAX_CONNS: usize = 20;
 
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 enum State {
     Raw(Options),
     Url(String),
@@ -92,38 +98,50 @@ impl IntoOptions for String {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum Address {
-    Url(String),
-    SocketAddr(SocketAddr),
-}
+/// An X509 certificate.
+#[cfg(feature = "tls")]
+#[derive(Clone)]
+pub struct Certificate(Arc<native_tls::Certificate>);
 
-impl From<SocketAddr> for Address {
-    fn from(addr: SocketAddr) -> Self {
-        Address::SocketAddr(addr)
+#[cfg(feature = "tls")]
+impl Certificate {
+    /// Parses a DER-formatted X509 certificate.
+    pub fn from_der(der: &[u8]) -> Result<Certificate> {
+        let inner = match native_tls::Certificate::from_der(der) {
+            Ok(certificate) => certificate,
+            Err(err) => return Err(Error::Other(err.into())),
+        };
+        Ok(Certificate(Arc::new(inner)))
+    }
+
+    /// Parses a PEM-formatted X509 certificate.
+    pub fn from_pem(der: &[u8]) -> Result<Certificate> {
+        let inner = match native_tls::Certificate::from_pem(der) {
+            Ok(certificate) => certificate,
+            Err(err) => return Err(Error::Other(err.into())),
+        };
+        Ok(Certificate(Arc::new(inner)))
     }
 }
 
-impl From<String> for Address {
-    fn from(url: String) -> Self {
-        Address::Url(url)
+#[cfg(feature = "tls")]
+impl fmt::Debug for Certificate {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "[Certificate]")
     }
 }
 
-impl From<&str> for Address {
-    fn from(url: &str) -> Self {
-        Address::Url(url.to_string())
+#[cfg(feature = "tls")]
+impl PartialEq for Certificate {
+    fn eq(&self, _other: &Self) -> bool {
+        true
     }
 }
 
-impl ToSocketAddrs for Address {
-    type Iter = vec::IntoIter<SocketAddr>;
-
-    fn to_socket_addrs(&self) -> io::Result<Self::Iter> {
-        match self {
-            Address::SocketAddr(addr) => Ok(vec![*addr].into_iter()),
-            Address::Url(url) => url.to_socket_addrs(),
-        }
+#[cfg(feature = "tls")]
+impl convert::From<Certificate> for native_tls::Certificate {
+    fn from(value: Certificate) -> Self {
+        value.0.as_ref().clone()
     }
 }
 
@@ -131,7 +149,7 @@ impl ToSocketAddrs for Address {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Options {
     /// Address of clickhouse server (defaults to `127.0.0.1:9000`).
-    pub(crate) addr: Address,
+    pub(crate) addr: Url,
 
     /// Database name. (defaults to `default`).
     pub(crate) database: String,
@@ -164,12 +182,24 @@ pub struct Options {
 
     /// Timeout for connection (defaults to `500 ms`)
     pub(crate) connection_timeout: Duration,
+
+    /// Enable TLS encryption (defaults to `false`)
+    #[cfg(feature = "tls")]
+    pub(crate) secure: bool,
+
+    /// Skip certificate verification (default is `false`).
+    #[cfg(feature = "tls")]
+    pub(crate) skip_verify: bool,
+
+    /// An X509 certificate.
+    #[cfg(feature = "tls")]
+    pub(crate) certificate: Option<Certificate>,
 }
 
 impl Default for Options {
     fn default() -> Self {
         Self {
-            addr: Address::SocketAddr("127.0.0.1:9000".parse().unwrap()),
+            addr: Url::parse("tcp://default@127.0.0.1:9000").unwrap(),
             database: "default".into(),
             username: "default".into(),
             password: "".into(),
@@ -183,6 +213,12 @@ impl Default for Options {
             retry_timeout: Duration::from_secs(5),
             ping_timeout: Duration::from_millis(500),
             connection_timeout: Duration::from_millis(500),
+            #[cfg(feature = "tls")]
+            secure: false,
+            #[cfg(feature = "tls")]
+            skip_verify: false,
+            #[cfg(feature = "tls")]
+            certificate: None,
         }
     }
 }
@@ -211,10 +247,10 @@ impl Options {
     /// Constructs a new Options.
     pub fn new<A>(addr: A) -> Self
     where
-        Address: From<A>,
+        A: Into<Url>,
     {
         Self {
-            addr: From::from(addr),
+            addr: addr.into(),
             ..Self::default()
         }
     }
@@ -286,6 +322,24 @@ impl Options {
         /// Timeout for connection (defaults to `500 ms`).
         => connection_timeout: Duration
     }
+
+    #[cfg(feature = "tls")]
+    property! {
+        /// Establish secure connection (default is `false`).
+        => secure: bool
+    }
+
+    #[cfg(feature = "tls")]
+    property! {
+        /// Skip certificate verification (default is `false`).
+        => skip_verify: bool
+    }
+
+    #[cfg(feature = "tls")]
+    property! {
+        /// An X509 certificate.
+        => certificate: Option<Certificate>
+    }
 }
 
 impl FromStr for Options {
@@ -320,12 +374,13 @@ fn from_url(url_str: &str) -> Result<Options> {
         options.password = password.into()
     }
 
-    let host = url
-        .host_str()
-        .map_or_else(|| "127.0.0.1".into(), String::from);
+    let mut addr = url.clone();
+    addr.set_path("");
+    addr.set_query(None);
 
-    let port = url.port().unwrap_or(9000);
-    options.addr = format!("{}:{}", host, port).into();
+    let port = url.port().or(Some(9000));
+    addr.set_port(port).map_err(|_| UrlError::Invalid)?;
+    options.addr = addr;
 
     if let Some(database) = get_database_from_url(&url)? {
         options.database = database.into();
@@ -356,6 +411,10 @@ where
                 options.connection_timeout = parse_param(key, value, parse_duration)?
             }
             "compression" => options.compression = parse_param(key, value, parse_compression)?,
+            #[cfg(feature = "tls")]
+            "secure" => options.secure = parse_param(key, value, bool::from_str)?,
+            #[cfg(feature = "tls")]
+            "skip_verify" => options.skip_verify = parse_param(key, value, bool::from_str)?,
             _ => return Err(UrlError::UnknownParameter { param: key.into() }),
         };
     }
@@ -432,6 +491,10 @@ fn parse_duration(source: &str) -> std::result::Result<Duration, ()> {
 }
 
 fn parse_opt_duration(source: &str) -> std::result::Result<Option<Duration>, ()> {
+    if source == "none" {
+        return Ok(None);
+    }
+
     let duration = parse_duration(source)?;
     Ok(Some(duration))
 }
@@ -446,9 +509,7 @@ fn parse_compression(source: &str) -> std::result::Result<bool, ()> {
 
 #[cfg(test)]
 mod test {
-    use std::time::Duration;
-
-    use super::{from_url, parse_compression, parse_duration, Options};
+    use super::*;
 
     #[test]
     fn test_parse_default() {
@@ -460,13 +521,35 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "tls")]
+    fn test_parse_secure_options() {
+        let url = "tcp://username:password@host1:9001/database?ping_timeout=42ms&keepalive=99s&compression=lz4&connection_timeout=10s&secure=true&skip_verify=true";
+        assert_eq!(
+            Options {
+                username: "username".into(),
+                password: "password".into(),
+                addr: Url::parse("tcp://username:password@host1:9001").unwrap(),
+                database: "database".into(),
+                keepalive: Some(Duration::from_secs(99)),
+                ping_timeout: Duration::from_millis(42),
+                connection_timeout: Duration::from_secs(10),
+                compression: true,
+                secure: true,
+                skip_verify: true,
+                ..Options::default()
+            },
+            from_url(url).unwrap(),
+        );
+    }
+
+    #[test]
     fn test_parse_options() {
         let url = "tcp://username:password@host1:9001/database?ping_timeout=42ms&keepalive=99s&compression=lz4&connection_timeout=10s";
         assert_eq!(
             Options {
                 username: "username".into(),
                 password: "password".into(),
-                addr: "host1:9001".into(),
+                addr: Url::parse("tcp://username:password@host1:9001").unwrap(),
                 database: "database".into(),
                 keepalive: Some(Duration::from_secs(99)),
                 ping_timeout: Duration::from_millis(42),
@@ -504,14 +587,23 @@ mod test {
         assert_eq!(parse_duration("3s").unwrap(), Duration::from_secs(3));
         assert_eq!(parse_duration("123ms").unwrap(), Duration::from_millis(123));
 
-        assert_eq!(parse_duration("ms").unwrap_err(), ());
-        assert_eq!(parse_duration("1ss").unwrap_err(), ());
+        parse_duration("ms").unwrap_err();
+        parse_duration("1ss").unwrap_err();
+    }
+
+    #[test]
+    fn test_parse_opt_duration() {
+        assert_eq!(
+            parse_opt_duration("3s").unwrap(),
+            Some(Duration::from_secs(3))
+        );
+        assert_eq!(parse_opt_duration("none").unwrap(), None::<Duration>);
     }
 
     #[test]
     fn test_parse_compression() {
         assert_eq!(parse_compression("none").unwrap(), false);
         assert_eq!(parse_compression("lz4").unwrap(), true);
-        assert_eq!(parse_compression("?").unwrap_err(), ());
+        parse_compression("?").unwrap_err();
     }
 }

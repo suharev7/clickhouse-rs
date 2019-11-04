@@ -206,7 +206,7 @@ impl Pool {
     fn new_connection(&self) -> BoxFuture<'static, Result<ClientHandle>> {
         let source = self.options.clone();
         let pool = Some(self.clone());
-        Box::pin(async move { Client::open(&source, pool).await })
+        Box::pin(async move { Client::open(source, pool).await })
     }
 
     fn handle_futures(&mut self, cx: &mut Context<'_>) -> Result<()> {

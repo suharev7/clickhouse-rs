@@ -1,3 +1,4 @@
+use failure::_core::cmp::Ordering;
 use std::fmt;
 
 static FACTORS10: &[i64] = &[
@@ -109,16 +110,18 @@ impl NoBits {
 
 impl PartialEq for Decimal {
     fn eq(&self, other: &Self) -> bool {
-        if self.scale == other.scale {
-            self.underlying == other.underlying
-        } else if other.scale < self.scale {
-            let delta = self.scale() - other.scale();
-            let underlying = other.underlying * FACTORS10[delta];
-            self.underlying == underlying
-        } else {
-            let delta = other.scale() - self.scale();
-            let underlying = self.underlying * FACTORS10[delta];
-            other.underlying == underlying
+        match self.scale.cmp(&other.scale) {
+            Ordering::Less => {
+                let delta = other.scale() - self.scale();
+                let underlying = self.underlying * FACTORS10[delta];
+                other.underlying == underlying
+            },
+            Ordering::Equal => self.underlying == other.underlying,
+            Ordering::Greater => {
+                let delta = self.scale() - other.scale();
+                let underlying = other.underlying * FACTORS10[delta];
+                self.underlying == underlying
+            },
         }
     }
 }
@@ -213,14 +216,16 @@ impl Decimal {
     }
 
     pub(crate) fn set_scale(self, scale: u8) -> Self {
-        let underlying = if scale == self.scale {
-            return self;
-        } else if scale < self.scale {
-            let delta = self.scale() - scale as usize;
-            self.underlying / FACTORS10[delta]
-        } else {
-            let delta = scale as usize - self.scale();
-            self.underlying * FACTORS10[delta]
+        let underlying = match scale.cmp(&self.scale) {
+            Ordering::Less => {
+                let delta = self.scale() - scale as usize;
+                self.underlying / FACTORS10[delta]
+            }
+            Ordering::Equal => return self,
+            Ordering::Greater => {
+                let delta = scale as usize - self.scale();
+                self.underlying * FACTORS10[delta]
+            }
         };
 
         Decimal {

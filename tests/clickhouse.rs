@@ -15,6 +15,7 @@ fn database_url() -> String {
     env::var("DATABASE_URL").unwrap_or_else(|_| "tcp://localhost:9000?compression=lz4".into())
 }
 
+#[cfg(feature = "tokio_io")]
 #[tokio::test]
 async fn test_ping() -> Result<(), Error> {
     let pool = Pool::new(database_url());
@@ -25,6 +26,7 @@ async fn test_ping() -> Result<(), Error> {
     Ok(())
 }
 
+#[cfg(feature = "tokio_io")]
 #[tokio::test]
 async fn test_connection_by_wrong_address() -> Result<(), Error> {
     let pool = Pool::new("tcp://badaddr:9000");
@@ -39,6 +41,7 @@ async fn test_connection_by_wrong_address() -> Result<(), Error> {
     Ok(())
 }
 
+#[cfg(feature = "tokio_io")]
 #[tokio::test]
 async fn test_create_table() -> Result<(), Error> {
     let ddl = r"
@@ -65,6 +68,7 @@ async fn test_create_table() -> Result<(), Error> {
     Ok(())
 }
 
+#[cfg(feature = "tokio_io")]
 #[tokio::test]
 async fn test_insert() -> Result<(), Error> {
     let ddl = r"
@@ -137,6 +141,7 @@ async fn test_insert() -> Result<(), Error> {
     Ok(())
 }
 
+#[cfg(feature = "tokio_io")]
 #[tokio::test]
 async fn test_select() -> Result<(), Error> {
     let ddl = "
@@ -224,6 +229,26 @@ async fn test_select() -> Result<(), Error> {
     Ok(())
 }
 
+#[cfg(feature = "async_std")]
+#[test]
+fn test_simple_select() {
+    use async_std::task;
+
+    async fn execute() -> Result<(), Error> {
+        let pool = Pool::new(database_url());
+        let mut c = pool.get_handle().await?;
+        let actual = c.query("SELECT 1 as A").fetch_all().await?;
+
+        let expected = Block::new().column("A", vec![1_u8]);
+        assert_eq!(expected, actual);
+
+        Ok(())
+    }
+
+    task::block_on(execute()).unwrap();
+}
+
+#[cfg(feature = "tokio_io")]
 #[tokio::test]
 async fn test_simple_select() -> Result<(), Error> {
     let pool = Pool::new(database_url());
@@ -262,6 +287,7 @@ async fn test_simple_select() -> Result<(), Error> {
     Ok(())
 }
 
+#[cfg(feature = "tokio_io")]
 #[tokio::test]
 async fn test_temporary_table() -> Result<(), Error> {
     let ddl = "CREATE TEMPORARY TABLE clickhouse_test_temporary_table (ID UInt64);";
@@ -285,6 +311,7 @@ async fn test_temporary_table() -> Result<(), Error> {
     Ok(())
 }
 
+#[cfg(feature = "tokio_io")]
 #[tokio::test]
 async fn test_with_totals() -> Result<(), Error> {
     let ddl = "
@@ -318,6 +345,7 @@ async fn test_with_totals() -> Result<(), Error> {
     Ok(())
 }
 
+#[cfg(feature = "tokio_io")]
 #[tokio::test]
 async fn test_stream_rows() -> Result<(), Error> {
     let pool = Pool::new(database_url());
@@ -336,6 +364,7 @@ async fn test_stream_rows() -> Result<(), Error> {
     Ok(())
 }
 
+#[cfg(feature = "tokio_io")]
 #[tokio::test]
 async fn test_concurrent_queries() -> Result<(), Error> {
     async fn query_sum(n: u64) -> Result<u64, Error> {
@@ -378,6 +407,7 @@ async fn test_concurrent_queries() -> Result<(), Error> {
     Ok(())
 }
 
+#[cfg(feature = "tokio_io")]
 #[tokio::test]
 async fn test_big_block() -> Result<(), Error> {
     let sql = "SELECT
@@ -392,6 +422,7 @@ async fn test_big_block() -> Result<(), Error> {
     Ok(())
 }
 
+#[cfg(feature = "tokio_io")]
 #[tokio::test]
 async fn test_nullable() -> Result<(), Error> {
     let ddl = "
@@ -485,6 +516,7 @@ async fn test_nullable() -> Result<(), Error> {
     Ok(())
 }
 
+#[cfg(feature = "tokio_io")]
 #[test]
 fn test_generic_column() {
     fn extract_to_vec<'a, T>(name: &str, block: &'a Block) -> Vec<T>
@@ -514,6 +546,7 @@ fn test_generic_column() {
     );
 }
 
+#[cfg(feature = "tokio_io")]
 #[tokio::test]
 async fn test_fixed_string() -> Result<(), Error> {
     let ddl = "
@@ -549,6 +582,7 @@ async fn test_fixed_string() -> Result<(), Error> {
     Ok(())
 }
 
+#[cfg(feature = "tokio_io")]
 #[tokio::test]
 async fn test_binary_string() -> Result<(), Error> {
     let ddl = "
@@ -595,6 +629,7 @@ async fn test_binary_string() -> Result<(), Error> {
     Ok(())
 }
 
+#[cfg(feature = "tokio_io")]
 #[tokio::test]
 async fn test_array() -> Result<(), Error> {
     let ddl = "
@@ -646,6 +681,7 @@ async fn test_array() -> Result<(), Error> {
     Ok(())
 }
 
+#[cfg(feature = "tokio_io")]
 #[allow(clippy::float_cmp)]
 #[tokio::test]
 async fn test_decimal() -> Result<(), Error> {
@@ -681,6 +717,7 @@ async fn test_decimal() -> Result<(), Error> {
     Ok(())
 }
 
+#[cfg(feature = "tokio_io")]
 #[tokio::test]
 async fn test_inconsistent_read() -> Result<(), Error> {
     let pool = Pool::new(database_url());
@@ -703,6 +740,7 @@ async fn test_inconsistent_read() -> Result<(), Error> {
     Ok(())
 }
 
+#[cfg(feature = "tokio_io")]
 #[tokio::test]
 async fn test_column_iter() -> Result<(), Error> {
     let ddl = r"
@@ -795,6 +833,7 @@ async fn test_column_iter() -> Result<(), Error> {
     Ok(())
 }
 
+#[cfg(feature = "tokio_io")]
 #[test]
 fn test_reconnect() {
     let url = format!("{}{}", database_url(), "&pool_max=1&pool_min=1");

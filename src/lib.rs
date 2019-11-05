@@ -1,5 +1,5 @@
 //! ## clickhouse-rs
-//! Tokio based asynchronous [Yandex ClickHouse](https://clickhouse.yandex/) client library for rust programming language.
+//! Asynchronous [Yandex ClickHouse](https://clickhouse.yandex/) client library for rust programming language.
 //!
 //! ### Installation
 //! Library hosted on [crates.io](https://crates.io/crates/clickhouse-rs/).
@@ -49,6 +49,15 @@
 //! tcp://user:password@host:9000/clicks?compression=lz4&ping_timeout=42ms
 //! ```
 //!
+//! ## Optional features
+//!
+//! `clickhouse-rs` puts some functionality behind optional features to optimize compile time
+//! for the most common use cases. The following features are available.
+//!
+//! - `tokio_io` *(enabled by default)* — I/O based on [Tokio](https://tokio.rs/).
+//! - `async_std` — I/O based on [async-std](https://async.rs/) (doesn't work together with `tokio_io`).
+//! - `tls` — TLS support (allowed only with `tokio_io`).
+//!
 //! ### Example
 //!
 //! ```rust
@@ -94,6 +103,7 @@ use std::{fmt, future::Future, time::Duration};
 use futures_core::{future::BoxFuture, stream::BoxStream};
 use futures_util::{future, future::FutureExt, stream, StreamExt};
 use log::info;
+#[cfg(feature = "tokio_io")]
 use tokio::timer::Timeout;
 
 use crate::{
@@ -192,6 +202,7 @@ macro_rules! try_opt {
     };
 }
 
+#[doc(hidden)]
 pub struct Client {
     _private: (),
 }
@@ -270,7 +281,7 @@ impl ClientHandle {
                     info = Some(server_info);
                 }
                 Ok(Packet::Exception(e)) => return Err(Error::Server(e)),
-                Err(e) => return Err(e.into()),
+                Err(e) => return Err(Error::Io(e)),
                 _ => return Err(Error::Driver(DriverError::UnexpectedPacket)),
             }
         }
@@ -299,7 +310,7 @@ impl ClientHandle {
                             h = Some(inner);
                         }
                         Ok(Packet::Exception(e)) => return Err(Error::Server(e)),
-                        Err(e) => return Err(e.into()),
+                        Err(e) => return Err(Error::Io(e)),
                         _ => return Err(Error::Driver(DriverError::UnexpectedPacket)),
                     }
                 }
@@ -359,7 +370,7 @@ impl ClientHandle {
                         | Ok(Packet::ProfileInfo(_))
                         | Ok(Packet::Progress(_)) => (),
                         Ok(Packet::Exception(e)) => return Err(Error::Server(e)),
-                        Err(e) => return Err(e.into()),
+                        Err(e) => return Err(Error::Io(e)),
                         _ => return Err(Error::Driver(DriverError::UnexpectedPacket)),
                     }
                 }
@@ -493,6 +504,19 @@ impl ClientHandle {
     }
 }
 
+#[cfg(feature = "async_std")]
+async fn with_timeout<F, T>(future: F, duration: Duration) -> F::Output
+where
+    F: Future<Output = Result<T>>,
+{
+    use async_std::io;
+
+    Ok(io::timeout(duration, async move {
+        Ok(future.await?)
+    }).await?)
+}
+
+#[cfg(not(feature = "async_std"))]
 async fn with_timeout<F, T>(future: F, timeout: Duration) -> F::Output
 where
     F: Future<Output = Result<T>>,

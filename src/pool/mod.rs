@@ -7,7 +7,6 @@ use std::{
 
 use futures_core::future::BoxFuture;
 use log::error;
-use tokio::prelude::*;
 
 use crate::{
     Client,
@@ -16,6 +15,7 @@ use crate::{
 };
 
 pub use self::futures::GetHandle;
+use futures_util::FutureExt;
 
 mod futures;
 
@@ -274,6 +274,7 @@ impl Drop for ClientHandle {
     }
 }
 
+#[cfg(feature = "tokio_io")]
 #[cfg(test)]
 mod test {
     use std::{

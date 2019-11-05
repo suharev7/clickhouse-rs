@@ -511,17 +511,9 @@ where
 {
     use async_std::io;
 
-    let ret: io::Result<T> = io::timeout(duration, async move {
-        match future.await {
-            Ok(r) => Ok(r),
-            Err(e) => Err(e.into()),
-        }
-    }).await;
-
-    match ret {
-        Ok(result) => Ok(result),
-        Err(e) => Err(Error::Io(e)),
-    }
+    Ok(io::timeout(duration, async move {
+        Ok(future.await?)
+    }).await?)
 }
 
 #[cfg(feature = "tokio")]

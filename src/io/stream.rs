@@ -42,16 +42,16 @@ impl From<SecureTcpStream> for Stream {
 }
 
 impl Stream {
+    #[cfg(feature = "async_std")]
     pub(crate) fn set_keepalive(&mut self, keepalive: Option<Duration>) -> io::Result<()> {
-        #[cfg(feature = "async_std")]
-        {
-            use log::warn;
-            if keepalive.is_some() {
-                warn!("`std_async` doesn't support `set_keepalive`.")
-            }
-            Ok(())
+        if keepalive.is_some() {
+            log::warn!("`std_async` doesn't support `set_keepalive`.")
         }
-        #[cfg(not(feature = "async_std"))]
+        Ok(())
+    }
+
+    #[cfg(not(feature = "async_std"))]
+    pub(crate) fn set_keepalive(&mut self, keepalive: Option<Duration>) -> io::Result<()> {
         match *self {
             Self::Plain(ref mut stream) => stream.set_keepalive(keepalive),
             #[cfg(feature = "tls")]
@@ -80,7 +80,7 @@ impl Stream {
     #[project]
     pub(crate) fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
         #[project]
-            match self.project() {
+        match self.project() {
             Stream::Plain(stream) => stream.poll_write(cx, buf),
             #[cfg(feature = "tls")]
             Stream::Secure(stream) => stream.poll_write(cx, buf),

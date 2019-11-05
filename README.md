@@ -6,7 +6,7 @@
 [![dependency status](https://deps.rs/repo/github/suharev7/clickhouse-rs/status.svg)](https://deps.rs/repo/github/suharev7/clickhouse-rs)
 [![Coverage Status](https://coveralls.io/repos/github/suharev7/clickhouse-rs/badge.svg)](https://coveralls.io/github/suharev7/clickhouse-rs)
 
-Tokio based asynchronous [Yandex ClickHouse](https://clickhouse.yandex/) client library for rust programming language. 
+Asynchronous [Yandex ClickHouse](https://clickhouse.yandex/) client library for rust programming language. 
 
 ## Installation
 Library hosted on [crates.io](https://crates.io/crates/clickhouse-rs/).
@@ -54,6 +54,15 @@ example:
 ```url
 tcp://user:password@host:9000/clicks?compression=lz4&ping_timeout=42ms
 ```
+
+## Optional features
+
+`clickhouse-rs` puts some functionality behind optional features to optimize compile time 
+for the most common use cases. The following features are available.
+
+- **`tokio_io`** *(enabled by default)* — I/O based on [Tokio](https://tokio.rs/).
+- **`async_std`** — I/O based on [async-std](https://async.rs/) (doesn't work together with `tokio_io`).
+- **`tls`** — TLS support (allowed only with `tokio_io`).
 
 ## Example
 

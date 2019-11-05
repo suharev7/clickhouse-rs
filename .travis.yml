@@ -31,6 +31,7 @@ before_install:
   - export PATH=$HOME/.cargo/bin:$PATH;
 script:
   - RUST_BACKTRACE=1 cargo test --all --verbose
-  - cargo clippy --all-targets --all-features -- -D warnings;
+  - cargo test --package clickhouse-rs --features async_std --no-default-features --test clickhouse -- --exact
+  - cargo clippy --all-targets -- -D warnings;
 after_success:
   - cargo coveralls --exclude-pattern target,clickhouse-rs-cityhash-sys,tests;

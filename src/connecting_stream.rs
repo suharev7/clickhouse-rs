@@ -12,7 +12,10 @@ use futures_util::{try_future::{select_ok, SelectOk}, TryFutureExt};
 
 #[cfg(feature = "tls")]
 use native_tls::TlsConnector;
+#[cfg(feature = "tokio_io")]
 use tokio::net::TcpStream;
+#[cfg(feature = "async_std")]
+use async_std::net::TcpStream;
 
 use pin_project::{pin_project, project};
 use url::Url;

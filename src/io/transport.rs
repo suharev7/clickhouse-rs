@@ -9,7 +9,6 @@ use std::{
 
 use chrono_tz::Tz;
 use log::trace;
-use tokio::prelude::*;
 
 use pin_project::{pin_project, project};
 
@@ -20,6 +19,8 @@ use crate::{
     types::{Block, Cmd, Packet},
     pool::{Pool, Inner},
 };
+use futures_core::Stream;
+use futures_util::StreamExt;
 
 /// Line transport
 #[pin_project]
@@ -98,7 +99,7 @@ impl ClickhouseTransport {
                 }
                 Ok(Packet::Eof(inner)) => h = Some(inner),
                 Ok(Packet::Exception(e)) => return Err(Error::Server(e)),
-                Err(e) => return Err(e.into()),
+                Err(e) => return Err(Error::Io(e)),
                 _ => {}
             }
         }
@@ -290,7 +291,7 @@ impl PacketStream {
                 Ok(Packet::Eof(inner)) => h = Some(inner),
                 Ok(Packet::Block(block)) => b = Some(block),
                 Ok(Packet::Exception(e)) => return Err(Error::Server(e)),
-                Err(e) => return Err(e.into()),
+                Err(e) => return Err(Error::Io(e)),
                 _ => return Err(Error::Driver(DriverError::UnexpectedPacket)),
             }
         }

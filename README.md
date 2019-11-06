@@ -1,4 +1,4 @@
-# Tokio ClickHouse Client 
+# Async ClickHouse Client 
 
 [![Build Status](https://travis-ci.com/suharev7/clickhouse-rs.svg?branch=master)](https://travis-ci.com/suharev7/clickhouse-rs)
 [![Crate info](https://img.shields.io/crates/v/clickhouse-rs.svg)](https://crates.io/crates/clickhouse-rs)

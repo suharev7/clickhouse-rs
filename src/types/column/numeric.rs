@@ -18,8 +18,8 @@ use super::{
 };
 
 pub struct VectorColumnData<T>
-where
-    T: StatBuffer
+    where
+        T: StatBuffer
         + Unmarshal<T>
         + Marshal
         + Copy
@@ -33,8 +33,8 @@ where
 }
 
 impl<T> ColumnFrom for Vec<T>
-where
-    T: StatBuffer
+    where
+        T: StatBuffer
         + Unmarshal<T>
         + Marshal
         + Copy
@@ -55,9 +55,9 @@ where
 }
 
 impl<T> ColumnFrom for Vec<Option<T>>
-where
-    Value: convert::From<T>,
-    T: StatBuffer
+    where
+        Value: convert::From<T>,
+        T: StatBuffer
         + Unmarshal<T>
         + Marshal
         + Copy
@@ -86,9 +86,9 @@ where
 }
 
 impl<T> ColumnFrom for Vec<Vec<T>>
-where
-    Value: convert::From<T>,
-    T: StatBuffer
+    where
+        Value: convert::From<T>,
+        T: StatBuffer
         + Unmarshal<T>
         + Marshal
         + Copy
@@ -118,9 +118,9 @@ where
 }
 
 fn to_array<T>(sql_type: SqlType, vs: Vec<T>) -> Value
-where
-    Value: convert::From<T>,
-    T: StatBuffer
+    where
+        Value: convert::From<T>,
+        T: StatBuffer
         + Unmarshal<T>
         + Marshal
         + Copy
@@ -140,8 +140,8 @@ where
 }
 
 impl<T> VectorColumnData<T>
-where
-    T: StatBuffer
+    where
+        T: StatBuffer
         + Unmarshal<T>
         + Marshal
         + Copy
@@ -168,8 +168,8 @@ where
 }
 
 impl<T> ColumnData for VectorColumnData<T>
-where
-    T: StatBuffer
+    where
+        T: StatBuffer
         + Unmarshal<T>
         + Marshal
         + Copy
@@ -212,6 +212,9 @@ where
             Value::Float32(x) => ValueRef::Float32(x),
             Value::Float64(x) => ValueRef::Float64(x),
 
+            Value::Enum8(x) => ValueRef::Enum8(x),
+            Value::Enum16(x) => ValueRef::Enum16(x),
+
             _ => panic!("can't convert value to value_ref."),
         }
     }
@@ -232,7 +235,7 @@ where
 
 pub(crate) fn save_data<T>(data: &[u8], encoder: &mut Encoder, start: usize, end: usize) {
     let start_index = start * mem::size_of::<T>();
-    let end_index =  end * mem::size_of::<T>();
+    let end_index = end * mem::size_of::<T>();
 
     encoder.write_bytes(&data[start_index..end_index]);
 }

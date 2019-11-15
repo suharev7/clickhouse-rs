@@ -398,7 +398,7 @@ async fn test_temporary_table() -> Result<(), Error> {
         "INSERT INTO clickhouse_test_temporary_table (ID) \
          SELECT number AS ID FROM system.numbers LIMIT 10",
     )
-    .await?;
+        .await?;
     let block = c
         .query("SELECT ID AS ID FROM clickhouse_test_temporary_table")
         .fetch_all()
@@ -642,8 +642,8 @@ async fn test_nullable() -> Result<(), Error> {
 #[test]
 fn test_generic_column() {
     fn extract_to_vec<'a, T>(name: &str, block: &'a Block) -> Vec<T>
-    where
-        T: FromSql<'a> + fmt::Debug + 'static,
+        where
+            T: FromSql<'a> + fmt::Debug + 'static,
     {
         let n = block.row_count();
         let mut result = Vec::with_capacity(n);
@@ -752,6 +752,40 @@ async fn test_binary_string() -> Result<(), Error> {
 }
 
 #[cfg(feature = "tokio_io")]
+#[tokio::test]
+async fn test_enum8() -> Result<(), Error> {
+    let ddl = "
+        CREATE TABLE IF NOT EXISTS clickhouse_enum8 (
+            enum_8        Enum8(
+                                'zero' = 0,
+                                'first' = 1
+                          )
+        ) Engine=Memory";
+
+    let query = "
+        SELECT
+            enum_8
+        FROM clickhouse_enum8";
+
+    let block = Block::new()
+        .column("enum_8", vec![0 as i8,1 as i8]);
+
+    let pool = Pool::new(database_url());
+    let mut c = pool.get_handle().await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_binary_string")
+        .await?;
+    c.execute(ddl).await?;
+    c.insert("clickhouse_enum8", block).await?;
+//    let block = c.query(query).fetch_all().await?;
+
+//    let enum_8: &[u8] = block.get(0, "enum_8")?;
+
+//    assert_eq!(2, block.row_count());
+//    assert_eq!([0,1].as_ref(), enum_8);
+
+    Ok(())
+}
+
 #[tokio::test]
 async fn test_array() -> Result<(), Error> {
     let ddl = "

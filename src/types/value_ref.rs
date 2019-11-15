@@ -33,6 +33,8 @@ pub enum ValueRef<'a> {
     Nullable(Either<&'static SqlType, Box<ValueRef<'a>>>),
     Array(&'static SqlType, Arc<Vec<ValueRef<'a>>>),
     Decimal(Decimal),
+    Enum8(i8),
+    Enum16(i16),
     Ipv4([u8; 4]),
     Ipv6([u8; 16]),
     Uuid([u8; 16])
@@ -65,6 +67,8 @@ impl<'a> PartialEq for ValueRef<'a> {
             (ValueRef::Nullable(a), ValueRef::Nullable(b)) => *a == *b,
             (ValueRef::Array(ta, a), ValueRef::Array(tb, b)) => *ta == *tb && *a == *b,
             (ValueRef::Decimal(a), ValueRef::Decimal(b)) => *a == *b,
+            (ValueRef::Enum8(a), ValueRef::Enum8(b)) => *a == *b,
+            (ValueRef::Enum16(a), ValueRef::Enum16(b)) => *a == *b,
             _ => false,
         }
     }
@@ -114,6 +118,8 @@ impl<'a> fmt::Display for ValueRef<'a> {
                 write!(f, "[{}]", cells.join(", "))
             }
             ValueRef::Decimal(v) => fmt::Display::fmt(v, f),
+            ValueRef::Enum8(v) => fmt::Display::fmt(v, f),
+            ValueRef::Enum16(v) => fmt::Display::fmt(v, f),
             ValueRef::Ipv4(v) => {
                 write!(f, "{}", Ipv4Addr::from(*v))
             }
@@ -155,6 +161,8 @@ impl<'a> convert::From<ValueRef<'a>> for SqlType {
             ValueRef::Ipv4(_) => SqlType::Ipv4,
             ValueRef::Ipv6(_) => SqlType::Ipv6,
             ValueRef::Uuid(_) => SqlType::Uuid,
+            ValueRef::Enum8(_) => SqlType::Enum8,
+            ValueRef::Enum16(_) => SqlType::Enum16
         }
     }
 }
@@ -223,6 +231,8 @@ impl<'a> From<ValueRef<'a>> for Value {
             ValueRef::Ipv4(v) => Value::Ipv4(v),
             ValueRef::Ipv6(v) => Value::Ipv6(v),
             ValueRef::Uuid(v) => Value::Uuid(v),
+            ValueRef::Enum8(v) => Value::Enum8(v),
+            ValueRef::Enum16(v) => Value::Enum16(v)
         }
     }
 }
@@ -298,6 +308,8 @@ impl<'a> From<&'a Value> for ValueRef<'a> {
                 ValueRef::Array(*t, Arc::new(ref_vec))
             }
             Value::Decimal(v) => ValueRef::Decimal(v.clone()),
+            Value::Enum8(v) => ValueRef::Enum8(*v),
+            Value::Enum16(v) => ValueRef::Enum16(*v),
             Value::Ipv4(v) => ValueRef::Ipv4(*v),
             Value::Ipv6(v) => ValueRef::Ipv6(*v),
             Value::Uuid(v) => ValueRef::Uuid(*v)

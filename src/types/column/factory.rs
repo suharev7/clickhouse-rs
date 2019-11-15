@@ -130,6 +130,8 @@ impl dyn ColumnData {
                     nobits,
                 })
             }
+            SqlType::Enum8 => W::wrap(VectorColumnData::<i8>::with_capacity(DEFAULT_CAPACITY)),
+            SqlType::Enum16 => W::wrap(VectorColumnData::<i16>::with_capacity(DEFAULT_CAPACITY)),
         })
     }
 }
@@ -261,9 +263,15 @@ fn parse_enum8(source: &str) -> Option<Vec<(String, i8)>> {
     if !source.starts_with(prefix) || !source.ends_with(suffix) {
         return None;
     }
-    let _source = &source[prefix.len()..source.len() - suffix.len()];
+    let source = String::from(&source[prefix.len()..source.len() - suffix.len()]);
+    let mut real_enums = vec![];
 
-    Some(vec![]) // TODO
+    for enum_string in source.split(",").map(|s| s.trim()) {
+        let values: Vec<&str> = enum_string.split("=").map(|s| s.trim()).collect();
+        real_enums.push((values[0].to_string(), values[1].to_string().parse::<i8>().unwrap()));
+    }
+    println!("{:?}", real_enums);
+    Some(real_enums) // TODO Catch exceptions use normal names without \'
 }
 
 fn parse_enum16(source: &str) -> Option<Vec<(String, i8)>> {

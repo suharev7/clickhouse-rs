@@ -41,7 +41,8 @@ pub(crate) enum NoBits {
 #[derive(Clone)]
 pub struct Decimal {
     pub(crate) underlying: i64,
-    pub(crate) nobits: NoBits, // its domain is {32, 64}
+    pub(crate) nobits: NoBits,
+    // its domain is {32, 64}
     pub(crate) precision: u8,
     pub(crate) scale: u8,
 }
@@ -183,6 +184,22 @@ impl Decimal {
             nobits: NoBits::N64,
         }
     }
+    /// Method of creating raw Decimal without scaling
+    pub fn of_no_scale(source: i64, scale: u8) -> Decimal {
+        let precision = 18;
+        if scale > precision {
+            panic!("scale can't be greater than 18");
+        }
+
+        let underlying = source;
+
+        Decimal {
+            underlying,
+            precision,
+            scale,
+            nobits: NoBits::N64,
+        }
+    }
 
     /// Get the internal representation of decimal as [`i32`] or [`i64`].
     ///
@@ -313,5 +330,10 @@ mod test {
         let d = Decimal::of(0.00001, 5);
         let actual = decimal2str(&d);
         assert_eq!(actual, "0.00001".to_string());
+    }
+    #[test]
+    fn test_raw_decimal() {
+        assert_eq!(Decimal::of(0.2_f64, 1), Decimal::of_no_scale(2, 1));
+        assert_eq!(Decimal::of(0.00002_f64, 5), Decimal::of_no_scale(2, 5));
     }
 }

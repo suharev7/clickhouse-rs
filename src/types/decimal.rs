@@ -191,10 +191,8 @@ impl Decimal {
             panic!("scale can't be greater than 18");
         }
 
-        let underlying = source;
-
         Decimal {
-            underlying,
+            underlying: source,
             precision,
             scale,
             nobits: NoBits::N64,

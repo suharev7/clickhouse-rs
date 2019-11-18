@@ -27,6 +27,7 @@ use crate::{
 use self::chunk::ChunkColumnData;
 pub(crate) use self::{column_data::ColumnData, string_pool::StringPool};
 pub use self::{concat::ConcatColumnData, numeric::VectorColumnData};
+use crate::types::column::enums::Enum8Adapter;
 
 mod array;
 mod chunk;
@@ -44,6 +45,7 @@ mod numeric;
 mod string;
 mod string_pool;
 mod enums;
+
 /// Represents Clickhouse Column
 pub struct Column<K: ColumnType> {
     pub(crate) name: String,
@@ -121,8 +123,8 @@ impl<K: ColumnType> Clone for Column<K> {
 
 impl Column<Simple> {
     pub(crate) fn concat<'a, I>(items: I) -> Column<Complex>
-    where
-        I: Iterator<Item = &'a Self>,
+        where
+            I: Iterator<Item=&'a Self>,
     {
         let items_vec: Vec<&Self> = items.collect();
         let chunks: Vec<_> = items_vec.iter().map(|column| column.data.clone()).collect();
@@ -238,7 +240,7 @@ impl<K: ColumnType> Column<K> {
             return Ok(self);
         }
 
-        match (dst_type, src_type) {
+        match (dst_type.clone(), src_type.clone()) {
             (SqlType::FixedString(str_len), SqlType::String) => {
                 let name = self.name().to_owned();
                 let adapter = FixedStringAdapter {
@@ -294,6 +296,19 @@ impl<K: ColumnType> Column<K> {
                     _marker: marker::PhantomData,
                 })
             }
+            (SqlType::Enum8(enum_values), SqlType::Enum8(_)) => {
+                let name = self.name().to_owned();
+                let adapter = Enum8Adapter {
+                    column: self,
+                    enum_values: enum_values.clone(),
+                };
+                Ok(Column {
+                    name,
+                    data: Arc::new(adapter),
+                    _marker: marker::PhantomData,
+                })
+            }
+            // TODO Nullable enum
             (
                 SqlType::Nullable(SqlType::Decimal(dst_p, dst_s)),
                 SqlType::Nullable(SqlType::Decimal(_, _)),
@@ -357,8 +372,8 @@ impl<K: ColumnType> Column<K> {
                 })
             }
             _ => Err(Error::FromSql(FromSqlError::InvalidType {
-                src: src_type.to_string(),
-                dst: dst_type.to_string(),
+                src: src_type.clone().to_string(),
+                dst: dst_type.clone().to_string(),
             })),
         }
     }
@@ -395,9 +410,9 @@ pub(crate) fn new_column<K: ColumnType>(
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Either<L, R>
-where
-    L: fmt::Debug + PartialEq + Clone,
-    R: fmt::Debug + PartialEq + Clone,
+    where
+        L: fmt::Debug + PartialEq + Clone,
+        R: fmt::Debug + PartialEq + Clone,
 {
     Left(L),
     Right(R),

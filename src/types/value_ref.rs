@@ -34,7 +34,7 @@ pub enum ValueRef<'a> {
     Nullable(Either<&'static SqlType, Box<ValueRef<'a>>>),
     Array(&'static SqlType, Arc<Vec<ValueRef<'a>>>),
     Decimal(Decimal),
-    Enum8(Enum8),
+    Enum8(Vec<(String, i8)>, Enum8),
     Enum16(i16),
     Ipv4([u8; 4]),
     Ipv6([u8; 16]),
@@ -68,7 +68,7 @@ impl<'a> PartialEq for ValueRef<'a> {
             (ValueRef::Nullable(a), ValueRef::Nullable(b)) => *a == *b,
             (ValueRef::Array(ta, a), ValueRef::Array(tb, b)) => *ta == *tb && *a == *b,
             (ValueRef::Decimal(a), ValueRef::Decimal(b)) => *a == *b,
-            (ValueRef::Enum8(a), ValueRef::Enum8(b)) => *a == *b,
+            (ValueRef::Enum8(a0, a1), ValueRef::Enum8(b0, b1)) => *a1 == *b1 && *a0 == *b0,
             (ValueRef::Enum16(a), ValueRef::Enum16(b)) => *a == *b,
             _ => false,
         }
@@ -119,7 +119,7 @@ impl<'a> fmt::Display for ValueRef<'a> {
                 write!(f, "[{}]", cells.join(", "))
             }
             ValueRef::Decimal(v) => fmt::Display::fmt(v, f),
-            ValueRef::Enum8(v) => fmt::Display::fmt(v, f),
+            ValueRef::Enum8(_, v) => fmt::Display::fmt(v, f),
             ValueRef::Enum16(v) => fmt::Display::fmt(v, f),
             ValueRef::Ipv4(v) => {
                 write!(f, "{}", Ipv4Addr::from(*v))
@@ -214,7 +214,7 @@ impl<'a> From<ValueRef<'a>> for Value {
             ValueRef::Date(v, tz) => Value::Date(v, tz),
             ValueRef::DateTime(v, tz) => Value::DateTime(v, tz),
             ValueRef::Nullable(u) => match u {
-                Either::Left(sql_type) => Value::Nullable(Either::Left((*sql_type).into())),
+                Either::Left(sql_type) => Value::Nullable(Either::Left((sql_type.clone()).into())),
                 Either::Right(v) => {
                     let value: Value = (*v).into();
                     Value::Nullable(Either::Right(Box::new(value)))
@@ -309,7 +309,7 @@ impl<'a> From<&'a Value> for ValueRef<'a> {
                 ValueRef::Array(*t, Arc::new(ref_vec))
             }
             Value::Decimal(v) => ValueRef::Decimal(v.clone()),
-            Value::Enum8(v) => ValueRef::Enum8(v.clone()),
+            Value::Enum8(values, v) => ValueRef::Enum8(values.to_vec(), v.clone()),
             Value::Enum16(v) => ValueRef::Enum16(*v),
             Value::Ipv4(v) => ValueRef::Ipv4(*v),
             Value::Ipv6(v) => ValueRef::Ipv6(*v),

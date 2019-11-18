@@ -15,12 +15,13 @@ use crate::{
         from_sql::FromSql, SqlType, Value, ValueRef,
     },
 };
+
 use crate::types::column::decimal::DecimalColumnData;
 use crate::types::column::numeric::save_data;
 use crate::types::enums::Enum8;
 
 pub(crate) struct Enum8ColumnData {
-    pub(crate) enum_values: Option<Vec<(String, i8)>>,
+    pub(crate) enum_values: Vec<(String, i8)>,
     pub(crate) inner: Box<dyn ColumnData + Send + Sync>,
 }
 
@@ -31,7 +32,7 @@ pub(crate) struct Enum8Adapter<K: ColumnType> {
 
 pub(crate) struct NullableEnum8Adapter<K: ColumnType> {
     pub(crate) column: Column<K>,
-    pub(crate) data: i8,
+    pub(crate) enum_values: Vec<(String, i8)>,
 }
 
 impl Enum8ColumnData {
@@ -45,7 +46,7 @@ impl Enum8ColumnData {
         let inner = ColumnData::load_data::<BoxColumnWrapper, _>(reader, type_name, size, tz)?;
 
         Ok(Enum8ColumnData {
-            enum_values: Some(enum_values),
+            enum_values,
             inner,
         })
     }
@@ -53,7 +54,7 @@ impl Enum8ColumnData {
 
 impl ColumnData for Enum8ColumnData {
     fn sql_type(&self) -> SqlType {
-        SqlType::Enum8
+        SqlType::Enum8(self.enum_values.clone())
     }
 
     fn save(&self, encoder: &mut Encoder, start: usize, end: usize) {
@@ -65,7 +66,7 @@ impl ColumnData for Enum8ColumnData {
     }
 
     fn push(&mut self, value: Value) {
-        if let Value::Enum8(enum8) = value {
+        if let Value::Enum8(values, enum8) = value {
             // TODO Validate enum or get string or smth else
 
             self.inner.push(Value::Int8(enum8.internal()));
@@ -75,8 +76,11 @@ impl ColumnData for Enum8ColumnData {
     }
 
     fn at(&self, index: usize) -> ValueRef {
+//        unimplemented!()
+        let a = self.inner.at(index);
+
         let value = i8::from(self.inner.at(index));
-        ValueRef::Enum8(Enum8(value))
+        ValueRef::Enum8(self.enum_values.clone(), Enum8(value))
     }
 
     fn clone_instance(&self) -> BoxColumnData {
@@ -97,13 +101,13 @@ impl ColumnData for Enum8ColumnData {
 
 impl<K: ColumnType> ColumnData for Enum8Adapter<K> {
     fn sql_type(&self) -> SqlType {
-        SqlType::Enum8
+        SqlType::Enum8(self.enum_values.clone())
     }
 
     fn save(&self, encoder: &mut Encoder, start: usize, end: usize) {
         for i in start..end {
-            if let ValueRef::Enum8(value) = self.at(i) {
-                encoder.write(value.0);
+            if let ValueRef::Enum8(enum_values, value) = self.at(i) {
+                encoder.write(value.internal());
             } else {
                 panic!("should be enum8");
             }
@@ -119,8 +123,8 @@ impl<K: ColumnType> ColumnData for Enum8Adapter<K> {
     }
 
     fn at(&self, index: usize) -> ValueRef {
-        if let ValueRef::Enum8(value) = self.column.at(index) {
-            ValueRef::Enum8(value)
+        if let ValueRef::Enum8(enum_values, value) = self.column.at(index) {
+            ValueRef::Enum8(enum_values, value)
         } else {
             panic!("should be enum8");
         }
@@ -133,7 +137,7 @@ impl<K: ColumnType> ColumnData for Enum8Adapter<K> {
 
 impl<K: ColumnType> ColumnData for NullableEnum8Adapter<K> {
     fn sql_type(&self) -> SqlType {
-        SqlType::Nullable(SqlType::Enum8.into())
+        SqlType::Nullable(SqlType::Enum8(self.enum_values.clone()).into())
     }
 
     fn save(&self, encoder: &mut Encoder, start: usize, end: usize) {
@@ -165,14 +169,15 @@ impl<K: ColumnType> ColumnData for NullableEnum8Adapter<K> {
     }
 
     fn at(&self, index: usize) -> ValueRef {
-        let value: Option<i8> = Option::from_sql(self.column.at(index)).unwrap();
-        match value {
-            None => ValueRef::Nullable(Either::Left(self.sql_type().into())),
-            Some(v) => {
-                let inner = ValueRef::Enum8(Enum8(v));
-                ValueRef::Nullable(Either::Right(Box::new(inner)))
-            }
-        }
+        unimplemented!();
+//        let value: Option<i8> = Option::from_sql(self.column.at(index)).unwrap();
+//        match value {
+//            None => ValueRef::Nullable(Either::Left(self.sql_type().into())),
+//            Some(v) => {
+//                let inner = ValueRef::Enum8(Enum8(v));
+//                ValueRef::Nullable(Either::Right(Box::new(inner)))
+//            }
+//        }
     }
 
     fn clone_instance(&self) -> BoxColumnData {
@@ -191,7 +196,7 @@ impl ColumnFrom for Vec<Enum8> {
 
         let column = Enum8ColumnData {
             inner,
-            enum_values: None,
+            enum_values: vec![],
         };
 
         W::wrap(column)

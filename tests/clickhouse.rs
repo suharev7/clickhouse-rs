@@ -23,7 +23,7 @@ use futures_util::{
 
 use clickhouse_rs::{
     errors::Error,
-    types::{Decimal, FromSql},
+    types::{Decimal, FromSql, Enum8},
     Block, Pool,
 };
 use uuid::Uuid;
@@ -762,13 +762,13 @@ async fn test_enum8() -> Result<(), Error> {
                           )
         ) Engine=Memory";
 
-    let query = "
+    let _query = "
         SELECT
             enum_8
         FROM clickhouse_enum8";
 
     let block = Block::new()
-        .column("enum_8", vec![0 as i8,1 as i8]);
+        .column("enum_8", vec![Enum8::of(0),Enum8::of(1)]);
 
     let pool = Pool::new(database_url());
     let mut c = pool.get_handle().await?;

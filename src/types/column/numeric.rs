@@ -236,6 +236,5 @@ impl<T> ColumnData for VectorColumnData<T>
 pub(crate) fn save_data<T>(data: &[u8], encoder: &mut Encoder, start: usize, end: usize) {
     let start_index = start * mem::size_of::<T>();
     let end_index = end * mem::size_of::<T>();
-
     encoder.write_bytes(&data[start_index..end_index]);
 }

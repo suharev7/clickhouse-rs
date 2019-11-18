@@ -8,7 +8,7 @@ use crate::{
         decimal::DecimalColumnData, fixed_string::FixedStringColumnData, list::List,
         nullable::NullableColumnData, numeric::VectorColumnData, string::StringColumnData,
         ip::{IpColumnData, Ipv4, Ipv6, Uuid},
-        BoxColumnWrapper, ColumnWrapper,
+        BoxColumnWrapper, ColumnWrapper,enums::{Enum8ColumnData},
     },
     types::decimal::NoBits,
     SqlType,
@@ -66,8 +66,8 @@ impl dyn ColumnData {
                     W::wrap(DecimalColumnData::load(
                         reader, precision, scale, nobits, size, tz,
                     )?)
-                } else if let Some(_items) = parse_enum8(type_name) {
-                    W::wrap(VectorColumnData::<i8>::load(reader, size)?)
+                } else if let Some(items) = parse_enum8(type_name) {
+                    W::wrap(Enum8ColumnData::load(reader, items, size, tz)?)
                 } else if let Some(_items) = parse_enum16(type_name) {
                     W::wrap(VectorColumnData::<i16>::load(reader, size)?)
                 } else {

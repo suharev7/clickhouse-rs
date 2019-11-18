@@ -331,6 +331,7 @@ mod test {
         let actual = decimal2str(&d);
         assert_eq!(actual, "0.00001".to_string());
     }
+
     #[test]
     fn test_raw_decimal() {
         assert_eq!(Decimal::of(0.2_f64, 1), Decimal::of_no_scale(2, 1));

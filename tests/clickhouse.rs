@@ -756,32 +756,32 @@ async fn test_binary_string() -> Result<(), Error> {
 async fn test_enum8() -> Result<(), Error> {
     let ddl = "
         CREATE TABLE IF NOT EXISTS clickhouse_enum8 (
-            enum_8        Enum8(
+            enum_8_row        Enum8(
                                 'zero' = 0,
                                 'first' = 1
                           )
         ) Engine=Memory";
 
-    let _query = "
+    let query = "
         SELECT
-            enum_8
+            enum_8_row
         FROM clickhouse_enum8";
 
     let block = Block::new()
-        .column("enum_8", vec![Enum8::of(0),Enum8::of(1)]);
+        .column("enum_8_row", vec![Enum8::of(0), Enum8::of(1)]);
 
     let pool = Pool::new(database_url());
     let mut c = pool.get_handle().await?;
-    c.execute("DROP TABLE IF EXISTS clickhouse_binary_string")
+    c.execute("DROP TABLE IF EXISTS clickhouse_enum8")
         .await?;
     c.execute(ddl).await?;
     c.insert("clickhouse_enum8", block).await?;
-//    let block = c.query(query).fetch_all().await?;
+    let block = c.query(query).fetch_all().await?;
 
-//    let enum_8: &[u8] = block.get(0, "enum_8")?;
+    let enum_8: Vec<Enum8> = block.get(0, "enum_8_row")?;
 
-//    assert_eq!(2, block.row_count());
-//    assert_eq!([0,1].as_ref(), enum_8);
+    assert_eq!(2, block.row_count());
+//    assert_eq!(vec!([0, 1]), enum_8);
 
     Ok(())
 }

@@ -12,6 +12,7 @@ use crate::{
         SqlType, Value,
     },
 };
+use crate::types::Enum8;
 
 use uuid::Uuid;
 
@@ -33,7 +34,7 @@ pub enum ValueRef<'a> {
     Nullable(Either<&'static SqlType, Box<ValueRef<'a>>>),
     Array(&'static SqlType, Arc<Vec<ValueRef<'a>>>),
     Decimal(Decimal),
-    Enum8(i8),
+    Enum8(Enum8),
     Enum16(i16),
     Ipv4([u8; 4]),
     Ipv6([u8; 16]),
@@ -308,7 +309,7 @@ impl<'a> From<&'a Value> for ValueRef<'a> {
                 ValueRef::Array(*t, Arc::new(ref_vec))
             }
             Value::Decimal(v) => ValueRef::Decimal(v.clone()),
-            Value::Enum8(v) => ValueRef::Enum8(*v),
+            Value::Enum8(v) => ValueRef::Enum8(v.clone()),
             Value::Enum16(v) => ValueRef::Enum16(*v),
             Value::Ipv4(v) => ValueRef::Ipv4(*v),
             Value::Ipv6(v) => ValueRef::Ipv6(*v),

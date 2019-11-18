@@ -3,11 +3,7 @@ use std::{convert, fmt, mem, str, sync::Arc, net::{Ipv4Addr, Ipv6Addr}};
 use chrono::prelude::*;
 use chrono_tz::Tz;
 
-use crate::types::{
-    column::Either,
-    decimal::{Decimal, NoBits},
-    DateConverter, SqlType,
-};
+use crate::types::{column::Either, decimal::{Decimal, NoBits}, DateConverter, SqlType, Enum8};
 
 use uuid::Uuid;
 
@@ -36,7 +32,7 @@ pub enum Value {
     Nullable(Either<&'static SqlType, Box<Value>>),
     Array(&'static SqlType, Arc<Vec<Value>>),
     Decimal(Decimal),
-    Enum8(i8),
+    Enum8(Enum8),
     Enum16(i16),
 }
 
@@ -100,6 +96,8 @@ impl Value {
                 scale,
                 nobits: NoBits::N64,
             }),
+            SqlType::Enum8 => Value::Enum8(Enum8(0)),
+            SqlType::Enum16 => Value::Enum16(0)
             SqlType::Ipv4 => Value::Ipv4([0_u8; 4]),
             SqlType::Ipv6 => Value::Ipv6([0_u8; 16]),
             SqlType::Uuid => Value::Uuid([0_u8; 16]),

@@ -131,7 +131,7 @@ impl dyn ColumnData {
                     nobits,
                 })
             }
-            SqlType::Enum8(values) => W::wrap(VectorColumnData::<i8>::with_capacity(DEFAULT_CAPACITY)),
+            SqlType::Enum8(_values) => W::wrap(VectorColumnData::<i8>::with_capacity(DEFAULT_CAPACITY)),
             SqlType::Enum16 => W::wrap(VectorColumnData::<i16>::with_capacity(DEFAULT_CAPACITY)),
         })
     }

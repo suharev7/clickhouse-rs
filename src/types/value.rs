@@ -151,7 +151,7 @@ impl fmt::Display for Value {
                 write!(f, "[{}]", cells.join(", "))
             }
             Value::Decimal(v) => fmt::Display::fmt(v, f),
-            Value::Enum8(ref v1, ref v2) => fmt::Display::fmt(v2, f),
+            Value::Enum8(ref _v1, ref v2) => fmt::Display::fmt(v2, f),
             Value::Enum16(ref v) => fmt::Display::fmt(v, f),
             Value::Ipv4(v) => {
                 write!(f, "{}", Ipv4Addr::from(*v))

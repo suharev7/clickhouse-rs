@@ -50,7 +50,7 @@ impl<'a> FromSql<'a> for Decimal {
 impl<'a> FromSql<'a> for Enum {
     fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
         match value {
-            ValueRef::Enum(size, _enum_values, v) => Ok(v),
+            ValueRef::Enum(_size, _enum_values, v) => Ok(v),
             _ => {
 
                 let from = SqlType::from(value.clone()).to_string();

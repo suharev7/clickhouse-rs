@@ -778,7 +778,7 @@ async fn test_enum() -> Result<(), Error> {
 	c.insert("clickhouse_Enum", block).await?;
 	let block = c.query(query).fetch_all().await?;
 
-	let enum_8_a: vec!([Enum = block.get(0, "enum_16_row")?;
+	let enum_8_a: Enum = block.get(0, "enum_16_row")?;
 	let enum_8_b: Enum = block.get(1, "enum_16_row")?;
 
 	assert_eq!(2, block.row_count());

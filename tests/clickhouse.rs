@@ -24,7 +24,7 @@ use futures_util::{
 use clickhouse_rs::{
 	Block,
 	errors::Error,
-	Pool, types::{Decimal, Enum8, FromSql},
+	Pool, types::{Decimal, Enum, FromSql},
 };
 use uuid::Uuid;
 use Tz::UTC;
@@ -753,10 +753,10 @@ async fn test_binary_string() -> Result<(), Error> {
 
 #[cfg(feature = "tokio_io")]
 #[tokio::test]
-async fn test_enum8() -> Result<(), Error> {
+async fn test_enum() -> Result<(), Error> {
 	let ddl = "
-        CREATE TABLE IF NOT EXISTS clickhouse_enum8 (
-            enum_8_row        Enum8(
+        CREATE TABLE IF NOT EXISTS clickhouse_Enum (
+            enum_8_row        Enum16(
                                 'zero' = 0,
                                 'first' = 1
                           )
@@ -765,24 +765,24 @@ async fn test_enum8() -> Result<(), Error> {
 	let query = "
         SELECT
             enum_8_row
-        FROM clickhouse_enum8";
+        FROM clickhouse_Enum";
 
 	let block = Block::new()
-		.column("enum_8_row", vec![Enum8::of(0), Enum8::of(1)]);
+		.column("enum_8_row", vec![Enum::of(0), Enum::of(1)]);
 
 	let pool = Pool::new(database_url());
 	let mut c = pool.get_handle().await?;
-	c.execute("DROP TABLE IF EXISTS clickhouse_enum8")
+	c.execute("DROP TABLE IF EXISTS clickhouse_Enum")
 		.await?;
 	c.execute(ddl).await?;
-	c.insert("clickhouse_enum8", block).await?;
+	c.insert("clickhouse_Enum", block).await?;
 	let block = c.query(query).fetch_all().await?;
 
-	let enum_8_a: Enum8 = block.get(0, "enum_8_row")?;
-	let enum_8_b: Enum8 = block.get(1, "enum_8_row")?;
+	let enum_8_a: Enum = block.get(0, "enum_8_row")?;
+	let enum_8_b: Enum = block.get(1, "enum_8_row")?;
 
 	assert_eq!(2, block.row_count());
-	assert_eq!(vec!([Enum8::of(0), Enum8::of(1)]), vec!([enum_8_a, enum_8_b]));
+	assert_eq!(vec!([Enum::of(0), Enum::of(1)]), vec!([enum_8_a, enum_8_b]));
 
 	Ok(())
 }

@@ -6,7 +6,7 @@ use crate::{
     errors::{Error, FromSqlError, Result},
     types::{column::Either, Decimal, SqlType, ValueRef},
 };
-use crate::types::Enum8;
+use crate::types::Enum;
 
 pub type FromSqlResult<T> = Result<T>;
 
@@ -47,16 +47,17 @@ impl<'a> FromSql<'a> for Decimal {
     }
 }
 
-impl<'a> FromSql<'a> for Enum8 {
+impl<'a> FromSql<'a> for Enum {
     fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
         match value {
-            ValueRef::Enum8(_enum_values, v) => Ok(v),
+            ValueRef::Enum(size, _enum_values, v) => Ok(v),
             _ => {
+
                 let from = SqlType::from(value.clone()).to_string();
 
                 Err(Error::FromSql(FromSqlError::InvalidType {
                     src: from,
-                    dst: "Enum8".into(), // TODO generate full name
+                    dst: "Enum".into(), // TODO generate full name
                 }))
             }
         }

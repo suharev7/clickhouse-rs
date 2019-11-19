@@ -16,7 +16,7 @@ pub use self::{
     query::Query,
     query_result::QueryResult,
     value::Value,
-    enums::Enum8,
+    enums::Enum,
 };
 pub(crate) use self::{
     cmd::Cmd,
@@ -27,6 +27,7 @@ pub(crate) use self::{
     unmarshal::Unmarshal,
     value_ref::ValueRef,
 };
+use crate::types::enums::EnumSize;
 
 pub(crate) mod column;
 mod marshal;
@@ -207,7 +208,6 @@ impl From<SqlType> for &'static SqlType {
             SqlType::Float64 => &SqlType::Float64,
             SqlType::Date => &SqlType::Date,
             SqlType::DateTime => &SqlType::DateTime,
-            SqlType::Enum16 => &SqlType::Enum16,
             _ => {
                 let mut guard = TYPES_CACHE.lock().unwrap();
                 loop {
@@ -244,17 +244,20 @@ impl SqlType {
             SqlType::Decimal(precision, scale) => {
                 format!("Decimal({}, {})", precision, scale).into()
             }
-            SqlType::Enum8(values) => {
-                let mut enum_type = "Enum8(".to_string();
+            SqlType::Enum(size, values) => {
+                let size_str = match size {
+                    EnumSize::ENUM16 => "16",
+                    EnumSize::ENUM8 => "8",
+                };
+                let mut enum_type = format!("Enum{}(", size_str).to_string();
                 let a: Vec<String> = values.iter().map(|(name, value)| {
-                    format!("{} = {}", name, value)
+                    format!("'{}' = {}", name, value)
                 }).collect();
                 enum_type += &a.join(",");
                 enum_type += " )";
 
                 enum_type.into()
             }
-            SqlType::Enum16 => "Enum16".into(),
         }
     }
 

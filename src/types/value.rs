@@ -3,7 +3,8 @@ use std::{convert, fmt, mem, str, sync::Arc, net::{Ipv4Addr, Ipv6Addr}};
 use chrono::prelude::*;
 use chrono_tz::Tz;
 
-use crate::types::{column::Either, decimal::{Decimal, NoBits}, DateConverter, SqlType, Enum8};
+use crate::types::{column::Either, decimal::{Decimal, NoBits}, DateConverter, SqlType, Enum};
+use crate::types::enums::EnumSize;
 
 use uuid::Uuid;
 
@@ -32,8 +33,7 @@ pub enum Value {
     Nullable(Either<&'static SqlType, Box<Value>>),
     Array(&'static SqlType, Arc<Vec<Value>>),
     Decimal(Decimal),
-    Enum8(Vec<(String, i8)>, Enum8),
-    Enum16(i16),
+    Enum(EnumSize, Vec<(String, i16)>, Enum),
 }
 
 impl PartialEq for Value {
@@ -63,8 +63,7 @@ impl PartialEq for Value {
             (Value::Nullable(a), Value::Nullable(b)) => *a == *b,
             (Value::Array(ta, a), Value::Array(tb, b)) => *ta == *tb && *a == *b,
             (Value::Decimal(a), Value::Decimal(b)) => *a == *b,
-            (Value::Enum8(value_a, all_enum_values_a), Value::Enum8(value_b, all_enum_values_b)) => *all_enum_values_a == *all_enum_values_b && value_a == value_b,
-            (Value::Enum16(a), Value::Enum16(b)) => *a == *b,
+            (Value::Enum(size_a, value_a, all_enum_values_a), Value::Enum(size_b, value_b, all_enum_values_b)) => *size_a == *size_b && *all_enum_values_a == *all_enum_values_b && value_a == value_b,
 
             _ => false,
         }
@@ -549,6 +548,6 @@ mod test {
     #[test]
     fn test_size_of() {
         use std::mem;
-        assert_eq!(24, mem::size_of::<[Value; 1]>());
+        assert_eq!(32, mem::size_of::<[Value; 1]>());
     }
 }

@@ -223,8 +223,7 @@ impl From<SqlType> for &'static SqlType {
 
 impl SqlType {
     pub fn to_string(&self) -> Cow<'static, str> {
-        let self_ = self.clone();
-        match self_ {
+        match self.clone() {
             SqlType::UInt8 => "UInt8".into(),
             SqlType::UInt16 => "UInt16".into(),
             SqlType::UInt32 => "UInt32".into(),
@@ -249,14 +248,10 @@ impl SqlType {
                     EnumSize::ENUM16 => "16",
                     EnumSize::ENUM8 => "8",
                 };
-                let mut enum_type = format!("Enum{}(", size_str).to_string();
                 let a: Vec<String> = values.iter().map(|(name, value)| {
                     format!("'{}' = {}", name, value)
                 }).collect();
-                enum_type += &a.join(",");
-                enum_type += " )";
-
-                enum_type.into()
+                format!("Enum{}({})", size_str, a.join(",")).to_string().into()
             }
         }
     }

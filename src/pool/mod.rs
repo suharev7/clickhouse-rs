@@ -7,11 +7,12 @@ use tokio::prelude::{*, task::{self, Task}};
 
 use crate::{
     io::BoxFuture,
-    pool::futures::GetHandle,
+    Client, ClientHandle,
     errors::Result,
     types::{IntoOptions, OptionsSource},
-    Client, ClientHandle,
 };
+
+pub use self::futures::GetHandle;
 
 mod futures;
 

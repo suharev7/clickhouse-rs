@@ -149,7 +149,8 @@ mod connecting_stream;
 /// Error types.
 pub mod errors;
 mod io;
-mod pool;
+/// Pool types.
+pub mod pool;
 mod retry_guard;
 /// Clickhouse types.
 pub mod types;

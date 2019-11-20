@@ -237,6 +237,16 @@ impl convert::From<AppDate> for Value {
     }
 }
 
+impl convert::From<Enum> for Value {
+    fn from(v: Enum) -> Value {
+        Value::Enum {
+            0: EnumSize::ENUM16,
+            1: vec![],
+            2: v,
+        }
+    }
+}
+
 impl convert::From<AppDateTime> for Value {
     fn from(v: AppDateTime) -> Value {
         Value::DateTime(v.timestamp() as u32, v.timezone())

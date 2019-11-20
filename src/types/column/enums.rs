@@ -294,11 +294,11 @@ impl<K: ColumnType> ColumnData for NullableEnumAdapter<K> {
 	}
 =======
     fn at(&self, index: usize) -> ValueRef {
-        let value: Option<i16> = Option::from_sql(self.column.at(index)).unwrap();
+        let value: Option<Enum> = Option::from_sql(self.column.at(index)).unwrap();
         match value {
             None => ValueRef::Nullable(Either::Left(self.sql_type().into())),
             Some(v) => {
-                let inner = ValueRef::Enum(self.size, self.enum_values.clone(), Enum(v));
+                let inner = ValueRef::Enum(self.size, self.enum_values.clone(), v);
                 ValueRef::Nullable(Either::Right(Box::new(inner)))
             }
         }

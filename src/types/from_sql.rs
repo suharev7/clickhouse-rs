@@ -57,7 +57,7 @@ impl<'a> FromSql<'a> for Enum {
 
                 Err(Error::FromSql(FromSqlError::InvalidType {
                     src: from,
-                    dst: "Enum".into(), // TODO generate full name
+                    dst: "Enum".into(), // TODO generate full name include Option Nullable error
                 }))
             }
         }

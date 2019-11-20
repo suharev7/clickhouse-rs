@@ -22,9 +22,9 @@ use futures_util::{
 };
 
 use clickhouse_rs::{
-	Block,
-	errors::Error,
-	Pool, types::{Decimal, Enum, FromSql},
+    Block,
+    errors::Error,
+    Pool, types::{Decimal, Enum, FromSql},
 };
 use uuid::Uuid;
 use Tz::UTC;
@@ -38,12 +38,12 @@ fn database_url() -> String {
 #[cfg(feature = "tokio_io")]
 #[tokio::test]
 async fn test_ping() -> Result<(), Error> {
-	let pool = Pool::new(database_url());
+    let pool = Pool::new(database_url());
 
-	let mut c = pool.get_handle().await?;
-	c.ping().await?;
+    let mut c = pool.get_handle().await?;
+    c.ping().await?;
 
-	Ok(())
+    Ok(())
 }
 
 #[cfg(feature = "tokio_io")]
@@ -57,41 +57,41 @@ async fn test_connection_by_wrong_address() -> Result<(), Error> {
     }
     .await;
 
-	ret.unwrap_err();
-	Ok(())
+    ret.unwrap_err();
+    Ok(())
 }
 
 #[cfg(feature = "tokio_io")]
 #[tokio::test]
 async fn test_create_table() -> Result<(), Error> {
-	let ddl = r"
+    let ddl = r"
                CREATE TABLE clickhouse_test_create_table (
                click_id   FixedString(64),
                click_time DateTime
                ) Engine=Memory";
 
-	let pool = Pool::new(database_url());
-	let mut c = pool.get_handle().await?;
-	c.execute("DROP TABLE IF EXISTS clickhouse_test_create_table")
-		.await?;
-	c.execute(ddl).await?;
+    let pool = Pool::new(database_url());
+    let mut c = pool.get_handle().await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_test_create_table")
+        .await?;
+    c.execute(ddl).await?;
 
-	if let Err(err) = c.execute(ddl).await {
-		assert_eq!(
-			"Server error: `ERROR DB::Exception (57): DB::Exception: Table default.clickhouse_test_create_table already exists.`",
-			format!("{}", err)
-		);
-	} else {
-		panic!("should fail")
-	}
+    if let Err(err) = c.execute(ddl).await {
+        assert_eq!(
+            "Server error: `ERROR DB::Exception (57): DB::Exception: Table default.clickhouse_test_create_table already exists.`",
+            format!("{}", err)
+        );
+    } else {
+        panic!("should fail")
+    }
 
-	Ok(())
+    Ok(())
 }
 
 #[cfg(feature = "tokio_io")]
 #[tokio::test]
 async fn test_insert() -> Result<(), Error> {
-	let ddl = r"
+    let ddl = r"
                CREATE TABLE clickhouse_test_insert (
                int8  Int8,
                int16 Int16,
@@ -210,17 +210,17 @@ async fn test_insert() -> Result<(), Error> {
             ],
         );
 
-	let expected = block.clone();
-	let pool = Pool::new(database_url());
-	let mut c = pool.get_handle().await?;
-	c.execute("DROP TABLE IF EXISTS clickhouse_test_insert")
-		.await?;
-	c.execute(ddl).await?;
-	c.insert("clickhouse_test_insert", block).await?;
-	let actual = c
-		.query("SELECT * FROM clickhouse_test_insert")
-		.fetch_all()
-		.await?;
+    let expected = block.clone();
+    let pool = Pool::new(database_url());
+    let mut c = pool.get_handle().await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_test_insert")
+        .await?;
+    c.execute(ddl).await?;
+    c.insert("clickhouse_test_insert", block).await?;
+    let actual = c
+        .query("SELECT * FROM clickhouse_test_insert")
+        .fetch_all()
+        .await?;
 
     assert_eq!(format!("{:?}", expected.as_ref()), format!("{:?}", &actual));
     Ok(())
@@ -243,7 +243,7 @@ async fn test_empty_select() -> Result<(), Error> {
 #[cfg(feature = "tokio_io")]
 #[tokio::test]
 async fn test_select() -> Result<(), Error> {
-	let ddl = "
+    let ddl = "
         CREATE TABLE clickhouse_test_select (
             id       Int32,
             code     String,
@@ -251,81 +251,81 @@ async fn test_select() -> Result<(), Error> {
             datetime DateTime
         ) Engine=Memory";
 
-	let block = Block::new()
-		.column("id", vec![1, 2, 3, 4])
-		.column("code", vec!["RU", "UA", "DE", "US"])
-		.column(
-			"date",
-			vec![
-				UTC.ymd(2014, 7, 8),
-				UTC.ymd(2014, 7, 8),
-				UTC.ymd(2014, 7, 8),
-				UTC.ymd(2014, 7, 9),
-			],
-		)
-		.column(
-			"datetime",
-			vec![
-				Tz::Singapore.ymd(2014, 7, 8).and_hms(14, 0, 0),
-				UTC.ymd(2014, 7, 8).and_hms(14, 0, 0),
-				UTC.ymd(2014, 7, 8).and_hms(14, 0, 0),
-				UTC.ymd(2014, 7, 8).and_hms(13, 0, 0),
-			],
-		);
+    let block = Block::new()
+        .column("id", vec![1, 2, 3, 4])
+        .column("code", vec!["RU", "UA", "DE", "US"])
+        .column(
+            "date",
+            vec![
+                UTC.ymd(2014, 7, 8),
+                UTC.ymd(2014, 7, 8),
+                UTC.ymd(2014, 7, 8),
+                UTC.ymd(2014, 7, 9),
+            ],
+        )
+        .column(
+            "datetime",
+            vec![
+                Tz::Singapore.ymd(2014, 7, 8).and_hms(14, 0, 0),
+                UTC.ymd(2014, 7, 8).and_hms(14, 0, 0),
+                UTC.ymd(2014, 7, 8).and_hms(14, 0, 0),
+                UTC.ymd(2014, 7, 8).and_hms(13, 0, 0),
+            ],
+        );
 
-	let pool = Pool::new(database_url());
-	let mut c = pool.get_handle().await?;
-	c.execute("DROP TABLE IF EXISTS clickhouse_test_select")
-		.await?;
-	c.execute(ddl).await?;
-	c.insert("clickhouse_test_select", block).await?;
+    let pool = Pool::new(database_url());
+    let mut c = pool.get_handle().await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_test_select")
+        .await?;
+    c.execute(ddl).await?;
+    c.insert("clickhouse_test_select", block).await?;
 
-	let r = c
-		.query("SELECT COUNT(*) FROM clickhouse_test_select")
-		.fetch_all()
-		.await?;
-	assert_eq!(4, r.get::<u64, _>(0, 0)?);
+    let r = c
+        .query("SELECT COUNT(*) FROM clickhouse_test_select")
+        .fetch_all()
+        .await?;
+    assert_eq!(4, r.get::<u64, _>(0, 0)?);
 
-	let r = c
-		.query("SELECT COUNT(*) FROM clickhouse_test_select WHERE date = '2014-07-08'")
-		.fetch_all()
-		.await?;
-	assert_eq!(3, r.get::<u64, _>(0, 0)?);
+    let r = c
+        .query("SELECT COUNT(*) FROM clickhouse_test_select WHERE date = '2014-07-08'")
+        .fetch_all()
+        .await?;
+    assert_eq!(3, r.get::<u64, _>(0, 0)?);
 
-	let r = c
-		.query("SELECT COUNT(*) FROM clickhouse_test_select WHERE datetime = '2014-07-08 14:00:00'")
-		.fetch_all()
-		.await?;
-	assert_eq!(2, r.get::<u64, _>(0, 0)?);
+    let r = c
+        .query("SELECT COUNT(*) FROM clickhouse_test_select WHERE datetime = '2014-07-08 14:00:00'")
+        .fetch_all()
+        .await?;
+    assert_eq!(2, r.get::<u64, _>(0, 0)?);
 
-	let r = c
-		.query("SELECT COUNT(*) FROM clickhouse_test_select WHERE id IN (1, 2, 3)")
-		.fetch_all()
-		.await?;
-	assert_eq!(3, r.get::<u64, _>(0, 0)?);
+    let r = c
+        .query("SELECT COUNT(*) FROM clickhouse_test_select WHERE id IN (1, 2, 3)")
+        .fetch_all()
+        .await?;
+    assert_eq!(3, r.get::<u64, _>(0, 0)?);
 
-	let r = c
-		.query("SELECT COUNT(*) FROM clickhouse_test_select WHERE code IN ('US', 'DE', 'RU')")
-		.fetch_all()
-		.await?;
-	assert_eq!(3, r.get::<u64, _>(0, 0)?);
+    let r = c
+        .query("SELECT COUNT(*) FROM clickhouse_test_select WHERE code IN ('US', 'DE', 'RU')")
+        .fetch_all()
+        .await?;
+    assert_eq!(3, r.get::<u64, _>(0, 0)?);
 
-	let r = c
-		.query("SELECT id FROM clickhouse_test_select ORDER BY id LIMIT 1")
-		.fetch_all()
-		.await?;
-	assert_eq!(r.row_count(), 1);
-	assert_eq!(1, r.get::<i32, _>(0, "id")?);
+    let r = c
+        .query("SELECT id FROM clickhouse_test_select ORDER BY id LIMIT 1")
+        .fetch_all()
+        .await?;
+    assert_eq!(r.row_count(), 1);
+    assert_eq!(1, r.get::<i32, _>(0, "id")?);
 
-	let r = c
-		.query("SELECT id FROM clickhouse_test_select ORDER BY id LIMIT 1, 2")
-		.fetch_all()
-		.await?;
-	assert_eq!(r.row_count(), 2);
-	assert_eq!(2, r.get::<i32, _>(0, "id")?);
-	assert_eq!(3, r.get::<i32, _>(1, 0)?);
+    let r = c
+        .query("SELECT id FROM clickhouse_test_select ORDER BY id LIMIT 1, 2")
+        .fetch_all()
+        .await?;
+    assert_eq!(r.row_count(), 2);
+    assert_eq!(2, r.get::<i32, _>(0, "id")?);
+    assert_eq!(3, r.get::<i32, _>(1, 0)?);
 
-	Ok(())
+    Ok(())
 }
 
 #[cfg(feature = "async_std")]
@@ -350,75 +350,75 @@ fn test_simple_select() {
 #[cfg(feature = "tokio_io")]
 #[tokio::test]
 async fn test_simple_select() -> Result<(), Error> {
-	let pool = Pool::new(database_url());
-	let mut c = pool.get_handle().await?;
-	let actual = c.query("SELECT a FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a) ORDER BY a ASC").fetch_all().await?;
+    let pool = Pool::new(database_url());
+    let mut c = pool.get_handle().await?;
+    let actual = c.query("SELECT a FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a) ORDER BY a ASC").fetch_all().await?;
 
-	let expected = Block::new().column("a", vec![1_u8, 2, 3]);
-	assert_eq!(expected, actual);
+    let expected = Block::new().column("a", vec![1_u8, 2, 3]);
+    assert_eq!(expected, actual);
 
-	let r = c
-		.query("SELECT min(a) FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a)")
-		.fetch_all()
-		.await?;
-	assert_eq!(1, r.get::<u8, _>(0, 0)?);
+    let r = c
+        .query("SELECT min(a) FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a)")
+        .fetch_all()
+        .await?;
+    assert_eq!(1, r.get::<u8, _>(0, 0)?);
 
-	let r = c
-		.query("SELECT max(a) FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a)")
-		.fetch_all()
-		.await?;
-	assert_eq!(3, r.get::<u8, _>(0, 0)?);
+    let r = c
+        .query("SELECT max(a) FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a)")
+        .fetch_all()
+        .await?;
+    assert_eq!(3, r.get::<u8, _>(0, 0)?);
 
-	let r = c
-		.query("SELECT sum(a) FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a)")
-		.fetch_all()
-		.await?;
-	assert_eq!(6, r.get::<u64, _>(0, 0)?);
+    let r = c
+        .query("SELECT sum(a) FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a)")
+        .fetch_all()
+        .await?;
+    assert_eq!(6, r.get::<u64, _>(0, 0)?);
 
-	let r = c
-		.query(
-			"SELECT median(a) FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a)",
-		)
-		.fetch_all()
-		.await?;
-	assert!((2_f64 - r.get::<f64, _>(0, 0)?).abs() < EPSILON);
+    let r = c
+        .query(
+            "SELECT median(a) FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a)",
+        )
+        .fetch_all()
+        .await?;
+    assert!((2_f64 - r.get::<f64, _>(0, 0)?).abs() < EPSILON);
 
-	Ok(())
+    Ok(())
 }
 
 #[cfg(feature = "tokio_io")]
 #[tokio::test]
 async fn test_temporary_table() -> Result<(), Error> {
-	let ddl = "CREATE TEMPORARY TABLE clickhouse_test_temporary_table (ID UInt64);";
+    let ddl = "CREATE TEMPORARY TABLE clickhouse_test_temporary_table (ID UInt64);";
 
-	let pool = Pool::new(database_url());
-	let mut c = pool.get_handle().await?;
-	c.execute(ddl).await?;
-	c.execute(
-		"INSERT INTO clickhouse_test_temporary_table (ID) \
+    let pool = Pool::new(database_url());
+    let mut c = pool.get_handle().await?;
+    c.execute(ddl).await?;
+    c.execute(
+        "INSERT INTO clickhouse_test_temporary_table (ID) \
          SELECT number AS ID FROM system.numbers LIMIT 10",
-	)
-		.await?;
-	let block = c
-		.query("SELECT ID AS ID FROM clickhouse_test_temporary_table")
-		.fetch_all()
-		.await?;
+    )
+        .await?;
+    let block = c
+        .query("SELECT ID AS ID FROM clickhouse_test_temporary_table")
+        .fetch_all()
+        .await?;
 
-	let expected = Block::new().column("ID", (0_u64..10).collect::<Vec<_>>());
-	assert_eq!(block, expected);
+    let expected = Block::new().column("ID", (0_u64..10).collect::<Vec<_>>());
+    assert_eq!(block, expected);
 
-	Ok(())
+    Ok(())
 }
 
 #[cfg(feature = "tokio_io")]
 #[tokio::test]
 async fn test_with_totals() -> Result<(), Error> {
-	let ddl = "
+    let ddl = "
         CREATE TABLE clickhouse_test_with_totals (
             country String
         ) Engine=Memory";
 
-	let query = "
+    let query = "
         SELECT
             country,
             COUNT(*)
@@ -426,105 +426,105 @@ async fn test_with_totals() -> Result<(), Error> {
         GROUP BY country
             WITH TOTALS";
 
-	let block = Block::new().column("country", vec!["RU", "EN", "RU", "RU", "EN", "RU"]);
+    let block = Block::new().column("country", vec!["RU", "EN", "RU", "RU", "EN", "RU"]);
 
-	let expected = Block::new()
-		.column("country", vec!["EN", "RU", ""])
-		.column("country", vec![2_u64, 4, 6]);
+    let expected = Block::new()
+        .column("country", vec!["EN", "RU", ""])
+        .column("country", vec![2_u64, 4, 6]);
 
-	let pool = Pool::new(database_url());
-	let mut c = pool.get_handle().await?;
-	c.execute("DROP TABLE IF EXISTS clickhouse_test_with_totals")
-		.await?;
-	c.execute(ddl).await?;
-	c.insert("clickhouse_test_with_totals", block).await?;
-	let block = c.query(query).fetch_all().await?;
+    let pool = Pool::new(database_url());
+    let mut c = pool.get_handle().await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_test_with_totals")
+        .await?;
+    c.execute(ddl).await?;
+    c.insert("clickhouse_test_with_totals", block).await?;
+    let block = c.query(query).fetch_all().await?;
 
-	assert_eq!(expected, block);
-	Ok(())
+    assert_eq!(expected, block);
+    Ok(())
 }
 
 #[cfg(feature = "tokio_io")]
 #[tokio::test]
 async fn test_stream_rows() -> Result<(), Error> {
-	let pool = Pool::new(database_url());
-	let mut c = pool.get_handle().await?;
-	let actual = c
-		.query("SELECT number FROM system.numbers LIMIT 10")
-		.stream()
-		.try_fold(0_u64, |acc, row| {
-			let number: u64 = row.get("number").unwrap();
-			future::ready(Ok(acc + number))
-		})
-		.await?;
-	c.ping().await?;
+    let pool = Pool::new(database_url());
+    let mut c = pool.get_handle().await?;
+    let actual = c
+        .query("SELECT number FROM system.numbers LIMIT 10")
+        .stream()
+        .try_fold(0_u64, |acc, row| {
+            let number: u64 = row.get("number").unwrap();
+            future::ready(Ok(acc + number))
+        })
+        .await?;
+    c.ping().await?;
 
-	assert_eq!(45, actual);
-	Ok(())
+    assert_eq!(45, actual);
+    Ok(())
 }
 
 #[cfg(feature = "tokio_io")]
 #[tokio::test]
 async fn test_concurrent_queries() -> Result<(), Error> {
-	async fn query_sum(n: u64) -> Result<u64, Error> {
-		let sql = format!("SELECT number FROM system.numbers LIMIT {}", n);
+    async fn query_sum(n: u64) -> Result<u64, Error> {
+        let sql = format!("SELECT number FROM system.numbers LIMIT {}", n);
 
-		let pool = Pool::new(database_url());
-		let mut c = pool.get_handle().await?;
-		let block = c.query(sql.as_str()).fetch_all().await?;
+        let pool = Pool::new(database_url());
+        let mut c = pool.get_handle().await?;
+        let block = c.query(sql.as_str()).fetch_all().await?;
 
-		let mut total = 0_u64;
-		for row in 0_usize..block.row_count() {
-			let x: u64 = block.get(row, "number")?;
-			total += x;
-		}
-		Ok(total)
-	}
+        let mut total = 0_u64;
+        for row in 0_usize..block.row_count() {
+            let x: u64 = block.get(row, "number")?;
+            total += x;
+        }
+        Ok(total)
+    }
 
-	let m = 250_000_u64;
+    let m = 250_000_u64;
 
-	let expected = m * (m - 1) / 2
-		+ (m * 2) * ((m * 2) - 1) / 2
-		+ (m * 3) * ((m * 3) - 1) / 2
-		+ (m * 4) * ((m * 4) - 1) / 2;
+    let expected = m * (m - 1) / 2
+        + (m * 2) * ((m * 2) - 1) / 2
+        + (m * 3) * ((m * 3) - 1) / 2
+        + (m * 4) * ((m * 4) - 1) / 2;
 
-	let requests = vec![
-		query_sum(m),
-		query_sum(m * 2),
-		query_sum(m * 3),
-		query_sum(m * 4),
-	];
+    let requests = vec![
+        query_sum(m),
+        query_sum(m * 2),
+        query_sum(m * 3),
+        query_sum(m * 4),
+    ];
 
-	let xs = future::join_all(requests).await;
-	let mut actual: u64 = 0;
+    let xs = future::join_all(requests).await;
+    let mut actual: u64 = 0;
 
-	for x in xs {
-		actual += x?;
-	}
+    for x in xs {
+        actual += x?;
+    }
 
-	assert_eq!(actual, expected);
-	Ok(())
+    assert_eq!(actual, expected);
+    Ok(())
 }
 
 #[cfg(feature = "tokio_io")]
 #[tokio::test]
 async fn test_big_block() -> Result<(), Error> {
-	let sql = "SELECT
+    let sql = "SELECT
         number, number, number, number, number, number, number, number, number, number
         FROM system.numbers LIMIT 20000";
 
-	let pool = Pool::new(database_url());
-	let mut c = pool.get_handle().await?;
-	let block = c.query(sql).fetch_all().await?;
+    let pool = Pool::new(database_url());
+    let mut c = pool.get_handle().await?;
+    let block = c.query(sql).fetch_all().await?;
 
-	assert_eq!(block.row_count(), 20000);
-	Ok(())
+    assert_eq!(block.row_count(), 20000);
+    Ok(())
 }
 
 #[cfg(feature = "tokio_io")]
 #[tokio::test]
 async fn test_nullable() -> Result<(), Error> {
-	let ddl = "
+    let ddl = "
         CREATE TABLE clickhouse_test_nullable (
             int8     Nullable(Int8),
             int16    Nullable(Int16),
@@ -544,7 +544,7 @@ async fn test_nullable() -> Result<(), Error> {
             uuid     Nullable(UUID)
         ) Engine=Memory";
 
-	let query = "
+    let query = "
         SELECT
             int8,
             int16,
@@ -564,8 +564,8 @@ async fn test_nullable() -> Result<(), Error> {
             uuid
         FROM clickhouse_test_nullable";
 
-	let date_value: Date<Tz> = UTC.ymd(2016, 10, 22);
-	let date_time_value: DateTime<Tz> = UTC.ymd(2014, 7, 8).and_hms(14, 0, 0);
+    let date_value: Date<Tz> = UTC.ymd(2016, 10, 22);
+    let date_time_value: DateTime<Tz> = UTC.ymd(2014, 7, 8).and_hms(14, 0, 0);
 
     let block = Block::new()
         .column("int8", vec![Some(1_i8)])
@@ -588,13 +588,13 @@ async fn test_nullable() -> Result<(), Error> {
         )
         .column("uuid", vec![Some(Uuid::nil())]);
 
-	let pool = Pool::new(database_url());
-	let mut c = pool.get_handle().await?;
-	c.execute("DROP TABLE IF EXISTS clickhouse_test_nullable")
-		.await?;
-	c.execute(ddl).await?;
-	c.insert("clickhouse_test_nullable", block).await?;
-	let block = c.query(query).fetch_all().await?;
+    let pool = Pool::new(database_url());
+    let mut c = pool.get_handle().await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_test_nullable")
+        .await?;
+    c.execute(ddl).await?;
+    c.insert("clickhouse_test_nullable", block).await?;
+    let block = c.query(query).fetch_all().await?;
 
     let int8: Option<i8> = block.get(0, "int8")?;
     let int16: Option<i16> = block.get(0, "int16")?;
@@ -613,19 +613,19 @@ async fn test_nullable() -> Result<(), Error> {
     let ipv6: Option<Ipv6Addr> = block.get(0, "ipv6")?;
     let uuid: Option<Uuid> = block.get(0, "uuid")?;
 
-	assert_eq!(int8, Some(1_i8));
-	assert_eq!(int16, Some(1_i16));
-	assert_eq!(int32, Some(1_i32));
-	assert_eq!(int64, Some(1_i64));
-	assert_eq!(uint8, Some(1_u8));
-	assert_eq!(uint16, Some(1_u16));
-	assert_eq!(uint32, Some(1_u32));
-	assert_eq!(uint64, Some(1_u64));
-	assert_eq!(float32, Some(1_f32));
-	assert_eq!(float64, Some(1_f64));
-	assert_eq!(string, Some("text"));
-	assert_eq!(date, Some(date_value));
-	assert_eq!(datetime, Some(date_time_value));
+    assert_eq!(int8, Some(1_i8));
+    assert_eq!(int16, Some(1_i16));
+    assert_eq!(int32, Some(1_i32));
+    assert_eq!(int64, Some(1_i64));
+    assert_eq!(uint8, Some(1_u8));
+    assert_eq!(uint16, Some(1_u16));
+    assert_eq!(uint32, Some(1_u32));
+    assert_eq!(uint64, Some(1_u64));
+    assert_eq!(float32, Some(1_f32));
+    assert_eq!(float64, Some(1_f64));
+    assert_eq!(string, Some("text"));
+    assert_eq!(date, Some(date_value));
+    assert_eq!(datetime, Some(date_time_value));
 
     assert_eq!(ipv4, Some(Ipv4Addr::new(127, 0, 0, 1)));
     assert_eq!(
@@ -641,73 +641,73 @@ async fn test_nullable() -> Result<(), Error> {
 #[cfg(feature = "tokio_io")]
 #[test]
 fn test_generic_column() {
-	fn extract_to_vec<'a, T>(name: &str, block: &'a Block) -> Vec<T>
-		where
-			T: FromSql<'a> + fmt::Debug + 'static,
-	{
-		let n = block.row_count();
-		let mut result = Vec::with_capacity(n);
-		for row_index in 0..n {
-			let value: T = block.get(row_index, name).unwrap();
-			result.push(value)
-		}
-		result
-	}
+    fn extract_to_vec<'a, T>(name: &str, block: &'a Block) -> Vec<T>
+        where
+            T: FromSql<'a> + fmt::Debug + 'static,
+    {
+        let n = block.row_count();
+        let mut result = Vec::with_capacity(n);
+        for row_index in 0..n {
+            let value: T = block.get(row_index, name).unwrap();
+            result.push(value)
+        }
+        result
+    }
 
-	let block = Block::new()
-		.column("int", vec![1u32, 2, 3])
-		.column("str", vec!["A", "B", "C"]);
+    let block = Block::new()
+        .column("int", vec![1u32, 2, 3])
+        .column("str", vec!["A", "B", "C"]);
 
-	let int_vec: Vec<u32> = extract_to_vec("int", &block);
-	let str_vec: Vec<String> = extract_to_vec("str", &block);
+    let int_vec: Vec<u32> = extract_to_vec("int", &block);
+    let str_vec: Vec<String> = extract_to_vec("str", &block);
 
-	assert_eq!(int_vec, vec![1u32, 2, 3]);
-	assert_eq!(
-		str_vec,
-		vec!["A".to_string(), "B".to_string(), "C".to_string()]
-	);
+    assert_eq!(int_vec, vec![1u32, 2, 3]);
+    assert_eq!(
+        str_vec,
+        vec!["A".to_string(), "B".to_string(), "C".to_string()]
+    );
 }
 
 #[cfg(feature = "tokio_io")]
 #[tokio::test]
 async fn test_fixed_string() -> Result<(), Error> {
-	let ddl = "
+    let ddl = "
         CREATE TABLE clickhouse_test_fixed_string (
             text     FixedString(4),
             opt_text Nullable(FixedString(4))
         ) Engine=Memory";
 
-	let query = "
+    let query = "
         SELECT
             text,
             opt_text
         FROM clickhouse_test_fixed_string";
 
-	let block = Block::new()
-		.column("opt_text", vec![Some("text")])
-		.column("text", vec!["text"]);
+    let block = Block::new()
+        .column("opt_text", vec![Some("text")])
+        .column("text", vec!["text"]);
 
-	let pool = Pool::new(database_url());
-	let mut c = pool.get_handle().await?;
-	c.execute("DROP TABLE IF EXISTS clickhouse_test_fixed_string")
-		.await?;
-	c.execute(ddl).await?;
-	c.insert("clickhouse_test_fixed_string", block).await?;
-	let block = c.query(query).fetch_all().await?;
+    let pool = Pool::new(database_url());
+    let mut c = pool.get_handle().await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_test_fixed_string")
+        .await?;
+    c.execute(ddl).await?;
+    c.insert("clickhouse_test_fixed_string", block).await?;
+    let block = c.query(query).fetch_all().await?;
 
-	let text: &str = block.get(0, "text")?;
-	let opt_text: Option<&str> = block.get(0, "opt_text")?;
+    let text: &str = block.get(0, "text")?;
+    let opt_text: Option<&str> = block.get(0, "opt_text")?;
 
-	assert_eq!(text, "text");
-	assert_eq!(opt_text, Some("text"));
+    assert_eq!(text, "text");
+    assert_eq!(opt_text, Some("text"));
 
-	Ok(())
+    Ok(())
 }
 
 #[cfg(feature = "tokio_io")]
 #[tokio::test]
 async fn test_binary_string() -> Result<(), Error> {
-	let ddl = "
+    let ddl = "
         CREATE TABLE IF NOT EXISTS clickhouse_binary_string (
             text        String,
             fx_text     FixedString(4),
@@ -715,7 +715,7 @@ async fn test_binary_string() -> Result<(), Error> {
             fx_opt_text Nullable(FixedString(4))
         ) Engine=Memory";
 
-	let query = "
+    let query = "
         SELECT
             text,
             fx_text,
@@ -723,38 +723,38 @@ async fn test_binary_string() -> Result<(), Error> {
             fx_opt_text
         FROM clickhouse_binary_string";
 
-	let block = Block::new()
-		.column("text", vec![vec![0_u8, 159, 146, 150]])
-		.column("fx_text", vec![vec![0_u8, 159, 146, 150]])
-		.column("opt_text", vec![Some(vec![0_u8, 159, 146, 150])])
-		.column("fx_opt_text", vec![Some(vec![0_u8, 159, 146, 150])]);
+    let block = Block::new()
+        .column("text", vec![vec![0_u8, 159, 146, 150]])
+        .column("fx_text", vec![vec![0_u8, 159, 146, 150]])
+        .column("opt_text", vec![Some(vec![0_u8, 159, 146, 150])])
+        .column("fx_opt_text", vec![Some(vec![0_u8, 159, 146, 150])]);
 
-	let pool = Pool::new(database_url());
-	let mut c = pool.get_handle().await?;
-	c.execute("DROP TABLE IF EXISTS clickhouse_binary_string")
-		.await?;
-	c.execute(ddl).await?;
-	c.insert("clickhouse_binary_string", block).await?;
-	let block = c.query(query).fetch_all().await?;
+    let pool = Pool::new(database_url());
+    let mut c = pool.get_handle().await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_binary_string")
+        .await?;
+    c.execute(ddl).await?;
+    c.insert("clickhouse_binary_string", block).await?;
+    let block = c.query(query).fetch_all().await?;
 
-	let text: &[u8] = block.get(0, "text")?;
-	let fx_text: &[u8] = block.get(0, "fx_text")?;
-	let opt_text: Option<&[u8]> = block.get(0, "opt_text")?;
-	let fx_opt_text: Option<&[u8]> = block.get(0, "fx_opt_text")?;
+    let text: &[u8] = block.get(0, "text")?;
+    let fx_text: &[u8] = block.get(0, "fx_text")?;
+    let opt_text: Option<&[u8]> = block.get(0, "opt_text")?;
+    let fx_opt_text: Option<&[u8]> = block.get(0, "fx_opt_text")?;
 
-	assert_eq!(1, block.row_count());
-	assert_eq!([0, 159, 146, 150].as_ref(), text);
-	assert_eq!([0, 159, 146, 150].as_ref(), fx_text);
-	assert_eq!(Some([0, 159, 146, 150].as_ref()), opt_text);
-	assert_eq!(Some([0, 159, 146, 150].as_ref()), fx_opt_text);
+    assert_eq!(1, block.row_count());
+    assert_eq!([0, 159, 146, 150].as_ref(), text);
+    assert_eq!([0, 159, 146, 150].as_ref(), fx_text);
+    assert_eq!(Some([0, 159, 146, 150].as_ref()), opt_text);
+    assert_eq!(Some([0, 159, 146, 150].as_ref()), fx_opt_text);
 
-	Ok(())
+    Ok(())
 }
 
 #[cfg(feature = "tokio_io")]
 #[tokio::test]
 async fn test_enum_16() -> Result<(), Error> {
-	let ddl = "
+    let ddl = "
         CREATE TABLE IF NOT EXISTS clickhouse_enum (
             enum_16_row        Enum16(
                                 'zero' = 5,
@@ -762,34 +762,69 @@ async fn test_enum_16() -> Result<(), Error> {
                           )
         ) Engine=Memory";
 
-	let query = "
+    let query = "
         SELECT
             enum_16_row
         FROM clickhouse_enum";
 
-	let block = Block::new()
-		.column("enum_16_row", vec![Enum::of(5), Enum::of(6)]);
+    let block = Block::new()
+        .column("enum_16_row", vec![Enum::of(5), Enum::of(6)]);
 
-	let pool = Pool::new(database_url());
-	let mut c = pool.get_handle().await?;
-	c.execute("DROP TABLE IF EXISTS clickhouse_enum")
-		.await?;
-	c.execute(ddl).await?;
-	c.insert("clickhouse_enum", block).await?;
-	let block = c.query(query).fetch_all().await?;
+    let pool = Pool::new(database_url());
+    let mut c = pool.get_handle().await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_enum")
+        .await?;
+    c.execute(ddl).await?;
+    c.insert("clickhouse_enum", block).await?;
+    let block = c.query(query).fetch_all().await?;
 
-	let enum_8_a: Enum = block.get(0, "enum_16_row")?;
-	let enum_8_b: Enum = block.get(1, "enum_16_row")?;
+    let enum_8_a: Enum = block.get(0, "enum_16_row")?;
+    let enum_8_b: Enum = block.get(1, "enum_16_row")?;
 
-	assert_eq!(2, block.row_count());
-	assert_eq!(vec!([Enum::of(5), Enum::of(6)]), vec!([enum_8_a, enum_8_b]));
+    assert_eq!(2, block.row_count());
+    assert_eq!(vec!([Enum::of(5), Enum::of(6)]), vec!([enum_8_a, enum_8_b]));
 
-	Ok(())
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_enum_16_nullable() -> Result<(), Error> {
+    let ddl = "
+        CREATE TABLE IF NOT EXISTS clickhouse_enum (
+            enum_16_row        Nullable(Enum16(
+                                'zero' = 5,
+                                'first' = 6
+                          ))
+        ) Engine=Memory";
+
+    let query = "
+        SELECT
+            enum_16_row
+        FROM clickhouse_enum";
+
+    let block = Block::new()
+        .column("enum_16_row", vec![Some(Enum::of(5)), Some(Enum::of(6)), Option::<Enum>::None]);
+
+    let pool = Pool::new(database_url());
+    let mut c = pool.get_handle().await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_enum")
+        .await?;
+    c.execute(ddl).await?;
+    c.insert("clickhouse_enum", block).await?;
+    let block = c.query(query).fetch_all().await?;
+
+    let enum_8_a: Option<Enum> = block.get(0, "enum_16_row")?;
+    let enum_8_b: Option<Enum> = block.get(1, "enum_16_row")?;
+
+    assert_eq!(3, block.row_count());
+    assert_eq!(vec!([Some(Enum::of(5)), Some(Enum::of(6))]), vec!([enum_8_a, enum_8_b]));
+
+    Ok(())
 }
 
 #[tokio::test]
 async fn test_enum_8() -> Result<(), Error> {
-	let ddl = "
+    let ddl = "
         CREATE TABLE IF NOT EXISTS clickhouse_Enum (
             enum_8_row        Enum8(
                                 'zero' = 1,
@@ -797,34 +832,34 @@ async fn test_enum_8() -> Result<(), Error> {
                           )
         ) Engine=Memory";
 
-	let query = "
+    let query = "
         SELECT
             enum_8_row
         FROM clickhouse_Enum";
 
-	let block = Block::new()
-		.column("enum_8_row", vec![Enum::of(1), Enum::of(2)]);
+    let block = Block::new()
+        .column("enum_8_row", vec![Enum::of(1), Enum::of(2)]);
 
-	let pool = Pool::new(database_url());
-	let mut c = pool.get_handle().await?;
-	c.execute("DROP TABLE IF EXISTS clickhouse_Enum")
-		.await?;
-	c.execute(ddl).await?;
-	c.insert("clickhouse_Enum", block).await?;
-	let block = c.query(query).fetch_all().await?;
+    let pool = Pool::new(database_url());
+    let mut c = pool.get_handle().await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_Enum")
+        .await?;
+    c.execute(ddl).await?;
+    c.insert("clickhouse_Enum", block).await?;
+    let block = c.query(query).fetch_all().await?;
 
-	let enum_8_a: Enum = block.get(0, "enum_8_row")?;
-	let enum_8_b: Enum = block.get(1, "enum_8_row")?;
+    let enum_8_a: Enum = block.get(0, "enum_8_row")?;
+    let enum_8_b: Enum = block.get(1, "enum_8_row")?;
 
-	assert_eq!(2, block.row_count());
-	assert_eq!(vec!([Enum::of(5), Enum::of(6)]), vec!([enum_8_a, enum_8_b]));
+    assert_eq!(2, block.row_count());
+    assert_eq!(vec!([Enum::of(5), Enum::of(6)]), vec!([enum_8_a, enum_8_b]));
 
-	Ok(())
+    Ok(())
 }
 
 #[tokio::test]
 async fn test_array() -> Result<(), Error> {
-	let ddl = "
+    let ddl = "
         CREATE TABLE clickhouse_array (
             u8    Array(UInt8),
             u32   Array(UInt32),
@@ -836,83 +871,83 @@ async fn test_array() -> Result<(), Error> {
 
     let query = "SELECT u8, u32, text1, text2, date, time  FROM clickhouse_array";
 
-	let date_value: Date<Tz> = UTC.ymd(2016, 10, 22);
-	let date_time_value: DateTime<Tz> = UTC.ymd(2014, 7, 8).and_hms(14, 0, 0);
+    let date_value: Date<Tz> = UTC.ymd(2016, 10, 22);
+    let date_time_value: DateTime<Tz> = UTC.ymd(2014, 7, 8).and_hms(14, 0, 0);
 
-	let block = Block::new()
-		.column("u8", vec![vec![41_u8]])
-		.column("u32", vec![vec![42_u32]])
-		.column("text1", vec![vec!["A"]])
-		.column("text2", vec![vec!["B".to_string()]])
-		.column("date", vec![vec![date_value]])
-		.column("time", vec![vec![date_time_value]]);
+    let block = Block::new()
+        .column("u8", vec![vec![41_u8]])
+        .column("u32", vec![vec![42_u32]])
+        .column("text1", vec![vec!["A"]])
+        .column("text2", vec![vec!["B".to_string()]])
+        .column("date", vec![vec![date_value]])
+        .column("time", vec![vec![date_time_value]]);
 
-	let pool = Pool::new(database_url());
+    let pool = Pool::new(database_url());
 
-	let mut c = pool.get_handle().await?;
-	c.execute("DROP TABLE IF EXISTS clickhouse_array").await?;
-	c.execute(ddl).await?;
-	c.insert("clickhouse_array", block).await?;
-	let block = c.query(query).fetch_all().await?;
+    let mut c = pool.get_handle().await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_array").await?;
+    c.execute(ddl).await?;
+    c.insert("clickhouse_array", block).await?;
+    let block = c.query(query).fetch_all().await?;
 
-	let u8_vec: Vec<u8> = block.get(0, "u8")?;
-	let u32_vec: Vec<u32> = block.get(0, "u32")?;
-	let text1_vec: Vec<&str> = block.get(0, "text1")?;
-	let text2_vec: Vec<String> = block.get(0, "text2")?;
-	let date_vec: Vec<Date<Tz>> = block.get(0, "date")?;
-	let time_vec: Vec<DateTime<Tz>> = block.get(0, "time")?;
+    let u8_vec: Vec<u8> = block.get(0, "u8")?;
+    let u32_vec: Vec<u32> = block.get(0, "u32")?;
+    let text1_vec: Vec<&str> = block.get(0, "text1")?;
+    let text2_vec: Vec<String> = block.get(0, "text2")?;
+    let date_vec: Vec<Date<Tz>> = block.get(0, "date")?;
+    let time_vec: Vec<DateTime<Tz>> = block.get(0, "time")?;
 
-	assert_eq!(1, block.row_count());
-	assert_eq!(vec![41_u8], u8_vec);
-	assert_eq!(vec![42_u32], u32_vec);
-	assert_eq!(vec!["A"], text1_vec);
-	assert_eq!(vec!["B".to_string()], text2_vec);
-	assert_eq!(vec![date_value], date_vec);
-	assert_eq!(vec![date_time_value], time_vec);
+    assert_eq!(1, block.row_count());
+    assert_eq!(vec![41_u8], u8_vec);
+    assert_eq!(vec![42_u32], u32_vec);
+    assert_eq!(vec!["A"], text1_vec);
+    assert_eq!(vec!["B".to_string()], text2_vec);
+    assert_eq!(vec![date_value], date_vec);
+    assert_eq!(vec![date_time_value], time_vec);
 
-	Ok(())
+    Ok(())
 }
 
 #[cfg(feature = "tokio_io")]
 #[allow(clippy::float_cmp)]
 #[tokio::test]
 async fn test_decimal() -> Result<(), Error> {
-	let ddl = "
+    let ddl = "
         CREATE TABLE clickhouse_decimal (
             x  Decimal(8, 3),
             ox Nullable(Decimal(10, 2))
         ) Engine=Memory";
 
-	let query = "SELECT x, ox FROM clickhouse_decimal";
+    let query = "SELECT x, ox FROM clickhouse_decimal";
 
-	let block = Block::new()
-		.column("x", vec![Decimal::of(1.234, 3), Decimal::of(5, 3)])
-		.column("ox", vec![None, Some(Decimal::of(1.23, 2))]);
+    let block = Block::new()
+        .column("x", vec![Decimal::of(1.234, 3), Decimal::of(5, 3)])
+        .column("ox", vec![None, Some(Decimal::of(1.23, 2))]);
 
-	let pool = Pool::new(database_url());
+    let pool = Pool::new(database_url());
 
-	let mut c = pool.get_handle().await?;
-	c.execute("DROP TABLE IF EXISTS clickhouse_decimal").await?;
-	c.execute(ddl).await?;
-	c.insert("clickhouse_decimal", block).await?;
-	let block = c.query(query).fetch_all().await?;
+    let mut c = pool.get_handle().await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_decimal").await?;
+    c.execute(ddl).await?;
+    c.insert("clickhouse_decimal", block).await?;
+    let block = c.query(query).fetch_all().await?;
 
-	let x: Decimal = block.get(0, "x")?;
-	let ox: Option<Decimal> = block.get(1, "ox")?;
-	let ox0: Option<Decimal> = block.get(0, "ox")?;
+    let x: Decimal = block.get(0, "x")?;
+    let ox: Option<Decimal> = block.get(1, "ox")?;
+    let ox0: Option<Decimal> = block.get(0, "ox")?;
 
-	assert_eq!(2, block.row_count());
-	assert_eq!(1.234, x.into());
-	assert_eq!(Some(1.23), ox.map(|v| v.into()));
-	assert_eq!(None, ox0);
+    assert_eq!(2, block.row_count());
+    assert_eq!(1.234, x.into());
+    assert_eq!(Some(1.23), ox.map(|v| v.into()));
+    assert_eq!(None, ox0);
 
-	Ok(())
+    Ok(())
 }
 
 #[cfg(feature = "tokio_io")]
 #[tokio::test]
 async fn test_column_iter() -> Result<(), Error> {
-	let ddl = r"
+    let ddl = r"
         CREATE TABLE clickhouse_test_column_iter (
             uint64    UInt64,
             str       String,
@@ -927,10 +962,10 @@ async fn test_column_iter() -> Result<(), Error> {
             uuid      UUID
         ) Engine=Memory";
 
-	let query = r"SELECT * FROM clickhouse_test_column_iter";
+    let query = r"SELECT * FROM clickhouse_test_column_iter";
 
-	let date_value: Date<Tz> = UTC.ymd(2016, 10, 22);
-	let date_time_value: DateTime<Tz> = UTC.ymd(2014, 7, 8).and_hms(14, 0, 0);
+    let date_value: Date<Tz> = UTC.ymd(2016, 10, 22);
+    let date_time_value: DateTime<Tz> = UTC.ymd(2014, 7, 8).and_hms(14, 0, 0);
 
     let block = Block::new()
         .column("uint64", vec![1_u64, 2, 3])
@@ -951,55 +986,55 @@ async fn test_column_iter() -> Result<(), Error> {
         .column("ipv6", vec!["::1", "::1", "::1"])
         .column("uuid", vec![Uuid::nil(); 3]);
 
-	let pool = Pool::new(database_url());
-	let mut c = pool.get_handle().await?;
-	c.execute("DROP TABLE IF EXISTS clickhouse_test_column_iter")
-		.await?;
-	c.execute(ddl).await?;
-	c.insert("clickhouse_test_column_iter", block).await?;
+    let pool = Pool::new(database_url());
+    let mut c = pool.get_handle().await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_test_column_iter")
+        .await?;
+    c.execute(ddl).await?;
+    c.insert("clickhouse_test_column_iter", block).await?;
 
-	let mut stream = c.query(query).stream_blocks();
+    let mut stream = c.query(query).stream_blocks();
 
-	while let Some(block) = stream.next().await {
-		let block = block?;
+    while let Some(block) = stream.next().await {
+        let block = block?;
 
-		let uint64_iter: Vec<_> = block
-			.get_column("uint64")?
-			.iter::<u64>()?
-			.copied()
-			.collect();
-		assert_eq!(uint64_iter, vec![1_u64, 2, 3]);
+        let uint64_iter: Vec<_> = block
+            .get_column("uint64")?
+            .iter::<u64>()?
+            .copied()
+            .collect();
+        assert_eq!(uint64_iter, vec![1_u64, 2, 3]);
 
-		let str_iter: Vec<_> = block.get_column("str")?.iter::<&[u8]>()?.collect();
-		assert_eq!(str_iter, vec![&[65_u8], &[66], &[67]]);
+        let str_iter: Vec<_> = block.get_column("str")?.iter::<&[u8]>()?.collect();
+        assert_eq!(str_iter, vec![&[65_u8], &[66], &[67]]);
 
-		let fixed_str_iter: Vec<_> = block.get_column("fixed_str")?.iter::<&[u8]>()?.collect();
-		assert_eq!(fixed_str_iter, vec![&[65_u8], &[66], &[67]]);
+        let fixed_str_iter: Vec<_> = block.get_column("fixed_str")?.iter::<&[u8]>()?.collect();
+        assert_eq!(fixed_str_iter, vec![&[65_u8], &[66], &[67]]);
 
-		let opt_str_iter: Vec<_> = block
-			.get_column("opt_str")?
-			.iter::<Option<&[u8]>>()?
-			.collect();
-		let expected: Vec<Option<&[u8]>> = vec![Some(&[65_u8]), None, None];
-		assert_eq!(opt_str_iter, expected);
+        let opt_str_iter: Vec<_> = block
+            .get_column("opt_str")?
+            .iter::<Option<&[u8]>>()?
+            .collect();
+        let expected: Vec<Option<&[u8]>> = vec![Some(&[65_u8]), None, None];
+        assert_eq!(opt_str_iter, expected);
 
-		let date_iter: Vec<_> = block.get_column("date")?.iter::<Date<Tz>>()?.collect();
-		assert_eq!(date_iter, vec![date_value, date_value, date_value]);
+        let date_iter: Vec<_> = block.get_column("date")?.iter::<Date<Tz>>()?.collect();
+        assert_eq!(date_iter, vec![date_value, date_value, date_value]);
 
-		let datetime_iter: Vec<_> = block
-			.get_column("datetime")?
-			.iter::<DateTime<Tz>>()?
-			.collect();
-		assert_eq!(
-			datetime_iter,
-			vec![date_time_value, date_time_value, date_time_value]
-		);
+        let datetime_iter: Vec<_> = block
+            .get_column("datetime")?
+            .iter::<DateTime<Tz>>()?
+            .collect();
+        assert_eq!(
+            datetime_iter,
+            vec![date_time_value, date_time_value, date_time_value]
+        );
 
-		let decimal_iter: Vec<_> = block.get_column("decimal")?.iter::<Decimal>()?.collect();
-		assert_eq!(
-			decimal_iter,
-			vec![Decimal::of(1.234, 3), Decimal::of(5, 3), Decimal::of(5, 3)]
-		);
+        let decimal_iter: Vec<_> = block.get_column("decimal")?.iter::<Decimal>()?.collect();
+        assert_eq!(
+            decimal_iter,
+            vec![Decimal::of(1.234, 3), Decimal::of(5, 3), Decimal::of(5, 3)]
+        );
 
         let array_iter: Vec<_> = block.get_column("array")?.iter::<Vec<u32>>()?.collect();
         assert_eq!(array_iter, vec![vec![&42_u32], Vec::new(), Vec::new()]);
@@ -1043,10 +1078,10 @@ async fn test_inconsistent_read() -> Result<(), Error> {
 #[cfg(feature = "tokio_io")]
 #[test]
 fn test_reconnect() {
-	let url = format!("{}{}", database_url(), "&pool_max=1&pool_min=1");
-	let pool = Pool::new(url);
+    let url = format!("{}{}", database_url(), "&pool_max=1&pool_min=1");
+    let pool = Pool::new(url);
 
-	let counter = Arc::new(AtomicUsize::new(0));
+    let counter = Arc::new(AtomicUsize::new(0));
 
     for _ in 0..2 {
         let pool = pool.clone();
@@ -1055,16 +1090,16 @@ fn test_reconnect() {
         let ret: Result<(), Error> = rt.block_on(async move {
             let mut client = pool.get_handle().await?;
 
-			let block = client.query("SELECT 1").fetch_all().await?;
-			let value: u8 = block.get(0, 0)?;
-			counter.fetch_add(value as usize, Ordering::SeqCst);
+            let block = client.query("SELECT 1").fetch_all().await?;
+            let value: u8 = block.get(0, 0)?;
+            counter.fetch_add(value as usize, Ordering::SeqCst);
 
-			Ok(())
-		});
-		ret.unwrap()
-	}
+            Ok(())
+        });
+        ret.unwrap()
+    }
 
-	assert_eq!(2, counter.load(Ordering::SeqCst))
+    assert_eq!(2, counter.load(Ordering::SeqCst))
 }
 
 #[cfg(feature = "tokio_io")]

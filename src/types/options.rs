@@ -631,8 +631,8 @@ mod test {
         assert_eq!(parse_duration("3s").unwrap(), Duration::from_secs(3));
         assert_eq!(parse_duration("123ms").unwrap(), Duration::from_millis(123));
 
-        assert_eq!(parse_duration("ms").unwrap_err(), ());
-        assert_eq!(parse_duration("1ss").unwrap_err(), ());
+        parse_duration("ms").unwrap_err();
+        parse_duration("1ss").unwrap_err();
     }
 
     #[test]
@@ -648,6 +648,6 @@ mod test {
     fn test_parse_compression() {
         assert_eq!(parse_compression("none").unwrap(), false);
         assert_eq!(parse_compression("lz4").unwrap(), true);
-        assert_eq!(parse_compression("?").unwrap_err(), ());
+        parse_compression("?").unwrap_err();
     }
 }

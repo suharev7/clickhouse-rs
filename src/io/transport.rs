@@ -89,7 +89,7 @@ impl Drop for TransportStatus {
         }
 
         if let Some(pool_inner) = self.pool.upgrade() {
-            pool_inner.clone().release_conn();
+            pool_inner.release_conn();
         }
     }
 }

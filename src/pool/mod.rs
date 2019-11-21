@@ -461,8 +461,8 @@ mod test {
 
     #[test]
     fn test_query_timeout() {
-        let test_db_url = format!("{}{}", DATABASE_URL.as_str(), "&query_timeout=10ms");
-        let pool = Pool::new(test_db_url.to_string());
+        let url = format!("{}{}", DATABASE_URL.as_str(), "&query_timeout=10ms");
+        let pool = Pool::new(url);
 
         let done = pool
             .get_handle()
@@ -479,7 +479,7 @@ mod test {
     #[test]
     fn test_query_stream_timeout() {
         let url = format!("{}{}", DATABASE_URL.as_str(), "&query_block_timeout=10ms");
-        let pool = Pool::new(url.to_string());
+        let pool = Pool::new(url);
 
         let done = pool
             .get_handle()
@@ -538,7 +538,7 @@ mod test {
         let counter = Arc::new(AtomicUsize::new(0));
 
         let url = format!("{}{}", DATABASE_URL.as_str(), "&query_block_timeout=10ms");
-        let pool = Pool::new(url.to_string());
+        let pool = Pool::new(url);
 
         for i in 0..4 {
             let counter = counter.clone();

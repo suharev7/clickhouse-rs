@@ -62,47 +62,44 @@
 //! ### Example
 //!
 //! ```rust
-//! extern crate clickhouse_rs;
-//! extern crate futures;
-//!
 //! use futures::Future;
 //! use clickhouse_rs::{Pool, types::Block};
 //! # use std::env;
 //!
-//! fn main() {
-//!     let ddl = "
-//!         CREATE TABLE IF NOT EXISTS payment (
-//!             customer_id  UInt32,
-//!             amount       UInt32,
-//!             account_name Nullable(FixedString(3))
-//!         ) Engine=Memory";
 //!
-//!     let block = Block::new()
-//!         .column("customer_id",  vec![1_u32,  3,  5,  7,  9])
-//!         .column("amount",       vec![2_u32,  4,  6,  8, 10])
-//!         .column("account_name", vec![Some("foo"), None, None, None, Some("bar")]);
+//!  let ddl = "
+//!      CREATE TABLE IF NOT EXISTS payment (
+//!          customer_id  UInt32,
+//!          amount       UInt32,
+//!          account_name Nullable(FixedString(3))
+//!      ) Engine=Memory";
 //!
-//!     # let database_url = env::var("DATABASE_URL").unwrap_or("tcp://localhost:9000?compression=lz4".into());
-//!     let pool = Pool::new(database_url);
+//!  let block = Block::new()
+//!      .column("customer_id",  vec![1_u32,  3,  5,  7,  9])
+//!      .column("amount",       vec![2_u32,  4,  6,  8, 10])
+//!      .column("account_name", vec![Some("foo"), None, None, None, Some("bar")]);
 //!
-//!     let done = pool
-//!        .get_handle()
-//!        .and_then(move |c| c.execute(ddl))
-//!        .and_then(move |c| c.insert("payment", block))
-//!        .and_then(move |c| c.query("SELECT * FROM payment").fetch_all())
-//!        .and_then(move |(_, block)| {
-//!            for row in block.rows() {
-//!                let id: u32     = row.get("customer_id")?;
-//!                let amount: u32 = row.get("amount")?;
-//!                let name: Option<&str>  = row.get("account_name")?;
-//!                println!("Found payment {}: {} {:?}", id, amount, name);
-//!            }
-//!            Ok(())
-//!        })
-//!        .map_err(|err| eprintln!("database error: {}", err));
+//!  # let database_url = env::var("DATABASE_URL").unwrap_or("tcp://localhost:9000?compression=lz4".into());
+//!  let pool = Pool::new(database_url);
 //!
-//!     tokio::run(done)
-//! }
+//!  let done = pool
+//!     .get_handle()
+//!     .and_then(move |c| c.execute(ddl))
+//!     .and_then(move |c| c.insert("payment", block))
+//!     .and_then(move |c| c.query("SELECT * FROM payment").fetch_all())
+//!     .and_then(move |(_, block)| {
+//!         for row in block.rows() {
+//!             let id: u32     = row.get("customer_id")?;
+//!             let amount: u32 = row.get("amount")?;
+//!             let name: Option<&str>  = row.get("account_name")?;
+//!             println!("Found payment {}: {} {:?}", id, amount, name);
+//!         }
+//!         Ok(())
+//!     })
+//!     .map_err(|err| eprintln!("database error: {}", err));
+//!
+//! tokio::run(done)
+//!
 //! ```
 
 #![recursion_limit = "1024"]

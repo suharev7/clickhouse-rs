@@ -31,6 +31,7 @@ before_install:
   - export PATH=$HOME/.cargo/bin:$PATH;
 script:
   - RUST_BACKTRACE=1 cargo test --all --verbose
+  - cargo test --package clickhouse-rs --features tokio,tokio_io --no-default-features --test clickhouse -- --exact
   - cargo test --package clickhouse-rs --features async_std --no-default-features --test clickhouse -- --exact
   - cargo clippy --all-targets -- -D warnings;
 after_success:

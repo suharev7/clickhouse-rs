@@ -2,7 +2,7 @@ use std::{env, f64::EPSILON, fmt, sync::{Arc, atomic::{Ordering, AtomicUsize}}};
 
 use chrono::prelude::*;
 use chrono_tz::Tz;
-use futures_util::{future, stream::StreamExt, try_stream::TryStreamExt};
+use futures_util::{future, stream::{TryStreamExt, StreamExt}};
 
 use clickhouse_rs::{
     errors::Error,
@@ -844,7 +844,7 @@ fn test_reconnect() {
     for _ in 0..2 {
         let pool = pool.clone();
         let counter = counter.clone();
-        let rt = tokio::runtime::Runtime::new().unwrap();
+        let mut rt = tokio::runtime::Runtime::new().unwrap();
         let ret: Result<(), Error> = rt.block_on(async move {
             let mut client = pool.get_handle().await?;
 

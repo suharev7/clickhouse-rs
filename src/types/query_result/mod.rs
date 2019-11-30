@@ -1,6 +1,6 @@
 use std::{marker::PhantomData, sync::Arc};
 
-use futures_core::stream::BoxStream;
+use futures_util::stream::BoxStream;
 use futures_util::{
     future,
     stream::{self, StreamExt},
@@ -49,7 +49,7 @@ impl<'a> QueryResult<'a> {
     /// # use clickhouse_rs::{Pool, errors::Result};
     /// # use futures_util::{future, TryStreamExt};
     /// #
-    /// # let rt = tokio::runtime::Runtime::new().unwrap();
+    /// # let mut rt = tokio::runtime::Runtime::new().unwrap();
     /// # let ret: Result<()> = rt.block_on(async {
     /// #
     /// #     let database_url = env::var("DATABASE_URL")

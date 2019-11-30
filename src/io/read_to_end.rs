@@ -4,7 +4,7 @@ use std::{
     task::{Context, Poll},
 };
 
-use futures_core::ready;
+use futures_util::ready;
 
 use crate::{
     io::Stream as InnerStream,

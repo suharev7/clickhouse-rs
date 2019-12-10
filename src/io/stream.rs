@@ -1,8 +1,8 @@
 use std::{
     io,
-    time::Duration,
     pin::Pin,
     task::{Context, Poll},
+    time::Duration,
 };
 
 #[cfg(feature = "tokio_io")]
@@ -10,13 +10,13 @@ use tokio::net::TcpStream;
 #[cfg(feature = "tls")]
 use tokio_tls::TlsStream;
 
-#[cfg(feature = "tokio_io")]
-use tokio::prelude::*;
-use pin_project::{pin_project, project};
-#[cfg(feature = "async_std")]
-use async_std::net::TcpStream;
 #[cfg(feature = "async_std")]
 use async_std::io::prelude::*;
+#[cfg(feature = "async_std")]
+use async_std::net::TcpStream;
+use pin_project::{pin_project, project};
+#[cfg(feature = "tokio_io")]
+use tokio::prelude::*;
 
 #[cfg(all(feature = "tls", feature = "tokio_io"))]
 type SecureTcpStream = TlsStream<TcpStream>;
@@ -68,7 +68,11 @@ impl Stream {
     }
 
     #[project]
-    pub(crate) fn poll_read(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<io::Result<usize>> {
+    pub(crate) fn poll_read(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut [u8],
+    ) -> Poll<io::Result<usize>> {
         #[project]
         match self.project() {
             Stream::Plain(stream) => stream.poll_read(cx, buf),
@@ -78,7 +82,11 @@ impl Stream {
     }
 
     #[project]
-    pub(crate) fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
+    pub(crate) fn poll_write(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<io::Result<usize>> {
         #[project]
         match self.project() {
             Stream::Plain(stream) => stream.poll_write(cx, buf),

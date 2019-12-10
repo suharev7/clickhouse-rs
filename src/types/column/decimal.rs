@@ -4,15 +4,14 @@ use crate::{
     binary::{Encoder, ReadEx},
     errors::Result,
     types::{
-        ColumnType,
         column::{
-            BoxColumnWrapper, column_data::BoxColumnData, column_data::ColumnData,
-            ColumnFrom, ColumnWrapper, Either, list::List, nullable::NullableColumnData,
+            column_data::BoxColumnData, column_data::ColumnData, list::List,
+            nullable::NullableColumnData, BoxColumnWrapper, ColumnFrom, ColumnWrapper, Either,
             VectorColumnData,
         },
-        Column,
         decimal::{Decimal, NoBits},
-        from_sql::FromSql, SqlType, Value, ValueRef,
+        from_sql::FromSql,
+        Column, ColumnType, SqlType, Value, ValueRef,
     },
 };
 

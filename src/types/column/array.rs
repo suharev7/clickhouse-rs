@@ -116,7 +116,7 @@ mod test {
     use std::io::Cursor;
 
     use super::*;
-    use crate::{Block, types::Simple};
+    use crate::{types::Simple, Block};
 
     #[test]
     fn test_write_and_read() {

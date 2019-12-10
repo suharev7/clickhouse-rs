@@ -8,14 +8,17 @@ use std::{
 use futures_core::future::BoxFuture;
 #[cfg(feature = "tls")]
 use futures_util::FutureExt;
-use futures_util::{try_future::{select_ok, SelectOk}, TryFutureExt};
+use futures_util::{
+    future::{select_ok, SelectOk},
+    TryFutureExt,
+};
 
+#[cfg(feature = "async_std")]
+use async_std::net::TcpStream;
 #[cfg(feature = "tls")]
 use native_tls::TlsConnector;
 #[cfg(feature = "tokio_io")]
 use tokio::net::TcpStream;
-#[cfg(feature = "async_std")]
-use async_std::net::TcpStream;
 
 use pin_project::{pin_project, project};
 use url::Url;
@@ -58,9 +61,7 @@ impl TcpState {
                 Poll::Ready(Err(err)) => Poll::Ready(Err(err)),
                 Poll::Pending => Poll::Pending,
             },
-            TcpState::Fail(ref mut err) => {
-                Poll::Ready(Err(err.take().unwrap()))
-            },
+            TcpState::Fail(ref mut err) => Poll::Ready(Err(err.take().unwrap())),
         }
     }
 }
@@ -79,7 +80,7 @@ impl TlsState {
             TlsState::Fail(ref mut err) => {
                 let e = err.take().unwrap();
                 Poll::Ready(Err(e))
-            },
+            }
         }
     }
 }
@@ -164,12 +165,14 @@ impl ConnectingStream {
     }
 
     #[cfg(feature = "tls")]
-    fn new_tls_connection(addr: &Url, socket: SelectOk<ConnectingFuture<TcpStream>>, options: &Options) -> Self {
+    fn new_tls_connection(
+        addr: &Url,
+        socket: SelectOk<ConnectingFuture<TcpStream>>,
+        options: &Options,
+    ) -> Self {
         match addr.host_str().map(|host| host.to_owned()) {
-            None => {
-                Self {
-                    state: State::tls_host_err(),
-                }
+            None => Self {
+                state: State::tls_host_err(),
             },
             Some(host) => {
                 let mut builder = TlsConnector::builder();
@@ -180,18 +183,16 @@ impl ConnectingStream {
                 }
 
                 Self {
-                    state: State::tls_wait(
-                        Box::pin(async move {
-                            let (s, _) = socket.await?;
+                    state: State::tls_wait(Box::pin(async move {
+                        let (s, _) = socket.await?;
 
-                            let cx = builder.build()?;
-                            let cx = tokio_tls::TlsConnector::from(cx);
+                        let cx = builder.build()?;
+                        let cx = tokio_tls::TlsConnector::from(cx);
 
-                            Ok(cx.connect(&host, s).await?)
-                        })
-                    )
+                        Ok(cx.connect(&host, s).await?)
+                    })),
                 }
-            },
+            }
         }
     }
 }

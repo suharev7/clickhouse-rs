@@ -3,8 +3,12 @@ use std::{
     io::{self, Cursor},
     pin::Pin,
     ptr,
+    sync::{
+        self,
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     task::{self, Poll},
-    sync::{self, Arc, atomic::{AtomicBool, Ordering}},
 };
 
 use chrono_tz::Tz;
@@ -16,8 +20,8 @@ use crate::{
     binary::Parser,
     errors::{DriverError, Error, Result},
     io::{read_to_end::read_to_end, Stream as InnerStream},
+    pool::{Inner, Pool},
     types::{Block, Cmd, Packet},
-    pool::{Pool, Inner},
 };
 use futures_core::Stream;
 use futures_util::StreamExt;

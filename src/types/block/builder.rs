@@ -3,12 +3,13 @@ use std::{borrow::Cow, marker};
 use chrono_tz::Tz;
 
 use crate::{
-    Block,
     errors::{Error, FromSqlError, Result},
     types::{
-        block::ColumnIdx, ColumnType,
-        column::{ArcColumnWrapper, ColumnData, Either}, Column, Value,
+        block::ColumnIdx,
+        column::{ArcColumnWrapper, ColumnData, Either},
+        Column, ColumnType, Value,
     },
+    Block,
 };
 
 pub trait RowBuilder {
@@ -131,7 +132,7 @@ mod test {
 
     use crate::{
         row,
-        types::{Decimal, SqlType, Simple},
+        types::{Decimal, Simple, SqlType},
     };
 
     use super::*;

@@ -104,7 +104,7 @@ use futures_core::{future::BoxFuture, stream::BoxStream};
 use futures_util::{future, future::FutureExt, stream, StreamExt};
 use log::info;
 #[cfg(feature = "tokio_io")]
-use tokio::timer::Timeout;
+use tokio::time::timeout as tokio_timeout;
 
 use crate::{
     connecting_stream::ConnectingStream,
@@ -511,9 +511,7 @@ where
 {
     use async_std::io;
 
-    Ok(io::timeout(duration, async move {
-        Ok(future.await?)
-    }).await?)
+    Ok(io::timeout(duration, async move { Ok(future.await?) }).await?)
 }
 
 #[cfg(not(feature = "async_std"))]
@@ -521,7 +519,7 @@ async fn with_timeout<F, T>(future: F, timeout: Duration) -> F::Output
 where
     F: Future<Output = Result<T>>,
 {
-    match Timeout::new(future, timeout).await {
+    match tokio_timeout(timeout, future).await {
         Ok(Ok(c)) => Ok(c),
         Ok(Err(err)) => Err(err),
         Err(err) => Err(err.into()),

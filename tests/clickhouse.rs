@@ -1,8 +1,19 @@
-use std::{env, f64::EPSILON, fmt, sync::{Arc, atomic::{Ordering, AtomicUsize}}};
+use std::{
+    env,
+    f64::EPSILON,
+    fmt,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
+};
 
 use chrono::prelude::*;
 use chrono_tz::Tz;
-use futures_util::{future, stream::StreamExt, try_stream::TryStreamExt};
+use futures_util::{
+    future,
+    stream::{StreamExt, TryStreamExt},
+};
 
 use clickhouse_rs::{
     errors::Error,
@@ -194,7 +205,7 @@ async fn test_select() -> Result<(), Error> {
     assert_eq!(3, r.get::<u64, _>(0, 0)?);
 
     let r = c
-        .query("SELECT COUNT(*) FROM clickhouse_test_select WHERE datetime = '2014-07-08 14:00:00'")
+        .query("SELECT COUNT(*) FROM clickhouse_test_select WHERE datetime = toDateTime('2014-07-08 14:00:00', 'UTC')")
         .fetch_all()
         .await?;
     assert_eq!(2, r.get::<u64, _>(0, 0)?);
@@ -844,7 +855,7 @@ fn test_reconnect() {
     for _ in 0..2 {
         let pool = pool.clone();
         let counter = counter.clone();
-        let rt = tokio::runtime::Runtime::new().unwrap();
+        let mut rt = tokio::runtime::Runtime::new().unwrap();
         let ret: Result<(), Error> = rt.block_on(async move {
             let mut client = pool.get_handle().await?;
 

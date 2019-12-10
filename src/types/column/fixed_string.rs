@@ -4,8 +4,8 @@ use crate::{
     binary::{Encoder, ReadEx},
     errors::Result,
     types::{
-        column::column_data::BoxColumnData, from_sql::*, Column, SqlType, Value,
-        ValueRef, ColumnType
+        column::column_data::BoxColumnData, from_sql::*, Column, ColumnType, SqlType, Value,
+        ValueRef,
     },
 };
 

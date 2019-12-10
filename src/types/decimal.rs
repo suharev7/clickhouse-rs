@@ -115,13 +115,13 @@ impl PartialEq for Decimal {
                 let delta = other.scale() - self.scale();
                 let underlying = self.underlying * FACTORS10[delta];
                 other.underlying == underlying
-            },
+            }
             Ordering::Equal => self.underlying == other.underlying,
             Ordering::Greater => {
                 let delta = self.scale() - other.scale();
                 let underlying = other.underlying * FACTORS10[delta];
                 self.underlying == underlying
-            },
+            }
         }
     }
 }
@@ -190,7 +190,7 @@ impl Decimal {
     /// ```rust
     /// # use std::env;
     /// # use clickhouse_rs::{Pool, types::Decimal, errors::Result};
-    /// # let rt = tokio::runtime::Runtime::new().unwrap();
+    /// # let mut rt = tokio::runtime::Runtime::new().unwrap();
     /// # let ret: Result<()> = rt.block_on(async {
     /// #     let database_url = env::var("DATABASE_URL")
     /// #         .unwrap_or("tcp://localhost:9000?compression=lz4".into());

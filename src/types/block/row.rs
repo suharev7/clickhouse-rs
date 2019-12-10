@@ -2,7 +2,7 @@ use std::{marker, sync::Arc};
 
 use crate::{
     errors::Result,
-    types::{Block, block::ColumnIdx, ColumnType, Column, FromSql, SqlType},
+    types::{block::ColumnIdx, Block, Column, ColumnType, FromSql, SqlType},
 };
 
 /// A row from Clickhouse

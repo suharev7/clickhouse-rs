@@ -6,9 +6,7 @@ use std::{
 
 use futures_core::ready;
 
-use crate::{
-    io::Stream as InnerStream,
-};
+use crate::io::Stream as InnerStream;
 
 struct Guard<'a> {
     buf: &'a mut Vec<u8>,

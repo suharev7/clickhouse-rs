@@ -9,7 +9,7 @@ use crate::errors::ServerError;
 
 pub use self::{
     block::{Block, RCons, RNil, Row, RowBuilder, Rows},
-    column::{Column, ColumnType, Simple, Complex},
+    column::{Column, ColumnType, Complex, Simple},
     decimal::Decimal,
     from_sql::FromSql,
     options::Options,

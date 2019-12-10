@@ -6,21 +6,21 @@ use crate::{
     binary::{Encoder, ReadEx},
     errors::{Error, FromSqlError, Result},
     types::{
+        column::iter::SimpleIterable,
         column::{
             column_data::ArcColumnData,
             decimal::{DecimalAdapter, NullableDecimalAdapter},
             fixed_string::{FixedStringAdapter, NullableFixedStringAdapter},
             string::StringAdapter,
         },
-        column::iter::SimpleIterable,
         decimal::NoBits,
         SqlType, Value, ValueRef,
     },
 };
 
+use self::chunk::ChunkColumnData;
 pub(crate) use self::{column_data::ColumnData, string_pool::StringPool};
 pub use self::{concat::ConcatColumnData, numeric::VectorColumnData};
-use self::chunk::ChunkColumnData;
 
 mod array;
 mod chunk;
@@ -141,7 +141,7 @@ impl Column<Simple> {
     /// # use std::env;
     /// # use clickhouse_rs::{errors::Error, Pool, errors::Result};
     /// # use futures_util::stream::StreamExt;
-    /// # let rt = tokio::runtime::Runtime::new().unwrap();
+    /// # let mut rt = tokio::runtime::Runtime::new().unwrap();
     /// # let ret: Result<()> = rt.block_on(async {
     /// #     let database_url = "tcp://localhost:9000";
     /// #     let pool = Pool::new(database_url);

@@ -11,8 +11,8 @@ use log::info;
 use crate::{
     errors::Result,
     types::{
-        block::BlockRef, query_result::stream_blocks::BlockStream, Block, Cmd, Query, Row,
-        Rows, Complex, Simple
+        block::BlockRef, query_result::stream_blocks::BlockStream, Block, Cmd, Complex, Query, Row,
+        Rows, Simple,
     },
     ClientHandle,
 };
@@ -49,7 +49,7 @@ impl<'a> QueryResult<'a> {
     /// # use clickhouse_rs::{Pool, errors::Result};
     /// # use futures_util::{future, TryStreamExt};
     /// #
-    /// # let rt = tokio::runtime::Runtime::new().unwrap();
+    /// # let mut rt = tokio::runtime::Runtime::new().unwrap();
     /// # let ret: Result<()> = rt.block_on(async {
     /// #
     /// #     let database_url = env::var("DATABASE_URL")
@@ -79,11 +79,7 @@ impl<'a> QueryResult<'a> {
 
                 let context = c.context.clone();
 
-                let inner = c
-                    .inner
-                    .take()
-                    .unwrap()
-                    .call(Cmd::SendQuery(query, context));
+                let inner = c.inner.take().unwrap().call(Cmd::SendQuery(query, context));
 
                 BlockStream::<'a>::new(c, inner)
             })

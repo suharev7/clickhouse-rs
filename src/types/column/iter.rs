@@ -1,16 +1,13 @@
 #![allow(clippy::cast_ptr_alignment)]
 
-use std::{
-    iter::FusedIterator,
-    marker, mem, ptr, slice,
-};
+use std::{iter::FusedIterator, marker, mem, ptr, slice};
 
 use chrono::{prelude::*, Date};
 use chrono_tz::Tz;
 
 use crate::{
     errors::{Error, FromSqlError, Result},
-    types::{column::StringPool, decimal::NoBits, Column, Decimal, SqlType, Simple},
+    types::{column::StringPool, decimal::NoBits, Column, Decimal, Simple, SqlType},
 };
 
 macro_rules! simple_num_iterable {

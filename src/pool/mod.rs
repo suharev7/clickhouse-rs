@@ -1,7 +1,8 @@
 use std::{
-    fmt, mem, pin::Pin,
-    sync::Arc,
+    fmt, mem,
+    pin::Pin,
     sync::atomic::{self, Ordering},
+    sync::Arc,
     task::{Context, Poll, Waker},
 };
 
@@ -9,9 +10,9 @@ use futures_core::future::BoxFuture;
 use log::error;
 
 use crate::{
-    Client,
-    ClientHandle,
-    errors::Result, types::{IntoOptions, OptionsSource},
+    errors::Result,
+    types::{IntoOptions, OptionsSource},
+    Client, ClientHandle,
 };
 
 pub use self::futures::GetHandle;
@@ -214,13 +215,13 @@ impl Pool {
             match new.poll_unpin(cx) {
                 Poll::Ready(Ok(client)) => {
                     self.inner.idle.push(client).unwrap();
-                },
+                }
                 Poll::Pending => {
                     let _ = self.inner.new.push(new);
-                },
+                }
                 Poll::Ready(Err(err)) => {
                     return Err(err);
-                },
+                }
             }
         }
 
@@ -280,17 +281,16 @@ mod test {
     use std::{
         str::FromStr,
         sync::{
-            Arc,
             atomic::{AtomicBool, Ordering},
+            Arc,
         },
-        thread,
         time::{Duration, Instant},
     };
 
     use futures_util::future;
-    use tokio::runtime::current_thread::Runtime;
+    use tokio::runtime::Builder;
 
-    use crate::{Block, errors::Result, Options, test_misc::DATABASE_URL};
+    use crate::{errors::Result, test_misc::DATABASE_URL, Block, Options};
 
     use super::Pool;
 
@@ -378,31 +378,29 @@ mod test {
         let barrier = Arc::new(AtomicBool::new(true));
         let pool = Pool::new(options);
 
-        let runtime = Runtime::new().unwrap();
+        let mut runtime = Builder::new()
+            .threaded_scheduler()
+            .enable_all()
+            .build()
+            .unwrap();
+        let tasks: Vec<_> = (0..100)
+            .map(|_| {
+                let local_pool = pool.clone();
+                let local_barer = Arc::clone(&barrier);
 
-        let mut threads = Vec::new();
-        for _ in 0..100 {
-            let handle = runtime.handle();
-            let local_pool = pool.clone();
-            let local_barer = barrier.clone();
-
-            let h = thread::spawn(move || {
-                handle.spawn(async move {
+                runtime.spawn(async move {
                     while local_barer.load(Ordering::SeqCst) {}
 
                     let _ = local_pool.get_handle().await;
                 })
-            });
-
-            threads.push(h);
-        }
+            })
+            .collect();
 
         barrier.store(false, Ordering::SeqCst);
-        for h in threads {
-            match h.join().unwrap() {
-                Ok(_) => {}
-                Err(e) => panic!(e),
-            }
+
+        match runtime.block_on(future::try_join_all(tasks)) {
+            Ok(_) => {}
+            Err(e) => panic!(e),
         }
     }
 

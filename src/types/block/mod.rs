@@ -16,7 +16,7 @@ use crate::{
     errors::{Error, FromSqlError, Result},
     types::{
         column::{self, ArcColumnWrapper, Column, ColumnFrom},
-        FromSql, SqlType, ColumnType, Simple, Complex
+        ColumnType, Complex, FromSql, Simple, SqlType,
     },
 };
 

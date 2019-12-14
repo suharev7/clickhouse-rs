@@ -190,7 +190,7 @@ impl Decimal {
     /// ```rust
     /// # use std::env;
     /// # use clickhouse_rs::{Pool, types::Decimal, errors::Result};
-    /// # let rt = tokio::runtime::Runtime::new().unwrap();
+    /// # let mut rt = tokio::runtime::Runtime::new().unwrap();
     /// # let ret: Result<()> = rt.block_on(async {
     /// #     let database_url = env::var("DATABASE_URL")
     /// #         .unwrap_or("tcp://localhost:9000?compression=lz4".into());

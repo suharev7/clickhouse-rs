@@ -5,10 +5,10 @@ use std::{
     task::{Context, Poll},
 };
 
-use futures_core::future::BoxFuture;
+use futures_util::future::BoxFuture;
 #[cfg(feature = "tls")]
 use futures_util::FutureExt;
-use futures_util::{try_future::{select_ok, SelectOk}, TryFutureExt};
+use futures_util::future::{select_ok, SelectOk, TryFutureExt};
 
 #[cfg(feature = "tls")]
 use native_tls::TlsConnector;

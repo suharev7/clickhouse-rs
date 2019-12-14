@@ -141,7 +141,7 @@ impl Column<Simple> {
     /// # use std::env;
     /// # use clickhouse_rs::{errors::Error, Pool, errors::Result};
     /// # use futures_util::stream::StreamExt;
-    /// # let rt = tokio::runtime::Runtime::new().unwrap();
+    /// # let mut rt = tokio::runtime::Runtime::new().unwrap();
     /// # let ret: Result<()> = rt.block_on(async {
     /// #     let database_url = "tcp://localhost:9000";
     /// #     let pool = Pool::new(database_url);

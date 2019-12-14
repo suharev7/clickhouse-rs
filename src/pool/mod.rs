@@ -5,7 +5,7 @@ use std::{
     task::{Context, Poll, Waker},
 };
 
-use futures_core::future::BoxFuture;
+use futures_util::future::BoxFuture;
 use log::error;
 
 use crate::{
@@ -288,7 +288,7 @@ mod test {
     };
 
     use futures_util::future;
-    use tokio::runtime::current_thread::Runtime;
+    use tokio::runtime::Builder;
 
     use crate::{Block, errors::Result, Options, test_misc::DATABASE_URL};
 
@@ -378,11 +378,11 @@ mod test {
         let barrier = Arc::new(AtomicBool::new(true));
         let pool = Pool::new(options);
 
-        let runtime = Runtime::new().unwrap();
+        let mut runtime = Builder::new().basic_scheduler().num_threads(1).enable_all().build().unwrap();
 
         let mut threads = Vec::new();
         for _ in 0..100 {
-            let handle = runtime.handle();
+            let handle = runtime.handle().clone();
             let local_pool = pool.clone();
             let local_barer = barrier.clone();
 
@@ -399,7 +399,8 @@ mod test {
 
         barrier.store(false, Ordering::SeqCst);
         for h in threads {
-            match h.join().unwrap() {
+            let join_handle = h.join();
+            match runtime.block_on(join_handle.unwrap()) {
                 Ok(_) => {}
                 Err(e) => panic!(e),
             }

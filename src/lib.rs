@@ -100,11 +100,9 @@
 
 use std::{fmt, future::Future, time::Duration};
 
-use futures_core::{future::BoxFuture, stream::BoxStream};
+use futures_util::{future::BoxFuture, stream::BoxStream};
 use futures_util::{future, future::FutureExt, stream, StreamExt};
 use log::info;
-#[cfg(feature = "tokio_io")]
-use tokio::timer::Timeout;
 
 use crate::{
     connecting_stream::ConnectingStream,
@@ -271,17 +269,17 @@ impl ClientHandle {
 
         let mut h = None;
         let mut info = None;
-        let mut stream = self.inner.take().unwrap().call(Cmd::Hello(context.clone()));
+        let stream = self.inner.take().unwrap().call(Cmd::Hello(context.clone()));
+        pin_utils::pin_mut!(stream);
 
-        while let Some(packet) = stream.next().await {
+        while let Some(packet) = stream.next().await.transpose().map_err(Error::Io)? {
             match packet {
-                Ok(Packet::Hello(inner, server_info)) => {
+                Packet::Hello(inner, server_info) => {
                     info!("[hello] <- {:?}", &server_info);
                     h = Some(inner);
                     info = Some(server_info);
                 }
-                Ok(Packet::Exception(e)) => return Err(Error::Server(e)),
-                Err(e) => return Err(Error::Io(e)),
+                Packet::Exception(e) => return Err(Error::Server(e)),
                 _ => return Err(Error::Driver(DriverError::UnexpectedPacket)),
             }
         }
@@ -510,10 +508,11 @@ where
     F: Future<Output = Result<T>>,
 {
     use async_std::io;
+    use futures_util::future::TryFutureExt;
 
-    Ok(io::timeout(duration, async move {
-        Ok(future.await?)
-    }).await?)
+    io::timeout(duration, future.map_err(Into::into))
+        .map_err(Into::into)
+        .await
 }
 
 #[cfg(not(feature = "async_std"))]
@@ -521,11 +520,7 @@ async fn with_timeout<F, T>(future: F, timeout: Duration) -> F::Output
 where
     F: Future<Output = Result<T>>,
 {
-    match Timeout::new(future, timeout).await {
-        Ok(Ok(c)) => Ok(c),
-        Ok(Err(err)) => Err(err),
-        Err(err) => Err(err.into()),
-    }
+    tokio::time::timeout(timeout, future).await?
 }
 
 #[cfg(test)]

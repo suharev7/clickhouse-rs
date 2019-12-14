@@ -2,7 +2,7 @@ use std::{borrow::Cow, io, result, str::Utf8Error, string::FromUtf8Error};
 
 use failure::*;
 #[cfg(feature = "tokio_io")]
-use tokio::timer::timeout::Elapsed;
+use tokio::time::Elapsed;
 use url::ParseError;
 
 /// Result type alias for this library.

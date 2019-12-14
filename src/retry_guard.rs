@@ -1,8 +1,5 @@
 use std::{mem, time::Duration};
 
-#[cfg(feature = "tokio_io")]
-use tokio::timer::Interval;
-
 use log::warn;
 
 use crate::{errors::Result, types::OptionsSource, Client, ClientHandle, Pool};
@@ -47,8 +44,7 @@ pub(crate) async fn retry_guard(
 
                 #[cfg(not(feature = "async_std"))]
                 {
-                    let mut interval = Interval::new_interval(duration);
-                    interval.next().await;
+                    tokio::time::delay_for(duration).await;
                 }
             }
         }

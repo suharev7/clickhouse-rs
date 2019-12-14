@@ -20,13 +20,13 @@ async_std = ["async-std"]
 tokio_io = ["tokio"]
 
 [dependencies]
-futures-core-preview = "=0.3.0-alpha.19"
-futures-sink-preview = "=0.3.0-alpha.19"
-futures-util-preview = { version = "=0.3.0-alpha.19", features = ["sink"] }
+futures-core = "0.3.1"
+futures-util = "0.3.1"
 
-tokio = { version = "0.2.0-alpha.6", default-features = false, features = ["io", "net", "sync", "rt-full"], optional = true }
-async-std = { version = "0.99.11", optional = true }
+tokio = { version = "0.2.4", default-features = false, features = ["tcp", "time", "sync", "rt-core", "macros"], optional = true }
+async-std = { version = "1.2.0", optional = true }
 pin-project = "0.4.5"
+pin-utils = "0.1.0-alpha.4"
 
 hostname = "^0.1"
 
@@ -46,7 +46,7 @@ log = { version = "0.4.8", features = ["std", "serde"] }
 crossbeam = "0.7"
 
 native-tls = { version = "0.2", optional = true }
-tokio-tls = { version = "=0.3.0-alpha.6", optional = true }
+tokio-tls = { version = "=0.3.0", optional = true }
 
 [dev-dependencies]
 env_logger = "^0.6"

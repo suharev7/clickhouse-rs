@@ -175,6 +175,8 @@ pub enum SqlType {
     Float64,
     Date,
     DateTime,
+    Ipv4,
+    Ipv6,
     Nullable(&'static SqlType),
     Array(&'static SqlType),
     Decimal(u8, u8),
@@ -230,6 +232,8 @@ impl SqlType {
             SqlType::Float64 => "Float64".into(),
             SqlType::Date => "Date".into(),
             SqlType::DateTime => "DateTime".into(),
+            SqlType::Ipv4 => "IPv4".into(),
+            SqlType::Ipv6 => "IPv6".into(),
             SqlType::Nullable(&nested) => format!("Nullable({})", nested).into(),
             SqlType::Array(&nested) => format!("Array({})", nested).into(),
             SqlType::Decimal(precision, scale) => {

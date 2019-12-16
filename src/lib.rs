@@ -19,6 +19,7 @@
 //! * UInt8, UInt16, UInt32, UInt64, Int8, Int16, Int32, Int64
 //! * Nullable(T)
 //! * Array(UInt/Int/String/Date/DateTime)
+//! * IPv4/IPv6
 //!
 //! ### DNS
 //!
@@ -269,17 +270,17 @@ impl ClientHandle {
 
         let mut h = None;
         let mut info = None;
-        let stream = self.inner.take().unwrap().call(Cmd::Hello(context.clone()));
-        pin_utils::pin_mut!(stream);
+        let mut stream = self.inner.take().unwrap().call(Cmd::Hello(context.clone()));
 
-        while let Some(packet) = stream.next().await.transpose().map_err(Error::Io)? {
+        while let Some(packet) = stream.next().await {
             match packet {
-                Packet::Hello(inner, server_info) => {
+                Ok(Packet::Hello(inner, server_info)) => {
                     info!("[hello] <- {:?}", &server_info);
                     h = Some(inner);
                     info = Some(server_info);
                 }
-                Packet::Exception(e) => return Err(Error::Server(e)),
+                Ok(Packet::Exception(e)) => return Err(Error::Server(e)),
+                Err(e) => return Err(Error::Io(e)),
                 _ => return Err(Error::Driver(DriverError::UnexpectedPacket)),
             }
         }
@@ -531,6 +532,6 @@ pub(crate) mod test_misc {
 
     lazy_static! {
         pub static ref DATABASE_URL: String = env::var("DATABASE_URL")
-            .unwrap_or_else(|_| "tcp://localhost:9000?compression=lz4".into());
+            .unwrap_or_else(|_| "tcp://localhost:9000?compression=lz4&ping_timeout=5s&retry_timeout=5s".into());
     }
 }

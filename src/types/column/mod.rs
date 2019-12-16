@@ -1,4 +1,9 @@
-use std::{fmt, marker, ops, sync::Arc};
+use std::{
+    fmt, marker,
+    net::{Ipv4Addr, Ipv6Addr},
+    ops,
+    sync::Arc,
+};
 
 use chrono_tz::Tz;
 
@@ -6,21 +11,22 @@ use crate::{
     binary::{Encoder, ReadEx},
     errors::{Error, FromSqlError, Result},
     types::{
+        column::iter::SimpleIterable,
         column::{
             column_data::ArcColumnData,
             decimal::{DecimalAdapter, NullableDecimalAdapter},
             fixed_string::{FixedStringAdapter, NullableFixedStringAdapter},
+            ip::{Ipv6, IpColumnData, Ipv4},
             string::StringAdapter,
         },
-        column::iter::SimpleIterable,
         decimal::NoBits,
         SqlType, Value, ValueRef,
     },
 };
 
+use self::chunk::ChunkColumnData;
 pub(crate) use self::{column_data::ColumnData, string_pool::StringPool};
 pub use self::{concat::ConcatColumnData, numeric::VectorColumnData};
-use self::chunk::ChunkColumnData;
 
 mod array;
 mod chunk;
@@ -30,6 +36,7 @@ mod date;
 mod decimal;
 mod factory;
 pub(crate) mod fixed_string;
+mod ip;
 mod iter;
 mod list;
 mod nullable;
@@ -303,6 +310,50 @@ impl<K: ColumnType> Column<K> {
                 Ok(Column {
                     name,
                     data: Arc::new(adapter),
+                    _marker: marker::PhantomData,
+                })
+            }
+            (SqlType::Ipv4, SqlType::String) => {
+                let name = self.name().to_owned();
+
+                let n = self.len();
+                let mut inner = Vec::with_capacity(n);
+                for i in 0..n {
+                    let source = self.at(i).as_str().unwrap();
+                    let ip: Ipv4Addr = source.parse().unwrap();
+                    inner.extend(&ip.octets());
+                }
+
+                let data = Arc::new(IpColumnData::<Ipv4> {
+                    inner,
+                    phantom: marker::PhantomData,
+                });
+
+                Ok(Column {
+                    name,
+                    data,
+                    _marker: marker::PhantomData,
+                })
+            }
+            (SqlType::Ipv6, SqlType::String) => {
+                let name = self.name().to_owned();
+
+                let n = self.len();
+                let mut inner = Vec::with_capacity(n);
+                for i in 0..n {
+                    let source = self.at(i).as_str().unwrap();
+                    let ip: Ipv6Addr = source.parse().unwrap();
+                    inner.extend(&ip.octets());
+                }
+
+                let data = Arc::new(IpColumnData::<Ipv6> {
+                    inner,
+                    phantom: marker::PhantomData,
+                });
+
+                Ok(Column {
+                    name,
+                    data,
                     _marker: marker::PhantomData,
                 })
             }

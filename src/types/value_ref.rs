@@ -1,4 +1,4 @@
-use std::{convert, fmt, str, sync::Arc};
+use std::{convert, fmt, str, sync::Arc, net::{Ipv4Addr, Ipv6Addr}};
 
 use chrono::prelude::*;
 use chrono_tz::Tz;
@@ -31,6 +31,8 @@ pub enum ValueRef<'a> {
     Nullable(Either<&'static SqlType, Box<ValueRef<'a>>>),
     Array(&'static SqlType, Arc<Vec<ValueRef<'a>>>),
     Decimal(Decimal),
+    Ipv4([u8; 4]),
+    Ipv6([u8; 16]),
 }
 
 impl<'a> PartialEq for ValueRef<'a> {
@@ -109,6 +111,12 @@ impl<'a> fmt::Display for ValueRef<'a> {
                 write!(f, "[{}]", cells.join(", "))
             }
             ValueRef::Decimal(v) => fmt::Display::fmt(v, f),
+            ValueRef::Ipv4(v) => {
+                write!(f, "{}", Ipv4Addr::from(*v))
+            }
+            ValueRef::Ipv6(v) => {
+                write!(f, "{}", Ipv6Addr::from(*v))
+            }
         }
     }
 }
@@ -135,6 +143,8 @@ impl<'a> convert::From<ValueRef<'a>> for SqlType {
             },
             ValueRef::Array(t, _) => SqlType::Array(t),
             ValueRef::Decimal(v) => SqlType::Decimal(v.precision, v.scale),
+            ValueRef::Ipv4(_) => SqlType::Ipv4,
+            ValueRef::Ipv6(_) => SqlType::Ipv6,
         }
     }
 }
@@ -200,6 +210,8 @@ impl<'a> From<ValueRef<'a>> for Value {
                 Value::Array(t, Arc::new(value_list))
             }
             ValueRef::Decimal(v) => Value::Decimal(v),
+            ValueRef::Ipv4(v) => Value::Ipv4(v),
+            ValueRef::Ipv6(v) => Value::Ipv6(v),
         }
     }
 }
@@ -275,6 +287,8 @@ impl<'a> From<&'a Value> for ValueRef<'a> {
                 ValueRef::Array(*t, Arc::new(ref_vec))
             }
             Value::Decimal(v) => ValueRef::Decimal(v.clone()),
+            Value::Ipv4(v) => ValueRef::Ipv4(*v),
+            Value::Ipv6(v) => ValueRef::Ipv6(*v),
         }
     }
 }

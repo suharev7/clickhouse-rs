@@ -1,4 +1,13 @@
-use std::{env, f64::EPSILON, fmt, sync::{Arc, atomic::{Ordering, AtomicUsize}}};
+use std::{
+    env,
+    f64::EPSILON,
+    fmt,
+    net::{Ipv4Addr, Ipv6Addr},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
+};
 
 use chrono::prelude::*;
 use chrono_tz::Tz;
@@ -85,7 +94,11 @@ async fn test_insert() -> Result<(), Error> {
                float64 Float64,
                string  String,
                date    Date,
-               datetime DateTime
+               datetime DateTime,
+               ipv4 IPv4,
+               ipv6 IPv6,
+               ipv4str IPv4,
+               ipv6str IPv6
                ) Engine=Memory";
 
     let block = Block::new()
@@ -123,6 +136,54 @@ async fn test_insert() -> Result<(), Error> {
                 UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
                 UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
             ],
+        )
+        .column(
+            "ipv4",
+            vec![
+                Ipv4Addr::new(10, 10, 10, 10),
+                Ipv4Addr::new(172, 16, 10, 10),
+                Ipv4Addr::new(172, 29, 45, 14),
+                Ipv4Addr::new(10, 10, 10, 10),
+                Ipv4Addr::new(172, 16, 10, 10),
+                Ipv4Addr::new(172, 29, 45, 14),
+                Ipv4Addr::new(10, 10, 10, 10),
+            ],
+        )
+        .column(
+            "ipv6",
+            vec![
+                Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1),
+                Ipv6Addr::new(0, 0, 0, 0, 0, 0xffff, 0xc00a, 0x2ff),
+                Ipv6Addr::new(0, 0, 0x1c9, 0, 0, 0xafc8, 0, 0x1),
+                Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1),
+                Ipv6Addr::new(0, 0, 0, 0, 0, 0xffff, 0xc00a, 0x2ff),
+                Ipv6Addr::new(0, 0, 0x1c9, 0, 0, 0xafc8, 0, 0x1),
+                Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1),
+            ],
+        )
+        .column(
+            "ipv4str",
+            vec![
+                "10.10.10.10",
+                "172.16.10.10",
+                "172.29.45.14",
+                "10.10.10.10",
+                "172.16.10.10",
+                "172.29.45.14",
+                "10.10.10.10",
+            ],
+        )
+        .column(
+            "ipv6str",
+            vec![
+                "2a02:aa08:e000:3100::2",
+                "2001:44c8:129:2632:33:0:252:2",
+                "2a02:e980:1e::1",
+                "2a02:aa08:e000:3100::2",
+                "2001:44c8:129:2632:33:0:252:2",
+                "2a02:e980:1e::1",
+                "2a02:aa08:e000:3100::2",
+            ],
         );
 
     let expected = block.clone();
@@ -137,7 +198,9 @@ async fn test_insert() -> Result<(), Error> {
         .fetch_all()
         .await?;
 
-    assert_eq!(expected.as_ref(), &actual);
+    assert_eq!(
+        format!("{:?}", expected.as_ref()), 
+        format!("{:?}", &actual));
     Ok(())
 }
 
@@ -439,7 +502,9 @@ async fn test_nullable() -> Result<(), Error> {
             float64  Nullable(Float64),
             string   Nullable(String),
             date     Nullable(Date),
-            datetime Nullable(DateTime)
+            datetime Nullable(DateTime),
+            ipv4     Nullable(IPv4),
+            ipv6     Nullable(IPv6)
         ) Engine=Memory";
 
     let query = "
@@ -456,7 +521,9 @@ async fn test_nullable() -> Result<(), Error> {
             float64,
             string,
             date,
-            datetime
+            datetime,
+            ipv4, 
+            ipv6
         FROM clickhouse_test_nullable";
 
     let date_value: Date<Tz> = UTC.ymd(2016, 10, 22);
@@ -475,7 +542,9 @@ async fn test_nullable() -> Result<(), Error> {
         .column("float64", vec![Some(1_f64)])
         .column("string", vec![Some("text")])
         .column("date", vec![Some(date_value)])
-        .column("datetime", vec![Some(date_time_value)]);
+        .column("datetime", vec![Some(date_time_value)])
+        .column("ipv4", vec![Some(Ipv4Addr::new(127, 0, 0, 1))])
+        .column("ipv6", vec![Some(Ipv6Addr::new(0, 0, 0, 0, 0, 0xffff, 0xc00a, 0x2ff))]);
 
     let pool = Pool::new(database_url());
     let mut c = pool.get_handle().await?;
@@ -498,6 +567,8 @@ async fn test_nullable() -> Result<(), Error> {
     let string: Option<&str> = block.get(0, "string")?;
     let date: Option<Date<Tz>> = block.get(0, "date")?;
     let datetime: Option<DateTime<Tz>> = block.get(0, "datetime")?;
+    let ipv4: Option<Ipv4Addr> = block.get(0, "ipv4")?;
+    let ipv6: Option<Ipv6Addr> = block.get(0, "ipv6")?;
 
     assert_eq!(int8, Some(1_i8));
     assert_eq!(int16, Some(1_i16));
@@ -512,6 +583,9 @@ async fn test_nullable() -> Result<(), Error> {
     assert_eq!(string, Some("text"));
     assert_eq!(date, Some(date_value));
     assert_eq!(datetime, Some(date_time_value));
+
+    assert_eq!(ipv4, Some(Ipv4Addr::new(127, 0, 0, 1)));
+    assert_eq!(ipv6, Some(Ipv6Addr::new(0, 0, 0, 0, 0, 0xffff, 0xc00a, 0x2ff)));
 
     Ok(())
 }
@@ -642,7 +716,7 @@ async fn test_array() -> Result<(), Error> {
             time  Array(DateTime)
         ) Engine=Memory";
 
-    let query = "SELECT u8, u32, text1, text2, date, time FROM clickhouse_array";
+    let query = "SELECT u8, u32, text1, text2, date, time  FROM clickhouse_array";
 
     let date_value: Date<Tz> = UTC.ymd(2016, 10, 22);
     let date_time_value: DateTime<Tz> = UTC.ymd(2014, 7, 8).and_hms(14, 0, 0);
@@ -752,7 +826,9 @@ async fn test_column_iter() -> Result<(), Error> {
             date      Date,
             datetime  DateTime,
             decimal   Decimal(8, 3),
-            array     Array(UInt32)
+            array     Array(UInt32),
+            ipv4      IPv4,
+            ipv6      IPv6
         ) Engine=Memory";
 
     let query = r"SELECT * FROM clickhouse_test_column_iter";
@@ -774,7 +850,9 @@ async fn test_column_iter() -> Result<(), Error> {
             "decimal",
             vec![Decimal::of(1.234, 3), Decimal::of(5, 3), Decimal::of(5, 3)],
         )
-        .column("array", vec![vec![42_u32], Vec::new(), Vec::new()]);
+        .column("array", vec![vec![42_u32], Vec::new(), Vec::new()])
+        .column("ipv4", vec!["127.0.0.1", "127.0.0.1", "127.0.0.1"])
+        .column("ipv6", vec!["::1", "::1", "::1"]);
 
     let pool = Pool::new(database_url());
     let mut c = pool.get_handle().await?;
@@ -828,6 +906,12 @@ async fn test_column_iter() -> Result<(), Error> {
 
         let array_iter: Vec<_> = block.get_column("array")?.iter::<Vec<u32>>()?.collect();
         assert_eq!(array_iter, vec![vec![&42_u32], Vec::new(), Vec::new()]);
+
+        let ipv4_iter: Vec<_> = block.get_column("ipv4")?.iter::<Ipv4Addr>()?.collect();
+        assert_eq!(ipv4_iter, vec![Ipv4Addr::new(127, 0, 0, 1); 3]);
+
+        let ipv6_iter: Vec<_> = block.get_column("ipv6")?.iter::<Ipv6Addr>()?.collect();
+        assert_eq!(ipv6_iter, vec![Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1); 3]);
     }
 
     Ok(())

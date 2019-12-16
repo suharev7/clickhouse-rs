@@ -283,7 +283,6 @@ mod test {
             Arc,
             atomic::{AtomicBool, Ordering},
         },
-        thread,
         time::{Duration, Instant},
     };
 
@@ -378,32 +377,29 @@ mod test {
         let barrier = Arc::new(AtomicBool::new(true));
         let pool = Pool::new(options);
 
-        let mut runtime = Builder::new().basic_scheduler().num_threads(1).enable_all().build().unwrap();
+        let mut runtime = Builder::new()
+            .threaded_scheduler()
+            .enable_all()
+            .build()
+            .unwrap();
+        let tasks: Vec<_> = (0..100)
+            .map(|_| {
+                let local_pool = pool.clone();
+                let local_barer = Arc::clone(&barrier);
 
-        let mut threads = Vec::new();
-        for _ in 0..100 {
-            let handle = runtime.handle().clone();
-            let local_pool = pool.clone();
-            let local_barer = barrier.clone();
-
-            let h = thread::spawn(move || {
-                handle.spawn(async move {
+                runtime.spawn(async move {
                     while local_barer.load(Ordering::SeqCst) {}
 
                     let _ = local_pool.get_handle().await;
                 })
-            });
-
-            threads.push(h);
-        }
+            })
+            .collect();
 
         barrier.store(false, Ordering::SeqCst);
-        for h in threads {
-            let join_handle = h.join();
-            match runtime.block_on(join_handle.unwrap()) {
-                Ok(_) => {}
-                Err(e) => panic!(e),
-            }
+
+        match runtime.block_on(future::try_join_all(tasks)) {
+            Ok(_) => {}
+            Err(e) => panic!(e),
         }
     }
 

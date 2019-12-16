@@ -1,4 +1,4 @@
-use std::{convert, fmt, mem, str, sync::Arc};
+use std::{convert, fmt, mem, str, sync::Arc, net::{Ipv4Addr, Ipv6Addr}}; 
 
 use chrono::prelude::*;
 use chrono_tz::Tz;
@@ -28,6 +28,8 @@ pub enum Value {
     Float64(f64),
     Date(u16, Tz),
     DateTime(u32, Tz),
+    Ipv4([u8; 4]),
+    Ipv6([u8; 16]),
     Nullable(Either<&'static SqlType, Box<Value>>),
     Array(&'static SqlType, Arc<Vec<Value>>),
     Decimal(Decimal),
@@ -90,6 +92,8 @@ impl Value {
                 scale,
                 nobits: NoBits::N64,
             }),
+            SqlType::Ipv4 => Value::Ipv4([0_u8; 4]),
+            SqlType::Ipv6 => Value::Ipv6([0_u8; 16]),
         }
     }
 }
@@ -138,6 +142,12 @@ impl fmt::Display for Value {
                 write!(f, "[{}]", cells.join(", "))
             }
             Value::Decimal(v) => fmt::Display::fmt(v, f),
+            Value::Ipv4(v) => {
+                write!(f, "{}", Ipv4Addr::from(*v))
+            },
+            Value::Ipv6(v) => {
+                write!(f, "{}", Ipv6Addr::from(*v))
+            }
         }
     }
 }
@@ -167,6 +177,8 @@ impl convert::From<Value> for SqlType {
             },
             Value::Array(t, _) => SqlType::Array(t),
             Value::Decimal(v) => SqlType::Decimal(v.precision, v.scale),
+            Value::Ipv4(_) => SqlType::Ipv4,
+            Value::Ipv6(_) => SqlType::Ipv6,
         }
     }
 }

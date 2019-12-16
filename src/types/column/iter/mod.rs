@@ -3,6 +3,7 @@
 use std::{
     iter::{FusedIterator},
     marker, mem, ptr, slice,
+    net::{Ipv4Addr, Ipv6Addr}
 };
 
 use chrono::{prelude::*, Date};
@@ -139,6 +140,18 @@ pub struct DecimalIterator<'a> {
     precision: u8,
     scale: u8,
     nobits: NoBits,
+    _marker: marker::PhantomData<&'a ()>,
+}
+
+pub struct Ipv4Iterator<'a> {
+    ptr: *const u8,
+    end: *const u8,
+    _marker: marker::PhantomData<&'a ()>,
+}
+
+pub struct Ipv6Iterator<'a> {
+    ptr: *const u8,
+    end: *const u8,
     _marker: marker::PhantomData<&'a ()>,
 }
 
@@ -285,6 +298,64 @@ impl<'a> DecimalIterator<'a> {
 
 iterator! { DecimalIterator: Decimal }
 
+iterator! { Ipv4Iterator: Ipv4Addr }
+
+impl<'a> Ipv4Iterator<'a> {
+    #[inline(always)]
+    unsafe fn next_unchecked(&mut self) -> Ipv4Addr {
+        let v = slice::from_raw_parts(self.ptr, 4);
+        let mut m = [0_u8; 4];
+        m.copy_from_slice(v);
+        self.ptr = self.ptr.offset(4) as *const u8;
+
+        Ipv4Addr::from(m)
+    }
+
+    #[inline(always)]
+    fn post_inc_start(&mut self, n: usize) {
+        unsafe {
+            self.ptr.add(n * 4);
+        }
+    }
+}
+
+impl<'a> ExactSizeIterator for Ipv4Iterator<'a> {
+    #[inline(always)]
+    fn len(&self) -> usize {
+        let size = 4;
+        (self.end as usize - self.ptr as usize) / size
+    }
+}
+
+iterator! { Ipv6Iterator: Ipv6Addr }
+
+impl<'a> Ipv6Iterator<'a> {
+    #[inline(always)]
+    unsafe fn next_unchecked(&mut self) -> Ipv6Addr {
+        let v = slice::from_raw_parts(self.ptr, 16);
+        let mut m = [0_u8; 16];
+        m.copy_from_slice(v);
+        self.ptr = self.ptr.offset(16) as *const u8;
+
+        Ipv6Addr::from(m)
+    }
+
+    #[inline(always)]
+    fn post_inc_start(&mut self, n: usize) {
+        unsafe {
+            self.ptr.add(n * 16);
+        }
+    }
+}
+
+impl<'a> ExactSizeIterator for Ipv6Iterator<'a> {
+    #[inline(always)]
+    fn len(&self) -> usize {
+        let size = 16;
+        (self.end as usize - self.ptr as usize) / size
+    }
+}
+
 impl<'a> DateIterator<'a> {
     #[inline(always)]
     unsafe fn next_unchecked(&mut self) -> Date<Tz> {
@@ -417,6 +488,48 @@ impl<'a, I: Iterator> Iterator for ArrayIterator<'a, I> {
 }
 
 impl<'a, I: Iterator> FusedIterator for ArrayIterator<'a, I> {}
+
+impl<'a> Iterable<'a, Simple> for Ipv4Addr {
+    type Iter = Ipv4Iterator<'a>;
+
+    fn iter(column: &'a Column<Simple>, _column_type: SqlType) -> Result<Self::Iter> {
+        let inner = unsafe {
+            let mut inner: *const u8 = ptr::null();
+            column.get_internal(&[&mut inner], 0)?;
+            &*(inner as *const Vec<u8>)
+        };
+
+        let ptr = inner.as_ptr();
+        let end = unsafe { ptr.add(inner.len()) };
+
+        Ok(Ipv4Iterator {
+            ptr,
+            end,
+            _marker: marker::PhantomData,
+        })
+    }
+}
+
+impl<'a> Iterable<'a, Simple> for Ipv6Addr {
+    type Iter = Ipv6Iterator<'a>;
+
+    fn iter(column: &'a Column<Simple>, _column_type: SqlType) -> Result<Self::Iter> {
+        let inner = unsafe {
+            let mut inner: *const u8 = ptr::null();
+            column.get_internal(&[&mut inner], 0)?;
+            &*(inner as *const Vec<u8>)
+        };
+
+        let ptr = inner.as_ptr();
+        let end = unsafe { ptr.add(inner.len()) };
+
+        Ok(Ipv6Iterator {
+            ptr,
+            end,
+            _marker: marker::PhantomData,
+        })
+    }
+}
 
 impl<'a> Iterable<'a, Simple> for &[u8] {
     type Iter = StringIterator<'a>;
@@ -645,7 +758,6 @@ where
         })
     }
 }
-
 
 pub struct ComplexIterator<'a, T>
 where

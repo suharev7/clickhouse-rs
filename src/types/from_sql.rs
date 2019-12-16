@@ -1,5 +1,6 @@
 use chrono::prelude::*;
 use chrono_tz::Tz;
+use std::net::{Ipv4Addr, Ipv6Addr};
 
 use crate::{
     errors::{Error, FromSqlError},
@@ -60,6 +61,38 @@ impl<'a> FromSql<'a> for &'a [u8] {
 impl<'a> FromSql<'a> for String {
     fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
         value.as_str().map(str::to_string)
+    }
+}
+
+impl<'a> FromSql<'a> for Ipv4Addr {
+    fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
+        match value {
+            ValueRef::Ipv4(ip) => Ok(Ipv4Addr::from(ip)),
+            _ => {
+                let from = SqlType::from(value.clone()).to_string();
+                Err(Error::FromSql(FromSqlError::InvalidType {
+                    src: from,
+                    dst: "Ipv4".into(),
+                }))
+            }
+        }
+
+    }
+}
+
+impl<'a> FromSql<'a> for Ipv6Addr {
+    fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
+        match value {
+            ValueRef::Ipv6(ip) => Ok(Ipv6Addr::from(ip)),
+            _ => {
+                let from = SqlType::from(value.clone()).to_string();
+                Err(Error::FromSql(FromSqlError::InvalidType {
+                    src: from,
+                    dst: "Ipv6".into(),
+                }))
+            }
+        }
+
     }
 }
 

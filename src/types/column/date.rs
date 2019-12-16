@@ -263,7 +263,7 @@ mod test {
         let tz = Tz::Zulu;
         let column =
             Vec::column_from::<ArcColumnWrapper>(vec![tz.ymd(2016, 10, 22).and_hms(12, 0, 0)]);
-        assert_eq!("2016-10-22 12:00:00 UTC", format!("{}", column.at(0)));
+        assert_eq!("2016-10-22 12:00:00", format!("{}", column.at(0)));
         assert_eq!(SqlType::DateTime, column.sql_type());
     }
 }

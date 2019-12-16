@@ -19,6 +19,7 @@
 //! * UInt8, UInt16, UInt32, UInt64, Int8, Int16, Int32, Int64
 //! * Nullable(T)
 //! * Array(UInt/Int/String/Date/DateTime)
+//! * IPv4/IPv6
 //!
 //! ### DNS
 //!
@@ -560,6 +561,6 @@ mod test_misc {
 
     lazy_static! {
         pub static ref DATABASE_URL: String = env::var("DATABASE_URL")
-            .unwrap_or_else(|_| "tcp://localhost:9000?compression=lz4".into());
+            .unwrap_or_else(|_| "tcp://localhost:9000?compression=lz4&ping_timeout=5s&retry_timeout=5s".into());
     }
 }

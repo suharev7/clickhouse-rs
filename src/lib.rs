@@ -1,3 +1,4 @@
+
 //! ## clickhouse-rs
 //! Asynchronous [Yandex ClickHouse](https://clickhouse.yandex/) client library for rust programming language.
 //!
@@ -265,7 +266,7 @@ impl Client {
             },
             timeout,
         )
-        .await
+            .await
     }
 }
 
@@ -325,13 +326,13 @@ impl ClientHandle {
             },
             timeout,
         )
-        .await
+            .await
     }
 
     /// Executes Clickhouse `query` on Conn.
     pub fn query<Q>(&mut self, sql: Q) -> QueryResult
-    where
-        Query: From<Q>,
+        where
+            Query: From<Q>,
     {
         let query = Query::from(sql);
         QueryResult {
@@ -342,8 +343,8 @@ impl ClientHandle {
 
     /// Convenience method to prepare and execute a single SQL statement.
     pub async fn execute<Q>(&mut self, sql: Q) -> Result<()>
-    where
-        Query: From<Q>,
+        where
+            Query: From<Q>,
     {
         let transport = self.execute_(sql).await?;
         self.inner = Some(transport);
@@ -351,8 +352,8 @@ impl ClientHandle {
     }
 
     async fn execute_<Q>(&mut self, sql: Q) -> Result<ClickhouseTransport>
-    where
-        Query: From<Q>,
+        where
+            Query: From<Q>,
     {
         let context = self.context.clone();
         let query = Query::from(sql);
@@ -383,13 +384,13 @@ impl ClientHandle {
                 Ok(h.unwrap())
             }
         })
-        .await
+            .await
     }
 
     /// Convenience method to insert block of data.
     pub async fn insert<Q>(&mut self, table: Q, block: Block) -> Result<()>
-    where
-        Query: From<Q>,
+        where
+            Query: From<Q>,
     {
         let transport = self.insert_(table, block).await?;
         self.inner = Some(transport);
@@ -397,8 +398,8 @@ impl ClientHandle {
     }
 
     async fn insert_<Q>(&mut self, table: Q, block: Block) -> Result<ClickhouseTransport>
-    where
-        Query: From<Q>,
+        where
+            Query: From<Q>,
     {
         let mut names: Vec<_> = Vec::with_capacity(block.column_count());
         for column in block.columns() {
@@ -436,14 +437,14 @@ impl ClientHandle {
                 Ok(transport)
             }
         })
-        .await
+            .await
     }
 
     pub(crate) async fn wrap_future<T, R, F>(&mut self, f: F) -> Result<T>
-    where
-        F: FnOnce(&mut Self) -> R + Send + 'static,
-        R: Future<Output = Result<T>>,
-        T: 'static,
+        where
+            F: FnOnce(&mut Self) -> R + Send + 'static,
+            R: Future<Output = Result<T>>,
+            T: 'static,
     {
         let ping_before_query = try_opt!(self.context.options.get()).ping_before_query;
 
@@ -454,8 +455,8 @@ impl ClientHandle {
     }
 
     pub(crate) fn wrap_stream<'a, F>(&'a mut self, f: F) -> BoxStream<'a, Result<Block>>
-    where
-        F: (FnOnce(&'a mut Self) -> BlockStream<'a>) + Send + 'static,
+        where
+            F: (FnOnce(&'a mut Self) -> BlockStream<'a>) + Send + 'static,
     {
         let ping_before_query = match self.context.options.get() {
             Ok(val) => val.ping_before_query,
@@ -523,8 +524,8 @@ fn column_name_to_string(name: &str) -> Result<String> {
 
 #[cfg(feature = "async_std")]
 async fn with_timeout<F, T>(future: F, duration: Duration) -> F::Output
-where
-    F: Future<Output = Result<T>>,
+    where
+        F: Future<Output = Result<T>>,
 {
     use async_std::io;
     use futures_util::future::TryFutureExt;
@@ -536,8 +537,8 @@ where
 
 #[cfg(not(feature = "async_std"))]
 async fn with_timeout<F, T>(future: F, timeout: Duration) -> F::Output
-where
-    F: Future<Output = Result<T>>,
+    where
+        F: Future<Output = Result<T>>,
 {
     tokio::time::timeout(timeout, future).await?
 }

@@ -15,6 +15,7 @@ use failure::_core::fmt::Formatter;
 #[cfg(feature = "tls")]
 use native_tls;
 use url::Url;
+use failure::_core::fmt::Debug;
 
 const DEFAULT_MIN_CONNS: usize = 10;
 
@@ -146,7 +147,7 @@ impl convert::From<Certificate> for native_tls::Certificate {
 }
 
 /// Clickhouse connection options.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct Options {
     /// Address of clickhouse server (defaults to `127.0.0.1:9000`).
     pub(crate) addr: Url,
@@ -206,6 +207,29 @@ pub struct Options {
     /// An X509 certificate.
     #[cfg(feature = "tls")]
     pub(crate) certificate: Option<Certificate>,
+}
+
+impl fmt::Debug for Options {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("Options")
+            .field("addr", &self.addr)
+            .field("database", &self.database)
+            .field("compression", &self.compression)
+            .field("pool_min", &self.pool_min)
+            .field("pool_max", &self.pool_max)
+            .field("nodelay", &self.nodelay)
+            .field("keepalive", &self.keepalive)
+            .field("ping_before_query", &self.ping_before_query)
+            .field("send_retries", &self.send_retries)
+            .field("retry_timeout", &self.retry_timeout)
+            .field("ping_timeout", &self.ping_timeout)
+            .field("connection_timeout", &self.connection_timeout)
+            .field("query_timeout", &self.query_timeout)
+            .field("query_block_timeout", &self.query_block_timeout)
+            .field("insert_timeout", &self.insert_timeout)
+            .field("execute_timeout", &self.execute_timeout)
+            .finish()
+    }
 }
 
 impl Default for Options {

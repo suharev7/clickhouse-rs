@@ -281,7 +281,7 @@ impl ClientHandle {
     fn hello(mut self) -> impl Future<Item = Self, Error = Error> {
         let context = self.context.clone();
         let pool = self.pool.clone();
-        info!("[hello] -> {:?}", &context);
+        debug!("[hello] -> {:?}", &context);
 
         self.inner
             .take()

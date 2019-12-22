@@ -39,6 +39,11 @@ parameters:
     * `none`
     * `lz4`
 
+- `readonly` - Restricts permissions for read data, write data and change settings queries. (defaults to `none`). Possible choices:
+    * `0` - All queries are allowed.
+    * `1` - Only read data queries are allowed.
+    * `2` - Read data and change settings queries are allowed.
+
 - `connection_timeout` - Timeout for connection (defaults to `500 ms`)
 - `keepalive` - TCP keep alive timeout in milliseconds.
 - `nodelay` - Whether to enable `TCP_NODELAY` (defaults to `true`).

@@ -196,9 +196,9 @@ impl ConnectingStream {
 
                 let socket = future::select_ok(streams);
 
-                return Self {
+                Self {
                     state: State::tcp_wait(socket),
-                };
+                }
             }
             Err(err) => Self {
                 state: State::tcp_err(err),

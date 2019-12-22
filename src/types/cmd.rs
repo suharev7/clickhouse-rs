@@ -2,7 +2,7 @@ use crate::{
     binary::{protocol, Encoder},
     client_info,
     errors::Result,
-    types::{Block, Context, Query, Simple},
+    types::{Block, Context, Query, Simple, Options},
 };
 
 /// Represents clickhouse commands.
@@ -20,6 +20,12 @@ impl Cmd {
     pub(crate) fn get_packed_command(&self) -> Result<Vec<u8>> {
         encode_command(self)
     }
+}
+
+#[derive(Debug, PartialOrd, PartialEq)]
+enum SettingsBinaryFormat {
+    Old,
+    Strings,
 }
 
 fn encode_command(cmd: &Cmd) -> Result<Vec<u8>> {
@@ -67,7 +73,7 @@ fn encode_query(query: &Query, context: &Context) -> Result<Vec<u8>> {
         let hostname = &context.hostname;
         encoder.uvarint(1);
         encoder.string("");
-        encoder.string(&query.get_id()); //initial_query_id;
+        encoder.string(&query.get_id()); // initial_query_id;
         encoder.string("[::ffff:127.0.0.1]:0");
         encoder.uvarint(1); // iface type TCP;
         encoder.string(hostname);
@@ -79,10 +85,17 @@ fn encode_query(query: &Query, context: &Context) -> Result<Vec<u8>> {
         encoder.string("");
     }
 
-    encoder.string(""); // settings
-    encoder.uvarint(protocol::STATE_COMPLETE);
-
     let options = context.options.get()?;
+
+    let settings_format = if context.server_info.revision >= protocol::DBMS_MIN_REVISION_WITH_SETTINGS_SERIALIZED_AS_STRINGS {
+        SettingsBinaryFormat::Strings
+    } else {
+        SettingsBinaryFormat::Old
+    };
+
+    serialize_settings(&mut encoder, &options, settings_format)?;
+
+    encoder.uvarint(protocol::STATE_COMPLETE);
 
     encoder.uvarint(if options.compression {
         protocol::COMPRESS_ENABLE
@@ -96,6 +109,29 @@ fn encode_query(query: &Query, context: &Context) -> Result<Vec<u8>> {
     Block::<Simple>::default().send_data(&mut encoder, options.compression);
 
     Ok(encoder.get_buffer())
+}
+
+fn serialize_settings(encoder: &mut Encoder, options: &Options, format: SettingsBinaryFormat) -> Result<()> {
+
+    if let Some(level) = options.readonly {
+        encoder.string("readonly");
+        if format >= SettingsBinaryFormat::Strings {
+            encoder.write(0_u8); // is_important
+        }
+        serialize_uint(encoder, level as u64, format);
+    }
+
+    encoder.string(""); // settings
+    Ok(())
+}
+
+fn serialize_uint(encoder: &mut Encoder, value: u64, format: SettingsBinaryFormat) {
+    if format >= SettingsBinaryFormat::Strings {
+        encoder.string(format!("{}", value));
+        return;
+    }
+
+    encoder.uvarint(value);
 }
 
 fn encode_data(block: &Block, context: &Context) -> Result<Vec<u8>> {

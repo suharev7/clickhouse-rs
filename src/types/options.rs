@@ -207,6 +207,9 @@ pub struct Options {
     /// An X509 certificate.
     #[cfg(feature = "tls")]
     pub(crate) certificate: Option<Certificate>,
+
+    /// Restricts permissions for read data, write data and change settings queries.
+    pub(crate) readonly: Option<u8>
 }
 
 impl fmt::Debug for Options {
@@ -228,6 +231,7 @@ impl fmt::Debug for Options {
             .field("query_block_timeout", &self.query_block_timeout)
             .field("insert_timeout", &self.insert_timeout)
             .field("execute_timeout", &self.execute_timeout)
+            .field("readonly", &self.readonly)
             .finish()
     }
 }
@@ -259,6 +263,7 @@ impl Default for Options {
             skip_verify: false,
             #[cfg(feature = "tls")]
             certificate: None,
+            readonly: None,
         }
     }
 }
@@ -400,6 +405,11 @@ impl Options {
         /// An X509 certificate.
         => certificate: Option<Certificate>
     }
+
+    property! {
+        /// Restricts permissions for read data, write data and change settings queries.
+        => readonly: Option<u8>
+    }
 }
 
 impl FromStr for Options {
@@ -485,6 +495,7 @@ where
             "secure" => options.secure = parse_param(key, value, bool::from_str)?,
             #[cfg(feature = "tls")]
             "skip_verify" => options.skip_verify = parse_param(key, value, bool::from_str)?,
+            "readonly" => options.readonly = parse_param(key, value, parse_opt_u8)?,
             _ => return Err(UrlError::UnknownParameter { param: key.into() }),
         };
     }
@@ -566,6 +577,19 @@ fn parse_opt_duration(source: &str) -> std::result::Result<Option<Duration>, ()>
     }
 
     let duration = parse_duration(source)?;
+    Ok(Some(duration))
+}
+
+fn parse_opt_u8(source: &str) -> std::result::Result<Option<u8>, ()> {
+    if source == "none" {
+        return Ok(None);
+    }
+
+    let duration: u8 = match source.parse() {
+        Ok(value) => value,
+        Err(_) => return Err(()),
+    };
+
     Ok(Some(duration))
 }
 

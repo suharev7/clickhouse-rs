@@ -146,7 +146,7 @@ impl convert::From<Certificate> for native_tls::Certificate {
 }
 
 /// Clickhouse connection options.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct Options {
     /// Address of clickhouse server (defaults to `127.0.0.1:9000`).
     pub(crate) addr: Url,
@@ -194,6 +194,29 @@ pub struct Options {
     /// An X509 certificate.
     #[cfg(feature = "tls")]
     pub(crate) certificate: Option<Certificate>,
+
+    /// Restricts permissions for read data, write data and change settings queries.
+    pub(crate) readonly: Option<u8>
+}
+
+impl fmt::Debug for Options {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("Options")
+            .field("addr", &self.addr)
+            .field("database", &self.database)
+            .field("compression", &self.compression)
+            .field("pool_min", &self.pool_min)
+            .field("pool_max", &self.pool_max)
+            .field("nodelay", &self.nodelay)
+            .field("keepalive", &self.keepalive)
+            .field("ping_before_query", &self.ping_before_query)
+            .field("send_retries", &self.send_retries)
+            .field("retry_timeout", &self.retry_timeout)
+            .field("ping_timeout", &self.ping_timeout)
+            .field("connection_timeout", &self.connection_timeout)
+            .field("readonly", &self.readonly)
+            .finish()
+    }
 }
 
 impl Default for Options {
@@ -219,6 +242,7 @@ impl Default for Options {
             skip_verify: false,
             #[cfg(feature = "tls")]
             certificate: None,
+            readonly: None,
         }
     }
 }
@@ -340,6 +364,11 @@ impl Options {
         /// An X509 certificate.
         => certificate: Option<Certificate>
     }
+
+    property! {
+        /// Restricts permissions for read data, write data and change settings queries.
+        => readonly: Option<u8>
+    }
 }
 
 impl FromStr for Options {
@@ -415,6 +444,7 @@ where
             "secure" => options.secure = parse_param(key, value, bool::from_str)?,
             #[cfg(feature = "tls")]
             "skip_verify" => options.skip_verify = parse_param(key, value, bool::from_str)?,
+            "readonly" => options.readonly = parse_param(key, value, parse_opt_u8)?,
             _ => return Err(UrlError::UnknownParameter { param: key.into() }),
         };
     }
@@ -496,6 +526,19 @@ fn parse_opt_duration(source: &str) -> std::result::Result<Option<Duration>, ()>
     }
 
     let duration = parse_duration(source)?;
+    Ok(Some(duration))
+}
+
+fn parse_opt_u8(source: &str) -> std::result::Result<Option<u8>, ()> {
+    if source == "none" {
+        return Ok(None);
+    }
+
+    let duration: u8 = match source.parse() {
+        Ok(value) => value,
+        Err(_) => return Err(()),
+    };
+
     Ok(Some(duration))
 }
 

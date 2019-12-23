@@ -33,6 +33,7 @@ lazy_static = "1.4.0"
 lz4 = "1.23.1"
 pin-project = "0.4.5"
 url="^2"
+uuid = "0.8.1"
 
 [dependencies.futures-util]
 version = "0.3.0"

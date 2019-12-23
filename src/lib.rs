@@ -20,6 +20,7 @@
 //! * Nullable(T)
 //! * Array(UInt/Int/String/Date/DateTime)
 //! * IPv4/IPv6
+//! * UUID
 //!
 //! ### DNS
 //!

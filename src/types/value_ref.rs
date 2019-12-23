@@ -13,6 +13,8 @@ use crate::{
     },
 };
 
+use uuid::Uuid;
+
 #[derive(Clone, Debug)]
 pub enum ValueRef<'a> {
     UInt8(u8),
@@ -33,6 +35,7 @@ pub enum ValueRef<'a> {
     Decimal(Decimal),
     Ipv4([u8; 4]),
     Ipv6([u8; 16]),
+    Uuid([u8; 16])
 }
 
 impl<'a> PartialEq for ValueRef<'a> {
@@ -117,6 +120,12 @@ impl<'a> fmt::Display for ValueRef<'a> {
             ValueRef::Ipv6(v) => {
                 write!(f, "{}", Ipv6Addr::from(*v))
             }
+            ValueRef::Uuid(v) => {
+                match Uuid::from_slice(v) {
+                    Ok(uuid) => write!(f, "{}", uuid),
+                    Err(e) => write!(f, "{}", e),
+                }
+            }
         }
     }
 }
@@ -145,6 +154,7 @@ impl<'a> convert::From<ValueRef<'a>> for SqlType {
             ValueRef::Decimal(v) => SqlType::Decimal(v.precision, v.scale),
             ValueRef::Ipv4(_) => SqlType::Ipv4,
             ValueRef::Ipv6(_) => SqlType::Ipv6,
+            ValueRef::Uuid(_) => SqlType::Uuid,
         }
     }
 }
@@ -212,6 +222,7 @@ impl<'a> From<ValueRef<'a>> for Value {
             ValueRef::Decimal(v) => Value::Decimal(v),
             ValueRef::Ipv4(v) => Value::Ipv4(v),
             ValueRef::Ipv6(v) => Value::Ipv6(v),
+            ValueRef::Uuid(v) => Value::Uuid(v),
         }
     }
 }
@@ -289,6 +300,7 @@ impl<'a> From<&'a Value> for ValueRef<'a> {
             Value::Decimal(v) => ValueRef::Decimal(v.clone()),
             Value::Ipv4(v) => ValueRef::Ipv4(*v),
             Value::Ipv6(v) => ValueRef::Ipv6(*v),
+            Value::Uuid(v) => ValueRef::Uuid(*v)
         }
     }
 }

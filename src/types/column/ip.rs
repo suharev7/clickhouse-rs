@@ -27,6 +27,9 @@ pub(crate) struct Ipv4;
 #[derive(Copy, Clone)]
 pub(crate) struct Ipv6;
 
+#[derive(Copy, Clone)]
+pub(crate) struct Uuid;
+
 impl IpVersion for Ipv4 {
     #[inline(always)]
     fn sql_type() -> SqlType {
@@ -83,6 +86,34 @@ impl IpVersion for Ipv6 {
     }
 }
 
+impl IpVersion for Uuid {
+    #[inline(always)]
+    fn sql_type() -> SqlType {
+        SqlType::Uuid
+    }
+
+    #[inline(always)]
+    fn size() -> usize {
+        16
+    }
+
+    #[inline(always)]
+    fn push(inner: &mut Vec<u8>, value: Value) {
+        if let Value::Uuid(v) = value {
+            inner.extend(&v);
+        } else {
+            panic!();
+        }
+    }
+
+    #[inline(always)]
+    fn get(inner: &[u8], index: usize) -> ValueRef {
+        let mut v: [u8; 16] = Default::default();
+        v.copy_from_slice(&inner[index * 16..(index + 1) * 16]);
+        ValueRef::Uuid(v)
+    }
+}
+
 impl ColumnFrom for Vec<Ipv4Addr> {
     fn column_from<W: ColumnWrapper>(data: Self) -> W::Wrapper {
         let mut inner = Vec::with_capacity(data.len());
@@ -111,27 +142,41 @@ impl ColumnFrom for Vec<Ipv6Addr> {
     }
 }
 
+impl ColumnFrom for Vec<uuid::Uuid> {
+    fn column_from<W: ColumnWrapper>(data: Self) -> W::Wrapper {
+        let mut inner = Vec::with_capacity(data.len());
+        for uuid in data {
+            inner.extend(uuid.as_bytes());
+        }
+
+        W::wrap(IpColumnData::<Uuid> {
+            inner,
+            phantom: PhantomData,
+        })
+    }
+}
+
 impl ColumnFrom for Vec<Option<Ipv4Addr>> {
     fn column_from<W: ColumnWrapper>(source: Self) -> <W as ColumnWrapper>::Wrapper {
         let n = source.len();
-        let mut fake: Vec<u8> = Vec::with_capacity(n * 4);
+        let mut inner: Vec<u8> = Vec::with_capacity(n * 4);
         let mut nulls: Vec<u8> = Vec::with_capacity(n);
 
         for ip in source {
             match ip {
                 None => {
-                    fake.extend(&[0; 4]);
+                    inner.extend(&[0; 4]);
                     nulls.push(1);
                 }
                 Some(ip) => {
-                    fake.extend(&ip.octets());
+                    inner.extend(&ip.octets());
                     nulls.push(0);
                 }
             }
         }
 
         let inner = Box::new(IpColumnData::<Ipv4> {
-            inner: fake,
+            inner,
             phantom: PhantomData,
         });
 
@@ -144,24 +189,54 @@ impl ColumnFrom for Vec<Option<Ipv4Addr>> {
 impl ColumnFrom for Vec<Option<Ipv6Addr>> {
     fn column_from<W: ColumnWrapper>(source: Self) -> <W as ColumnWrapper>::Wrapper {
         let n = source.len();
-        let mut fake: Vec<u8> = Vec::with_capacity(n * 16);
+        let mut inner: Vec<u8> = Vec::with_capacity(n * 16);
         let mut nulls: Vec<u8> = Vec::with_capacity(n);
 
         for ip in source {
             match ip {
                 None => {
-                    fake.extend(&[0; 16]);
+                    inner.extend(&[0; 16]);
                     nulls.push(1);
                 }
                 Some(ip) => {
-                    fake.extend(&ip.octets());
+                    inner.extend(&ip.octets());
                     nulls.push(0);
                 }
             }
         }
 
         let inner = Box::new(IpColumnData::<Ipv6> {
-            inner: fake,
+            inner,
+            phantom: PhantomData,
+        });
+
+        let data = NullableColumnData { inner, nulls };
+
+        W::wrap(data)
+    }
+}
+
+impl ColumnFrom for Vec<Option<uuid::Uuid>> {
+    fn column_from<W: ColumnWrapper>(source: Self) -> <W as ColumnWrapper>::Wrapper {
+        let n = source.len();
+        let mut inner: Vec<u8> = Vec::with_capacity(n * 16);
+        let mut nulls: Vec<u8> = Vec::with_capacity(n);
+
+        for uuid in source {
+            match uuid {
+                None => {
+                    inner.extend(&[0; 16]);
+                    nulls.push(1);
+                }
+                Some(uuid) => {
+                    inner.extend(uuid.as_bytes());
+                    nulls.push(0);
+                }
+            }
+        }
+
+        let inner = Box::new(IpColumnData::<Uuid> {
+            inner,
             phantom: PhantomData,
         });
 
@@ -233,4 +308,3 @@ impl<V: IpVersion> ColumnData for IpColumnData<V> {
         Ok(())
     }
 }
-

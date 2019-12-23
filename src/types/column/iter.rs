@@ -150,6 +150,12 @@ pub struct Ipv6Iterator<'a> {
     _marker: marker::PhantomData<&'a ()>,
 }
 
+pub struct UuidIterator<'a> {
+    ptr: *const u8,
+    end: *const u8,
+    _marker: marker::PhantomData<&'a ()>,
+}
+
 pub struct DateIterator<'a> {
     ptr: *const u16,
     end: *const u16,
@@ -349,6 +355,37 @@ impl<'a> ExactSizeIterator for Ipv6Iterator<'a> {
     }
 }
 
+iterator! { UuidIterator: uuid::Uuid }
+
+impl<'a> UuidIterator<'a> {
+    #[inline(always)]
+    unsafe fn next_unchecked(&mut self) -> uuid::Uuid {
+        let v = slice::from_raw_parts(self.ptr, 16);
+        let mut m = [0_u8; 16];
+        m.copy_from_slice(v);
+        self.ptr = self.ptr.offset(16) as *const u8;
+
+        uuid::Uuid::from_bytes(m)
+    }
+
+    #[inline(always)]
+    fn post_inc_start(&mut self, n: usize) {
+        unsafe {
+            self.ptr.add(n * 16);
+        }
+    }
+}
+
+impl<'a> ExactSizeIterator for UuidIterator<'a> {
+    #[inline(always)]
+    fn len(&self) -> usize {
+        let size = 16;
+        (self.end as usize - self.ptr as usize) / size
+    }
+}
+
+
+
 impl<'a> DateIterator<'a> {
     #[inline(always)]
     unsafe fn next_unchecked(&mut self) -> Date<Tz> {
@@ -518,6 +555,27 @@ impl<'a> SimpleIterable<'a> for Ipv6Addr {
         let end = unsafe { ptr.add(inner.len()) };
 
         Ok(Ipv6Iterator {
+            ptr,
+            end,
+            _marker: marker::PhantomData,
+        })
+    }
+}
+
+impl<'a> SimpleIterable<'a> for uuid::Uuid {
+    type Iter = UuidIterator<'a>;
+
+    fn iter(column: &'a Column<Simple>, _column_type: SqlType) -> Result<Self::Iter> {
+        let inner = unsafe {
+            let mut inner: *const u8 = ptr::null();
+            column.get_internal(&[&mut inner], 0)?;
+            &*(inner as *const Vec<u8>)
+        };
+
+        let ptr = inner.as_ptr();
+        let end = unsafe { ptr.add(inner.len()) };
+
+        Ok(UuidIterator {
             ptr,
             end,
             _marker: marker::PhantomData,

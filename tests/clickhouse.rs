@@ -21,6 +21,7 @@ use tokio::prelude::*;
 use clickhouse_rs::{
     errors::Error, types::Block, types::Decimal, types::FromSql, ClientHandle, Pool,
 };
+use uuid::Uuid;
 
 type BoxFuture<T> = Box<dyn Future<Item = T, Error = Error> + Send>;
 
@@ -105,7 +106,8 @@ fn test_insert() {
                ipv4 IPv4,
                ipv6 IPv6,
                ipv4str IPv4,
-               ipv6str IPv6
+               ipv6str IPv6,
+               uuid UUID
                ) Engine=Memory";
 
     let block = Block::new()
@@ -190,6 +192,18 @@ fn test_insert() {
                 "2001:44c8:129:2632:33:0:252:2",
                 "2a02:e980:1e::1",
                 "2a02:aa08:e000:3100::2",
+            ],
+        )
+        .column(
+            "uuid",
+            vec![
+                Uuid::parse_str("936DA01F9ABD4d9d80C702AF85C822A8").unwrap(),
+                Uuid::nil(),
+                Uuid::nil(),
+                Uuid::nil(),
+                Uuid::nil(),
+                Uuid::nil(),
+                Uuid::nil(),
             ],
         );
 
@@ -473,7 +487,8 @@ fn test_nullable() {
             date     Nullable(Date),
             datetime Nullable(DateTime),
             ipv4     Nullable(IPv4),
-            ipv6     Nullable(IPv6)
+            ipv6     Nullable(IPv6),
+            uuid     Nullable(UUID)
         ) Engine=Memory";
 
     let query = "
@@ -492,7 +507,8 @@ fn test_nullable() {
             date,
             datetime,
             ipv4,
-            ipv6
+            ipv6,
+            uuid
         FROM clickhouse_test_nullable";
 
     let date_value: Date<Tz> = UTC.ymd(2016, 10, 22);
@@ -513,7 +529,8 @@ fn test_nullable() {
         .column("date", vec![Some(date_value)])
         .column("datetime", vec![Some(date_time_value)])
         .column("ipv4", vec![Some(Ipv4Addr::new(127, 0, 0, 1))])
-        .column("ipv6", vec![Some(Ipv6Addr::new(0, 0, 0, 0, 0, 0xffff, 0xc00a, 0x2ff))]);
+        .column("ipv6", vec![Some(Ipv6Addr::new(0, 0, 0, 0, 0, 0xffff, 0xc00a, 0x2ff))])
+        .column("uuid", vec![Some(Uuid::nil())]);
 
     let pool = Pool::new(database_url());
     let done = pool
@@ -538,6 +555,7 @@ fn test_nullable() {
             let datetime: Option<DateTime<Tz>> = block.get(0, "datetime")?;
             let ipv4: Option<Ipv4Addr> = block.get(0, "ipv4")?;
             let ipv6: Option<Ipv6Addr> = block.get(0, "ipv6")?;
+            let uuid: Option<Uuid> = block.get(0, "uuid")?;
 
             assert_eq!(int8, Some(1_i8));
             assert_eq!(int16, Some(1_i16));
@@ -555,6 +573,8 @@ fn test_nullable() {
 
             assert_eq!(ipv4, Some(Ipv4Addr::new(127, 0, 0, 1)));
             assert_eq!(ipv6, Some(Ipv6Addr::new(0, 0, 0, 0, 0, 0xffff, 0xc00a, 0x2ff)));
+
+            assert_eq!(uuid, Some(Uuid::nil()));
 
             Ok(())
         });
@@ -808,7 +828,8 @@ fn test_column_iter() {
             decimal   Decimal(8, 3),
             array     Array(UInt32),
             ipv4      IPv4,
-            ipv6      IPv6
+            ipv6      IPv6,
+            uuid      UUID
         ) Engine=Memory";
 
     let query = r"SELECT * FROM clickhouse_test_column_iter";
@@ -832,7 +853,8 @@ fn test_column_iter() {
         )
         .add_column("array", vec![vec![42_u32], Vec::new(), Vec::new()])
         .column("ipv4", vec!["127.0.0.1", "127.0.0.1", "127.0.0.1"])
-        .column("ipv6", vec!["::1", "::1", "::1"]);
+        .column("ipv6", vec!["::1", "::1", "::1"])
+        .column("uuid", vec![Uuid::nil(); 3]);
 
     let pool = Pool::new(database_url());
 
@@ -890,6 +912,9 @@ fn test_column_iter() {
 
                     let ipv6_iter: Vec<_> = block.get_column("ipv6")?.iter::<Ipv6Addr>()?.collect();
                     assert_eq!(ipv6_iter, vec![Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1); 3]);
+
+                    let uuid_iter: Vec<_> = block.get_column("uuid")?.iter::<Uuid>()?.collect();
+                    assert_eq!(uuid_iter, vec![uuid::Uuid::nil(); 3]);
 
                     Ok(())
                 })

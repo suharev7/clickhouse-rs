@@ -8,7 +8,7 @@ use crate::{
         decimal::DecimalColumnData, fixed_string::FixedStringColumnData, list::List,
         nullable::NullableColumnData, numeric::VectorColumnData, string::StringColumnData,
         BoxColumnWrapper, ColumnWrapper, SqlType,
-        ip::{IpColumnData, Ipv4, Ipv6},
+        ip::{IpColumnData, Ipv4, Ipv6, Uuid},
     },
     types::decimal::NoBits,
 };
@@ -36,6 +36,7 @@ impl dyn ColumnData {
             "DateTime" => W::wrap(DateColumnData::<u32>::load(reader, size, tz)?),
             "IPv4" => W::wrap(IpColumnData::<Ipv4>::load(reader, size)?),
             "IPv6" => W::wrap(IpColumnData::<Ipv6>::load(reader, size)?),
+            "UUID" => W::wrap(IpColumnData::<Uuid>::load(reader, size)?),
             _ => {
                 if let Some(inner_type) = parse_nullable_type(type_name) {
                     W::wrap(NullableColumnData::load(reader, inner_type, size, tz)?)
@@ -78,6 +79,7 @@ impl dyn ColumnData {
 
             SqlType::Ipv4 => W::wrap(IpColumnData::<Ipv4>::with_capacity(capacity)),
             SqlType::Ipv6 => W::wrap(IpColumnData::<Ipv6>::with_capacity(capacity)),
+            SqlType::Uuid => W::wrap(IpColumnData::<Uuid>::with_capacity(capacity)),
 
             SqlType::Date => W::wrap(DateColumnData::<u16>::with_capacity(capacity, timezone)),
             SqlType::DateTime => W::wrap(DateColumnData::<u32>::with_capacity(capacity, timezone)),

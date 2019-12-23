@@ -185,6 +185,7 @@ pub enum SqlType {
     DateTime,
     Ipv4,
     Ipv6,
+    Uuid,
     Nullable(&'static SqlType),
     Array(&'static SqlType),
     Decimal(u8, u8),
@@ -242,6 +243,7 @@ impl SqlType {
             SqlType::DateTime => "DateTime".into(),
             SqlType::Ipv4 => "IPv4".into(),
             SqlType::Ipv6 => "IPv6".into(),
+            SqlType::Uuid => "UUID".into(),
             SqlType::Nullable(&nested) => format!("Nullable({})", nested).into(),
             SqlType::Array(&nested) => format!("Array({})", nested).into(),
             SqlType::Decimal(precision, scale) => {

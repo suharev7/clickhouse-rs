@@ -39,6 +39,7 @@ url="^2"
 lazy_static = "1.4.0"
 
 crossbeam = "0.7"
+uuid = "0.8.1"
 
 [dev-dependencies]
 env_logger = "^0.7"

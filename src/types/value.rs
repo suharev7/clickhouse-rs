@@ -9,6 +9,8 @@ use crate::types::{
     DateConverter, SqlType,
 };
 
+use uuid::Uuid;
+
 pub(crate) type AppDateTime = DateTime<Tz>;
 pub(crate) type AppDate = Date<Tz>;
 
@@ -30,6 +32,7 @@ pub enum Value {
     DateTime(u32, Tz),
     Ipv4([u8; 4]),
     Ipv6([u8; 16]),
+    Uuid([u8; 16]),
     Nullable(Either<&'static SqlType, Box<Value>>),
     Array(&'static SqlType, Arc<Vec<Value>>),
     Decimal(Decimal),
@@ -94,6 +97,7 @@ impl Value {
             }),
             SqlType::Ipv4 => Value::Ipv4([0_u8; 4]),
             SqlType::Ipv6 => Value::Ipv6([0_u8; 16]),
+            SqlType::Uuid => Value::Uuid([0_u8; 16]),
         }
     }
 }
@@ -148,6 +152,12 @@ impl fmt::Display for Value {
             Value::Ipv6(v) => {
                 write!(f, "{}", Ipv6Addr::from(*v))
             }
+            Value::Uuid(v) => {
+                match Uuid::from_slice(v) {
+                    Ok(uuid) => write!(f, "{}", uuid),
+                    Err(e) => write!(f, "{}", e),
+                }
+            }
         }
     }
 }
@@ -179,6 +189,7 @@ impl convert::From<Value> for SqlType {
             Value::Decimal(v) => SqlType::Decimal(v.precision, v.scale),
             Value::Ipv4(_) => SqlType::Ipv4,
             Value::Ipv6(_) => SqlType::Ipv6,
+            Value::Uuid(_) => SqlType::Uuid,
         }
     }
 }

@@ -96,6 +96,22 @@ impl<'a> FromSql<'a> for Ipv6Addr {
     }
 }
 
+impl<'a> FromSql<'a> for uuid::Uuid {
+    fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
+        match value {
+            ValueRef::Uuid(row) => Ok(uuid::Uuid::from_bytes(row)),
+            _ => {
+                let from = SqlType::from(value.clone()).to_string();
+                Err(Error::FromSql(FromSqlError::InvalidType {
+                    src: from,
+                    dst: "Uuid".into(),
+                }))
+            }
+        }
+
+    }
+}
+
 macro_rules! from_sql_vec_impl {
     ( $( $t:ty: $k:ident => $f:expr ),* ) => {
         $(

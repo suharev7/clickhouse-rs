@@ -20,6 +20,7 @@
 //! * Nullable(T)
 //! * Array(UInt/Int/String/Date/DateTime)
 //! * IPv4/IPv6
+//! * UUID
 //!
 //! ### DNS
 //!
@@ -72,7 +73,6 @@
 //! use clickhouse_rs::{Pool, types::Block};
 //! # use std::env;
 //!
-//!
 //!  let ddl = "
 //!      CREATE TABLE IF NOT EXISTS payment (
 //!          customer_id  UInt32,
@@ -105,7 +105,6 @@
 //!     .map_err(|err| eprintln!("database error: {}", err));
 //!
 //! tokio::run(done)
-//!
 //! ```
 
 #![recursion_limit = "1024"]

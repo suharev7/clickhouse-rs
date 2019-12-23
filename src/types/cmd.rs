@@ -93,8 +93,7 @@ fn encode_query(query: &Query, context: &Context) -> Result<Vec<u8>> {
         SettingsBinaryFormat::Old
     };
 
-    serialize_settings(&mut encoder, &options, settings_format)?;
-
+    serialize_settings(&mut encoder, &options, settings_format);
     encoder.uvarint(protocol::STATE_COMPLETE);
 
     encoder.uvarint(if options.compression {
@@ -111,7 +110,7 @@ fn encode_query(query: &Query, context: &Context) -> Result<Vec<u8>> {
     Ok(encoder.get_buffer())
 }
 
-fn serialize_settings(encoder: &mut Encoder, options: &Options, format: SettingsBinaryFormat) -> Result<()> {
+fn serialize_settings(encoder: &mut Encoder, options: &Options, format: SettingsBinaryFormat) {
 
     if let Some(level) = options.readonly {
         encoder.string("readonly");
@@ -122,7 +121,6 @@ fn serialize_settings(encoder: &mut Encoder, options: &Options, format: Settings
     }
 
     encoder.string(""); // settings
-    Ok(())
 }
 
 fn serialize_uint(encoder: &mut Encoder, value: u64, format: SettingsBinaryFormat) {

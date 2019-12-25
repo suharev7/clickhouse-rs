@@ -271,7 +271,7 @@ fn parse_decimal(source: &str) -> Option<(u8, u8, NoBits)> {
 }
 
 fn parse_enum(source: &str) -> Option<(EnumSize, Vec<(String, i16)>)> {
-	let re_enum = Regex::new(r"(?P<values>Enum(?P<enum_size>\d{1,3})\(([a-zA-Z' =\-\d,]*\))+)").unwrap();
+	let re_enum = Regex::new(r"(?P<values>Enum(?P<enum_size>\d{1,3})\(([a-zA-Z'_ =\-\d,]*\))+)").unwrap();
 	let re_values = Regex::new(r"(?P<name>[^']+)' = (?P<value>\-?\d{1,4})").unwrap();
 
 	let mut real_enums = vec![];

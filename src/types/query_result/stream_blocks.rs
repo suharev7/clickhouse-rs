@@ -18,6 +18,7 @@ pub(crate) struct BlockStream<'a> {
     inner: PacketStream,
     eof: bool,
     block_index: usize,
+    skip_first_block: bool,
 }
 
 impl<'a> Drop for BlockStream<'a> {
@@ -32,12 +33,13 @@ impl<'a> Drop for BlockStream<'a> {
 }
 
 impl<'a> BlockStream<'a> {
-    pub(crate) fn new(client: &mut ClientHandle, inner: PacketStream) -> BlockStream {
+    pub(crate) fn new(client: &mut ClientHandle, inner: PacketStream, skip_first_block: bool) -> BlockStream {
         BlockStream {
             client,
             inner,
             eof: false,
             block_index: 0,
+            skip_first_block,
         }
     }
 }
@@ -75,7 +77,7 @@ impl<'a> Stream for BlockStream<'a> {
                 }
                 Packet::Block(block) => {
                     self.block_index += 1;
-                    if self.block_index > 1 && !block.is_empty() {
+                    if (self.block_index > 1 || !self.skip_first_block) && !block.is_empty() {
                         return Poll::Ready(Some(Ok(block)));
                     }
                 }

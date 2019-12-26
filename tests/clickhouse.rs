@@ -206,6 +206,23 @@ async fn test_insert() -> Result<(), Error> {
 
 #[cfg(feature = "tokio_io")]
 #[tokio::test]
+async fn test_empty_select() -> Result<(), Error> {
+    let pool = Pool::new(database_url());
+    let mut c = pool.get_handle().await?;
+
+    let r = c
+        .query("SELECT 1 WHERE 1 <> 1")
+        .fetch_all()
+        .await?;
+
+    assert_eq!(r.row_count(), 0);
+    assert_eq!(r.column_count(), 1);
+
+    Ok(())
+}
+
+#[cfg(feature = "tokio_io")]
+#[tokio::test]
 async fn test_select() -> Result<(), Error> {
     let ddl = "
         CREATE TABLE clickhouse_test_select (

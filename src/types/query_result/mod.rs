@@ -29,7 +29,7 @@ impl<'a> QueryResult<'a> {
     /// Fetch data from table. It returns a block that contains all rows.
     pub async fn fetch_all(self) -> Result<Block<Complex>> {
         let blocks = self
-            .stream_blocks()
+            .stream_blocks_(false)
             .try_fold(Vec::new(), |mut blocks, block| {
                 if !block.is_empty() {
                     blocks.push(block);
@@ -70,6 +70,10 @@ impl<'a> QueryResult<'a> {
     /// # ret.unwrap()
     /// ```
     pub fn stream_blocks(self) -> BoxStream<'a, Result<Block>> {
+        self.stream_blocks_(true)
+    }
+
+    fn stream_blocks_(self, skip_first_block: bool) -> BoxStream<'a, Result<Block>> {
         let query = self.query.clone();
 
         self.client
@@ -85,7 +89,7 @@ impl<'a> QueryResult<'a> {
                     .unwrap()
                     .call(Cmd::SendQuery(query, context));
 
-                BlockStream::<'a>::new(c, inner)
+                BlockStream::<'a>::new(c, inner, skip_first_block)
             })
     }
 

@@ -11,6 +11,7 @@ addons:
     sources:
       - kalakris-cmake
 rust:
+  - stable
   - beta
   - nightly
 matrix:

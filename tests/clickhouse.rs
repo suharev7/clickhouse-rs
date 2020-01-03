@@ -27,7 +27,7 @@ use Tz::UTC;
 use uuid::Uuid;
 
 fn database_url() -> String {
-    env::var("DATABASE_URL").unwrap_or_else(|_| "tcp://localhost:9000?compression=lz4".into())
+    env::var("DATABASE_URL").unwrap_or_else(|_| "tcp://localhost:9000?compression=lz4&ping_timeout=2s&retry_timeout=3s".into())
 }
 
 #[cfg(feature = "tokio_io")]

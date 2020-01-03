@@ -538,6 +538,6 @@ pub(crate) mod test_misc {
 
     lazy_static! {
         pub static ref DATABASE_URL: String = env::var("DATABASE_URL")
-            .unwrap_or_else(|_| "tcp://localhost:9000?compression=lz4&ping_timeout=5s&retry_timeout=5s".into());
+            .unwrap_or_else(|_| "tcp://localhost:9000?compression=lz4&ping_timeout=1s&retry_timeout=2s".into());
     }
 }

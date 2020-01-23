@@ -835,29 +835,6 @@ async fn test_decimal() -> Result<(), Error> {
 
 #[cfg(feature = "tokio_io")]
 #[tokio::test]
-async fn test_inconsistent_read() -> Result<(), Error> {
-    let pool = Pool::new(database_url());
-    let mut client = pool.get_handle().await?;
-    {
-        let mut stream = client
-            .query(
-                r"
-            SELECT number FROM system.numbers LIMIT 10000
-            UNION ALL
-            SELECT number FROM system.numbers LIMIT 1000000",
-            )
-            .stream();
-
-        if let Some(row) = stream.next().await {
-            row?;
-        }
-    }
-    client.ping().await?;
-    Ok(())
-}
-
-#[cfg(feature = "tokio_io")]
-#[tokio::test]
 async fn test_column_iter() -> Result<(), Error> {
     let ddl = r"
         CREATE TABLE clickhouse_test_column_iter (
@@ -965,6 +942,29 @@ async fn test_column_iter() -> Result<(), Error> {
 }
 
 #[cfg(feature = "tokio_io")]
+#[tokio::test]
+async fn test_inconsistent_read() -> Result<(), Error> {
+    let pool = Pool::new(database_url());
+    let mut client = pool.get_handle().await?;
+    {
+        let mut stream = client
+            .query(
+                r"
+            SELECT number FROM system.numbers LIMIT 10000
+            UNION ALL
+            SELECT number FROM system.numbers LIMIT 1000000",
+            )
+            .stream();
+
+        if let Some(row) = stream.next().await {
+            row?;
+        }
+    }
+    client.ping().await?;
+    Ok(())
+}
+
+#[cfg(feature = "tokio_io")]
 #[test]
 fn test_reconnect() {
     let url = format!("{}{}", database_url(), "&pool_max=1&pool_min=1");
@@ -989,4 +989,22 @@ fn test_reconnect() {
     }
 
     assert_eq!(2, counter.load(Ordering::SeqCst))
+}
+
+#[cfg(feature = "tokio_io")]
+#[tokio::test]
+async fn test_reusing_handle_after_dropped() -> Result<(), Error> {
+    let pool = Pool::new(database_url());
+
+    let mut client = pool.get_handle().await?;
+
+    let some_query = "SELECT * FROM numbers(0,10) UNION ALL SELECT * FROM numbers(0,10)";
+    let other_query = "SELECT 1";
+
+    let mut blocks = client.query(some_query).stream_blocks();
+    blocks.next().await;
+    drop(blocks);
+
+    client.query(other_query).stream().next().await;
+    Ok(())
 }

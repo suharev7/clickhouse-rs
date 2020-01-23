@@ -23,6 +23,10 @@ pub(crate) struct BlockStream<'a> {
 
 impl<'a> Drop for BlockStream<'a> {
     fn drop(&mut self) {
+        if !self.eof && !self.client.pool.is_attached() {
+            self.client.pool.attach();
+        }
+
         if self.client.inner.is_none() {
             if let Some(mut transport) = self.inner.take_transport() {
                 transport.inconsistent = true;

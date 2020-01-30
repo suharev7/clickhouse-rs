@@ -922,3 +922,33 @@ fn test_column_iter() {
 
     run(done).unwrap();
 }
+
+#[test]
+fn test_non_alphanumeric_columns() {
+    let ddl = r"
+        CREATE TABLE IF NOT EXISTS clickhouse_non_alphanumeric_columns (
+            `id`  UInt32,
+            `ns:exampleAttr1` UInt32,
+            `ns:exampleAttr2` UInt32
+        ) Engine=Memory
+    ";
+
+    let block = Block::new()
+        .column("id", vec![1_u32])
+        .column("ns:exampleAttr1", vec![2_u32])
+        .column("ns:exampleAttr2", vec![3_u32]);
+
+    let pool = Pool::new(database_url());
+    let done = pool
+        .get_handle()
+        .and_then(move |c| c.execute("DROP TABLE IF EXISTS clickhouse_non_alphanumeric_columns"))
+        .and_then(move |c| c.execute(ddl))
+        .and_then(move |c| c.insert("clickhouse_non_alphanumeric_columns", block))
+        .and_then(move |c| c.query("SELECT count(*) FROM clickhouse_non_alphanumeric_columns").fetch_all())
+        .map(move |(_, block)| {
+            let count: u64 = block.get(0, 0).unwrap();
+            assert_eq!(count, 1)
+        });
+
+    run(done).unwrap()
+}

@@ -413,12 +413,10 @@ impl ClientHandle {
     where
         Query: From<Q>,
     {
-        let names: Vec<_> = block
-            .as_ref()
-            .columns()
-            .iter()
-            .map(|column| column.name().to_string())
-            .collect();
+        let mut names: Vec<_> = Vec::with_capacity(block.column_count());
+        for column in block.columns() {
+            names.push(try_opt!(column_name_to_string(column.name())));
+        }
         let fields = names.join(", ");
 
         let query = Query::from(table)
@@ -545,6 +543,20 @@ impl ClientHandle {
     }
 }
 
+fn column_name_to_string(name: &str) -> Result<String, Error> {
+
+    if name.chars().all(|ch| ch.is_alphanumeric()) {
+        return Ok(name.to_string())
+    }
+
+    if name.chars().any(|ch| ch == '`') {
+        let err = "Column name shouldn't contains backticks.".to_string();
+        return Err(Error::Other(failure::Context::new(err).into()));
+    }
+
+    Ok(format!("`{}`", name))
+}
+
 pub(crate) fn with_timeout<F>(
     f: F,
     timeout: Option<Duration>,
@@ -562,9 +574,17 @@ pub(crate) fn with_timeout<F>(
 #[cfg(test)]
 mod test_misc {
     use std::env;
+    use crate::*;
 
     lazy_static! {
         pub static ref DATABASE_URL: String = env::var("DATABASE_URL")
             .unwrap_or_else(|_| "tcp://localhost:9000?compression=lz4&ping_timeout=5s&retry_timeout=5s".into());
+    }
+
+    #[test]
+    fn test_column_name_to_string() {
+        assert_eq!(column_name_to_string("id").unwrap(), "id");
+        assert_eq!(column_name_to_string("ns:attr").unwrap(), "`ns:attr`");
+        assert!(column_name_to_string("`").is_err());
     }
 }

@@ -154,7 +154,7 @@ impl Column<Simple> {
     /// #     let pool = Pool::new(database_url);
     /// #     let mut client = pool.get_handle().await?;
     ///       let mut stream = client
-    ///             .query("SELECT number as n1, number as n2, number as n3 FROM numbers(100000000)")
+    ///             .query("SELECT number as n1, number as n2, number as n3 FROM numbers(10000000)")
     ///             .stream_blocks();
     ///
     ///       let mut sum = 0;

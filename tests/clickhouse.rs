@@ -16,18 +16,23 @@ use std::{
 
 use chrono::prelude::*;
 use chrono_tz::Tz;
-use futures_util::{future, stream::{TryStreamExt, StreamExt}};
+use futures_util::{
+    future,
+    stream::{StreamExt, TryStreamExt},
+};
 
 use clickhouse_rs::{
     errors::Error,
     types::{Decimal, FromSql},
     Block, Pool,
 };
-use Tz::UTC;
 use uuid::Uuid;
+use Tz::UTC;
 
 fn database_url() -> String {
-    env::var("DATABASE_URL").unwrap_or_else(|_| "tcp://localhost:9000?compression=lz4&ping_timeout=2s&retry_timeout=3s".into())
+    env::var("DATABASE_URL").unwrap_or_else(|_| {
+        "tcp://localhost:9000?compression=lz4&ping_timeout=2s&retry_timeout=3s".into()
+    })
 }
 
 #[cfg(feature = "tokio_io")]
@@ -50,7 +55,7 @@ async fn test_connection_by_wrong_address() -> Result<(), Error> {
         c.ping().await?;
         Ok(())
     }
-        .await;
+    .await;
 
     ret.unwrap_err();
     Ok(())
@@ -217,9 +222,7 @@ async fn test_insert() -> Result<(), Error> {
         .fetch_all()
         .await?;
 
-    assert_eq!(
-        format!("{:?}", expected.as_ref()),
-        format!("{:?}", &actual));
+    assert_eq!(format!("{:?}", expected.as_ref()), format!("{:?}", &actual));
     Ok(())
 }
 
@@ -229,10 +232,7 @@ async fn test_empty_select() -> Result<(), Error> {
     let pool = Pool::new(database_url());
     let mut c = pool.get_handle().await?;
 
-    let r = c
-        .query("SELECT 1 WHERE 1 <> 1")
-        .fetch_all()
-        .await?;
+    let r = c.query("SELECT 1 WHERE 1 <> 1").fetch_all().await?;
 
     assert_eq!(r.row_count(), 0);
     assert_eq!(r.column_count(), 1);
@@ -582,7 +582,10 @@ async fn test_nullable() -> Result<(), Error> {
         .column("date", vec![Some(date_value)])
         .column("datetime", vec![Some(date_time_value)])
         .column("ipv4", vec![Some(Ipv4Addr::new(127, 0, 0, 1))])
-        .column("ipv6", vec![Some(Ipv6Addr::new(0, 0, 0, 0, 0, 0xffff, 0xc00a, 0x2ff))])
+        .column(
+            "ipv6",
+            vec![Some(Ipv6Addr::new(0, 0, 0, 0, 0, 0xffff, 0xc00a, 0x2ff))],
+        )
         .column("uuid", vec![Some(Uuid::nil())]);
 
     let pool = Pool::new(database_url());
@@ -608,7 +611,7 @@ async fn test_nullable() -> Result<(), Error> {
     let datetime: Option<DateTime<Tz>> = block.get(0, "datetime")?;
     let ipv4: Option<Ipv4Addr> = block.get(0, "ipv4")?;
     let ipv6: Option<Ipv6Addr> = block.get(0, "ipv6")?;
-            let uuid: Option<Uuid> = block.get(0, "uuid")?;
+    let uuid: Option<Uuid> = block.get(0, "uuid")?;
 
     assert_eq!(int8, Some(1_i8));
     assert_eq!(int16, Some(1_i16));
@@ -625,7 +628,10 @@ async fn test_nullable() -> Result<(), Error> {
     assert_eq!(datetime, Some(date_time_value));
 
     assert_eq!(ipv4, Some(Ipv4Addr::new(127, 0, 0, 1)));
-    assert_eq!(ipv6, Some(Ipv6Addr::new(0, 0, 0, 0, 0, 0xffff, 0xc00a, 0x2ff)));
+    assert_eq!(
+        ipv6,
+        Some(Ipv6Addr::new(0, 0, 0, 0, 0, 0xffff, 0xc00a, 0x2ff))
+    );
 
     assert_eq!(uuid, Some(Uuid::nil()));
 
@@ -1008,3 +1014,40 @@ async fn test_reusing_handle_after_dropped() -> Result<(), Error> {
     client.query(other_query).stream().next().await;
     Ok(())
 }
+
+#[cfg(feature = "tokio_io")]
+#[tokio::test]
+async fn test_non_alphanumeric_columns() -> Result<(), Error> {
+    let ddl = r"
+        CREATE TABLE IF NOT EXISTS clickhouse_non_alphanumeric_columns (
+            `id`  UInt32,
+            `ns:exampleAttr1` UInt32,
+            `ns:exampleAttr2` UInt32
+        ) Engine=Memory
+    ";
+
+    let block = Block::new()
+        .column("id", vec![1_u32])
+        .column("ns:exampleAttr1", vec![2_u32])
+        .column("ns:exampleAttr2", vec![3_u32]);
+
+    let pool = Pool::new(database_url());
+
+    let mut client = pool.get_handle().await?;
+    client
+        .execute("DROP TABLE IF EXISTS clickhouse_non_alphanumeric_columns")
+        .await?;
+    client.execute(ddl).await?;
+    client
+        .insert("clickhouse_non_alphanumeric_columns", block)
+        .await?;
+    let block = client
+        .query("SELECT count(*) FROM clickhouse_non_alphanumeric_columns")
+        .fetch_all()
+        .await?;
+
+    let count: u64 = block.get(0, 0).unwrap();
+    assert_eq!(count, 1);
+    Ok(())
+}
+

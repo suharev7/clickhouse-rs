@@ -279,8 +279,8 @@ pub(crate) fn set_exception_handle(exception: &mut ServerError, transport: Optio
             INVALID_SESSION_TIMEOUT => {
                 let client = ClientHandle {
                     inner: Some(transport),
-                    context: context.clone(),
-                    pool: pool.clone(),
+                    context,
+                    pool,
                 };
                 exception.handle = Some(Arc::new(client))
             }

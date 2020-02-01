@@ -3,12 +3,13 @@ use std::{marker, sync::Arc};
 use tokio::prelude::*;
 
 use crate::{
-    errors::{DriverError, Error},
+    errors::{DriverError, Error, ServerError},
     io::{BoxFuture, BoxStream, ClickhouseTransport},
     types::{
         block::BlockRef, query_result::stream_blocks::BlockStream, Block, Cmd,
-        Complex, Packet, Query, Row, Rows, Simple, either::Either,
+        Complex, Packet, Query, Row, Rows, Simple, either::Either, Context,
     },
+    pool::PoolBinding,
     ClientHandle,
 };
 
@@ -123,7 +124,10 @@ impl QueryResult {
                 acc,
             ))),
             Packet::ProfileInfo(_) | Packet::Progress(_) => Either::Right(future::ok((h, acc))),
-            Packet::Exception(exception) => Either::Right(future::err(Error::Server(exception))),
+            Packet::Exception(mut exception, transport) => {
+                set_exception_handle(&mut exception, transport, context.clone(), pool.clone());
+                Either::Right(future::err(Error::Server(exception)))
+            },
             _ => Either::Right(future::err(Error::Driver(DriverError::UnexpectedPacket))),
         });
 
@@ -232,5 +236,55 @@ impl QueryResult {
                 })
                 .flatten(),
         )
+    }
+}
+
+const CANNOT_PARSE_DATE: u32 = 38;
+const CANNOT_PARSE_DATETIME: u32 = 41;
+const UNKNOWN_FUNCTION: u32 = 46;
+const UNKNOWN_IDENTIFIER: u32 = 47;
+const SYNTAX_ERROR: u32 = 62;
+const UNKNOWN_AGGREGATE_FUNCTION: u32 = 63;
+const ILLEGAL_KEY_OF_AGGREGATION: u32 = 67;
+const ARGUMENT_OUT_OF_BOUND: u32 = 69;
+const CANNOT_CONVERT_TYPE: u32 = 70;
+const CANNOT_WRITE_AFTER_END_OF_BUFFER: u32 = 71;
+const CANNOT_PARSE_NUMBER: u32 = 72;
+const ILLEGAL_DIVISION: u32 = 153;
+const READONLY: u32 = 164;
+const BARRIER_TIMEOUT: u32 = 335;
+const TIMEOUT_EXCEEDED: u32 = 159;
+const SOCKET_TIMEOUT: u32 = 209;
+const INVALID_SESSION_TIMEOUT: u32 = 374;
+
+pub(crate) fn set_exception_handle(exception: &mut ServerError, transport: Option<ClickhouseTransport>, context: Context, pool: PoolBinding) {
+    if let Some(transport) = transport {
+        match exception.code {
+            CANNOT_PARSE_DATE |
+            CANNOT_PARSE_DATETIME |
+            UNKNOWN_FUNCTION |
+            UNKNOWN_IDENTIFIER |
+            SYNTAX_ERROR |
+            UNKNOWN_AGGREGATE_FUNCTION |
+            ILLEGAL_KEY_OF_AGGREGATION |
+            ARGUMENT_OUT_OF_BOUND |
+            CANNOT_CONVERT_TYPE |
+            CANNOT_WRITE_AFTER_END_OF_BUFFER |
+            CANNOT_PARSE_NUMBER |
+            ILLEGAL_DIVISION |
+            READONLY |
+            BARRIER_TIMEOUT |
+            TIMEOUT_EXCEEDED |
+            SOCKET_TIMEOUT |
+            INVALID_SESSION_TIMEOUT => {
+                let client = ClientHandle {
+                    inner: Some(transport),
+                    context: context.clone(),
+                    pool: pool.clone(),
+                };
+                exception.handle = Some(Arc::new(client))
+            }
+            _ => ()
+        }
     }
 }

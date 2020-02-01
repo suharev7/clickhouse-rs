@@ -141,7 +141,10 @@ use crate::{
     io::{BoxFuture, BoxStream, ClickhouseTransport},
     pool::PoolBinding,
     retry_guard::RetryGuard,
-    types::{Block, Cmd, Context, IntoOptions, Options, OptionsSource, Packet, Query, QueryResult, Complex, Either},
+    types::{
+        set_exception_handle, Block, Cmd, Complex, Context, Either, IntoOptions, Options,
+        OptionsSource, Packet, Query, QueryResult,
+    },
 };
 use failure::_core::time::Duration;
 
@@ -246,11 +249,14 @@ impl fmt::Debug for ClientHandle {
 
 impl Client {
     #[deprecated(since = "0.1.4", note = "please use Pool to connect")]
-    pub fn connect(options: Options) -> impl Future<Item=ClientHandle, Error=Error> {
+    pub fn connect(options: Options) -> impl Future<Item = ClientHandle, Error = Error> {
         Self::open(&options.into_options_src(), None)
     }
 
-    pub(crate) fn open(source: &OptionsSource, pool: Option<Pool>) -> impl Future<Item=ClientHandle, Error=Error> {
+    pub(crate) fn open(
+        source: &OptionsSource,
+        pool: Option<Pool>,
+    ) -> impl Future<Item = ClientHandle, Error = Error> {
         let options = try_opt!(source.get()).as_ref().to_owned();
         let compress = options.compression;
         let timeout = options.connection_timeout;
@@ -305,41 +311,42 @@ impl ClientHandle {
                     };
                     future::ok::<_, Error>(Some(client))
                 }
-                Packet::Exception(e) => future::err::<_, Error>(Error::Server(e)),
+                Packet::Exception(e, _) => future::err::<_, Error>(Error::Server(e)),
                 _ => future::err::<_, Error>(Error::Driver(DriverError::UnexpectedPacket)),
             })
             .map(Option::unwrap)
     }
 
-    pub fn ping(mut self) -> impl Future<Item=Self, Error=Error> {
+    pub fn ping(mut self) -> impl Future<Item = Self, Error = Error> {
         let context = self.context.clone();
         let timeout = try_opt!(self.context.options.get()).ping_timeout;
 
         let pool = self.pool.clone();
         info!("[ping]");
-        let fut =
-            self.inner
-                .take()
-                .unwrap()
-                .call(Cmd::Ping)
-                .fold(None, move |_, packet| match packet {
-                    Packet::Pong(inner) => {
-                        let client = Self {
-                            inner: Some(inner),
-                            context: context.clone(),
-                            pool: pool.clone(),
-                        };
-                        info!("[pong]");
-                        future::ok::<_, Error>(Some(client))
-                    }
-                    Packet::Exception(exception) => {
-                        future::err::<_, Error>(Error::Server(exception))
-                    }
-                    _ => future::err::<_, Error>(Error::Driver(DriverError::UnexpectedPacket)),
-                })
-                .map(Option::unwrap)
-                .timeout(timeout)
-                .map_err(Error::from);
+        let fut = self
+            .inner
+            .take()
+            .unwrap()
+            .call(Cmd::Ping)
+            .fold(None, move |_, packet| match packet {
+                Packet::Pong(inner) => {
+                    let client = Self {
+                        inner: Some(inner),
+                        context: context.clone(),
+                        pool: pool.clone(),
+                    };
+                    info!("[pong]");
+                    future::ok::<_, Error>(Some(client))
+                }
+                Packet::Exception(mut exception, transport) => {
+                    set_exception_handle(&mut exception, transport, context.clone(), pool.clone());
+                    future::err::<_, Error>(Error::Server(exception))
+                }
+                _ => future::err::<_, Error>(Error::Driver(DriverError::UnexpectedPacket)),
+            })
+            .map(Option::unwrap)
+            .timeout(timeout)
+            .map_err(Error::from);
 
         Either::Right(fut)
     }
@@ -395,7 +402,13 @@ impl ClientHandle {
                     Packet::Block(_) | Packet::ProfileInfo(_) | Packet::Progress(_) => {
                         future::ok::<_, Error>(acc)
                     }
-                    Packet::Exception(exception) => {
+                    Packet::Exception(mut exception, transport) => {
+                        set_exception_handle(
+                            &mut exception,
+                            transport,
+                            context.clone(),
+                            pool.clone(),
+                        );
                         future::err::<_, Error>(Error::Server(exception))
                     }
                     _ => future::err::<_, Error>(Error::Driver(DriverError::UnexpectedPacket)),
@@ -523,13 +536,19 @@ impl ClientHandle {
             }
         };
 
-        let fut = RetryGuard::new(self, |c| Box::new(c.ping()), reconnect, send_retries, retry_timeout)
-            .and_then(|mut c| {
-                if !c.pool.is_attached() && c.pool.is_some() {
-                    c.pool.attach();
-                }
-                Ok(c)
-            });
+        let fut = RetryGuard::new(
+            self,
+            |c| Box::new(c.ping()),
+            reconnect,
+            send_retries,
+            retry_timeout,
+        )
+        .and_then(|mut c| {
+            if !c.pool.is_attached() && c.pool.is_some() {
+                c.pool.attach();
+            }
+            Ok(c)
+        });
 
         Either::Right(fut)
     }
@@ -544,9 +563,8 @@ impl ClientHandle {
 }
 
 fn column_name_to_string(name: &str) -> Result<String, Error> {
-
     if name.chars().all(|ch| ch.is_alphanumeric()) {
-        return Ok(name.to_string())
+        return Ok(name.to_string());
     }
 
     if name.chars().any(|ch| ch == '`') {
@@ -561,8 +579,8 @@ pub(crate) fn with_timeout<F>(
     f: F,
     timeout: Option<Duration>,
 ) -> impl Future<Item = F::Item, Error = Error>
-    where
-        F: Future<Error = Error> + Send + 'static,
+where
+    F: Future<Error = Error> + Send + 'static,
 {
     if let Some(timeout) = timeout {
         Either::Left(f.timeout(timeout).map_err(|err| err.into()))
@@ -573,12 +591,13 @@ pub(crate) fn with_timeout<F>(
 
 #[cfg(test)]
 mod test_misc {
-    use std::env;
     use crate::*;
+    use std::env;
 
     lazy_static! {
-        pub static ref DATABASE_URL: String = env::var("DATABASE_URL")
-            .unwrap_or_else(|_| "tcp://localhost:9000?compression=lz4&ping_timeout=5s&retry_timeout=5s".into());
+        pub static ref DATABASE_URL: String = env::var("DATABASE_URL").unwrap_or_else(|_| {
+            "tcp://localhost:9000?compression=lz4&ping_timeout=5s&retry_timeout=5s".into()
+        });
     }
 
     #[test]

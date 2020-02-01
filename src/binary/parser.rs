@@ -115,10 +115,11 @@ impl<'a, T: Read> Parser<T> {
             name: self.reader.read_string()?,
             message: self.reader.read_string()?,
             stack_trace: self.reader.read_string()?,
+            handle: None,
         };
 
         warn!("server exception: {:?}", exception);
-        Ok(Packet::Exception(exception))
+        Ok(Packet::Exception(exception, None))
     }
 
     fn parse_pong(&self) -> Result<Packet<()>> {

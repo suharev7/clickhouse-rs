@@ -4,7 +4,7 @@ use crate::{
     errors::{DriverError, Error},
     io::transport::PacketStream,
     pool::PoolBinding,
-    types::{Block, Context, Packet},
+    types::{Block, Context, Packet, query_result::set_exception_handle},
     ClientHandle,
 };
 
@@ -60,7 +60,11 @@ impl Stream for BlockStream {
                     self.eof = true;
                 }
                 Packet::ProfileInfo(_) | Packet::Progress(_) => {}
-                Packet::Exception(exception) => return Err(Error::Server(exception)),
+                Packet::Exception(mut exception, transport) => {
+                    let (context, pool) = self.rest.take().unwrap();
+                    set_exception_handle(&mut exception, transport, context, pool);
+                    return Err(Error::Server(exception))
+                },
                 Packet::Block(block) => {
                     self.block_index += 1;
                     if self.block_index > 1 && !block.is_empty() {

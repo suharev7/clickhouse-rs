@@ -28,6 +28,7 @@ pub(crate) use self::{
     unmarshal::Unmarshal,
     value_ref::ValueRef,
     either::Either,
+    query_result::set_exception_handle,
 };
 
 #[cfg(feature = "tls")]
@@ -134,7 +135,7 @@ pub(crate) enum Packet<S> {
     Pong(S),
     Progress(Progress),
     ProfileInfo(ProfileInfo),
-    Exception(ServerError),
+    Exception(ServerError, Option<S>),
     Block(Block),
     Eof(S),
 }
@@ -146,7 +147,7 @@ impl<S> fmt::Debug for Packet<S> {
             Packet::Pong(_) => write!(f, "Pong"),
             Packet::Progress(p) => write!(f, "Progress({:?})", p),
             Packet::ProfileInfo(info) => write!(f, "ProfileInfo({:?})", info),
-            Packet::Exception(e) => write!(f, "Exception({:?})", e),
+            Packet::Exception(e, _) => write!(f, "Exception({:?})", e),
             Packet::Block(b) => write!(f, "Block({:?})", b),
             Packet::Eof(_) => write!(f, "Eof"),
         }
@@ -160,7 +161,7 @@ impl<S> Packet<S> {
             Packet::Pong(_) => Packet::Pong(transport.take().unwrap()),
             Packet::Progress(progress) => Packet::Progress(progress),
             Packet::ProfileInfo(profile_info) => Packet::ProfileInfo(profile_info),
-            Packet::Exception(exception) => Packet::Exception(exception),
+            Packet::Exception(exception, _) => Packet::Exception(exception, transport.take()),
             Packet::Block(block) => Packet::Block(block),
             Packet::Eof(_) => Packet::Eof(transport.take().unwrap()),
         }

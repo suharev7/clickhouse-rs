@@ -7,6 +7,8 @@ use tokio_timer::Error as TimerError;
 use url::ParseError;
 
 use crate::types::Packet;
+use crate::ClientHandle;
+use std::sync::Arc;
 
 /// Result type alias for this library.
 pub type Result<T> = result::Result<T, Error>;
@@ -44,6 +46,7 @@ pub struct ServerError {
     pub name: String,
     pub message: String,
     pub stack_trace: String,
+    pub handle: Option<Arc<ClientHandle>>
 }
 
 /// This type enumerates connection errors.

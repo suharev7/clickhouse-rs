@@ -272,7 +272,7 @@ impl PacketStream {
                     future::ok::<_, Error>((Some(client), b))
                 }
                 Packet::Block(block) => future::ok::<_, Error>((c, Some(block))),
-                Packet::Exception(e) => future::err(Error::Server(e)),
+                Packet::Exception(e, _) => future::err(Error::Server(e)),
                 _ => future::err(Error::Driver(DriverError::UnexpectedPacket)),
             })
             .map(|(c, b)| (c.unwrap(), b)),

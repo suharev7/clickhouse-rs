@@ -5,6 +5,9 @@ use failure::*;
 use tokio::time::Elapsed;
 use url::ParseError;
 
+/// Clickhouse error codes
+pub mod codes;
+
 /// Result type alias for this library.
 pub type Result<T> = result::Result<T, Error>;
 

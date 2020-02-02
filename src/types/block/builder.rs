@@ -3,7 +3,7 @@ use std::{borrow::Cow, marker};
 use chrono_tz::Tz;
 
 use crate::{
-    Block,
+        Block,
     errors::{Error, FromSqlError, Result},
     types::{
         block::ColumnIdx, ColumnType,
@@ -91,7 +91,7 @@ fn put_param<K: ColumnType>(
 
                 let column = Column {
                     name: key.clone().into(),
-                    data: ColumnData::from_type::<ArcColumnWrapper>(sql_type, timezone)?,
+                    data: ColumnData::from_type::<ArcColumnWrapper>(sql_type, timezone, block.capacity)?,
                     _marker: marker::PhantomData,
                 };
 

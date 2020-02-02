@@ -3,7 +3,7 @@ use std::{marker, sync::Arc};
 use tokio::prelude::*;
 
 use crate::{
-    errors::{DriverError, Error, ServerError},
+    errors::{codes, DriverError, Error, ServerError},
     io::{BoxFuture, BoxStream, ClickhouseTransport},
     types::{
         block::BlockRef, query_result::stream_blocks::BlockStream, Block, Cmd,
@@ -239,44 +239,26 @@ impl QueryResult {
     }
 }
 
-const CANNOT_PARSE_DATE: u32 = 38;
-const CANNOT_PARSE_DATETIME: u32 = 41;
-const UNKNOWN_FUNCTION: u32 = 46;
-const UNKNOWN_IDENTIFIER: u32 = 47;
-const SYNTAX_ERROR: u32 = 62;
-const UNKNOWN_AGGREGATE_FUNCTION: u32 = 63;
-const ILLEGAL_KEY_OF_AGGREGATION: u32 = 67;
-const ARGUMENT_OUT_OF_BOUND: u32 = 69;
-const CANNOT_CONVERT_TYPE: u32 = 70;
-const CANNOT_WRITE_AFTER_END_OF_BUFFER: u32 = 71;
-const CANNOT_PARSE_NUMBER: u32 = 72;
-const ILLEGAL_DIVISION: u32 = 153;
-const READONLY: u32 = 164;
-const BARRIER_TIMEOUT: u32 = 335;
-const TIMEOUT_EXCEEDED: u32 = 159;
-const SOCKET_TIMEOUT: u32 = 209;
-const INVALID_SESSION_TIMEOUT: u32 = 374;
-
 pub(crate) fn set_exception_handle(exception: &mut ServerError, transport: Option<ClickhouseTransport>, context: Context, pool: PoolBinding) {
     if let Some(transport) = transport {
         match exception.code {
-            CANNOT_PARSE_DATE |
-            CANNOT_PARSE_DATETIME |
-            UNKNOWN_FUNCTION |
-            UNKNOWN_IDENTIFIER |
-            SYNTAX_ERROR |
-            UNKNOWN_AGGREGATE_FUNCTION |
-            ILLEGAL_KEY_OF_AGGREGATION |
-            ARGUMENT_OUT_OF_BOUND |
-            CANNOT_CONVERT_TYPE |
-            CANNOT_WRITE_AFTER_END_OF_BUFFER |
-            CANNOT_PARSE_NUMBER |
-            ILLEGAL_DIVISION |
-            READONLY |
-            BARRIER_TIMEOUT |
-            TIMEOUT_EXCEEDED |
-            SOCKET_TIMEOUT |
-            INVALID_SESSION_TIMEOUT => {
+            codes::CANNOT_PARSE_DATE |
+            codes::CANNOT_PARSE_DATETIME |
+            codes::UNKNOWN_FUNCTION |
+            codes::UNKNOWN_IDENTIFIER |
+            codes::SYNTAX_ERROR |
+            codes::UNKNOWN_AGGREGATE_FUNCTION |
+            codes::ILLEGAL_KEY_OF_AGGREGATION |
+            codes::ARGUMENT_OUT_OF_BOUND |
+            codes::CANNOT_CONVERT_TYPE |
+            codes::CANNOT_WRITE_AFTER_END_OF_BUFFER |
+            codes::CANNOT_PARSE_NUMBER |
+            codes::ILLEGAL_DIVISION |
+            codes::READONLY |
+            codes::BARRIER_TIMEOUT |
+            codes::TIMEOUT_EXCEEDED |
+            codes::SOCKET_TIMEOUT |
+            codes::INVALID_SESSION_TIMEOUT => {
                 let client = ClientHandle {
                     inner: Some(transport),
                     context,

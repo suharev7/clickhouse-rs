@@ -15,18 +15,20 @@ use std::{
 };
 
 use chrono::prelude::*;
-use chrono_tz::Tz::{self, UTC, UCT};
+use chrono_tz::Tz::{self, UCT, UTC};
 use tokio::prelude::*;
 
 use clickhouse_rs::{
-    errors::Error, types::Block, types::Decimal, types::FromSql, ClientHandle, Pool,
+    errors::{codes, Error}, types::Block, types::Decimal, types::FromSql, ClientHandle, Pool,
 };
 use uuid::Uuid;
 
 type BoxFuture<T> = Box<dyn Future<Item = T, Error = Error> + Send>;
 
 fn database_url() -> String {
-    env::var("DATABASE_URL").unwrap_or_else(|_| "tcp://localhost:9000?compression=lz4&ping_timeout=2s&retry_timeout=3s".into())
+    env::var("DATABASE_URL").unwrap_or_else(|_| {
+        "tcp://localhost:9000?compression=lz4&ping_timeout=2s&retry_timeout=3s".into()
+    })
 }
 
 /// Same as `tokio::run`, but will panic if future panics and will return the result
@@ -217,9 +219,7 @@ fn test_insert() {
         .and_then(move |c| c.insert("clickhouse_test_insert", block))
         .and_then(move |c| c.query("SELECT * FROM clickhouse_test_insert").fetch_all())
         .map(move |(_, actual)| {
-            assert_eq!(
-                format!("{:?}", expected.as_ref()),
-                format!("{:?}", &actual));
+            assert_eq!(format!("{:?}", expected.as_ref()), format!("{:?}", &actual));
         });
 
     run(done).unwrap()
@@ -529,7 +529,10 @@ fn test_nullable() {
         .column("date", vec![Some(date_value)])
         .column("datetime", vec![Some(date_time_value)])
         .column("ipv4", vec![Some(Ipv4Addr::new(127, 0, 0, 1))])
-        .column("ipv6", vec![Some(Ipv6Addr::new(0, 0, 0, 0, 0, 0xffff, 0xc00a, 0x2ff))])
+        .column(
+            "ipv6",
+            vec![Some(Ipv6Addr::new(0, 0, 0, 0, 0, 0xffff, 0xc00a, 0x2ff))],
+        )
         .column("uuid", vec![Some(Uuid::nil())]);
 
     let pool = Pool::new(database_url());
@@ -572,7 +575,10 @@ fn test_nullable() {
             assert_eq!(datetime, Some(date_time_value));
 
             assert_eq!(ipv4, Some(Ipv4Addr::new(127, 0, 0, 1)));
-            assert_eq!(ipv6, Some(Ipv6Addr::new(0, 0, 0, 0, 0, 0xffff, 0xc00a, 0x2ff)));
+            assert_eq!(
+                ipv6,
+                Some(Ipv6Addr::new(0, 0, 0, 0, 0, 0xffff, 0xc00a, 0x2ff))
+            );
 
             assert_eq!(uuid, Some(Uuid::nil()));
 
@@ -858,66 +864,67 @@ fn test_column_iter() {
 
     let pool = Pool::new(database_url());
 
-    let done = pool.get_handle()
+    let done = pool
+        .get_handle()
         .and_then(move |c| c.execute("DROP TABLE IF EXISTS clickhouse_test_column_iter"))
         .and_then(move |c| c.execute(ddl))
         .and_then(move |c| c.insert("clickhouse_test_column_iter", block))
         .and_then(move |c| {
-            c.query(query)
-                .stream_blocks()
-                .for_each(move |block| {
-                    let uint64_iter: Vec<_> = block
-                        .get_column("uint64")?
-                        .iter::<u64>()?
-                        .copied()
-                        .collect();
-                    assert_eq!(uint64_iter, vec![1_u64, 2, 3]);
+            c.query(query).stream_blocks().for_each(move |block| {
+                let uint64_iter: Vec<_> = block
+                    .get_column("uint64")?
+                    .iter::<u64>()?
+                    .copied()
+                    .collect();
+                assert_eq!(uint64_iter, vec![1_u64, 2, 3]);
 
-                    let str_iter: Vec<_> = block.get_column("str")?.iter::<&[u8]>()?.collect();
-                    assert_eq!(str_iter, vec![&[65_u8], &[66], &[67]]);
+                let str_iter: Vec<_> = block.get_column("str")?.iter::<&[u8]>()?.collect();
+                assert_eq!(str_iter, vec![&[65_u8], &[66], &[67]]);
 
-                    let fixed_str_iter: Vec<_> = block.get_column("fixed_str")?.iter::<&[u8]>()?.collect();
-                    assert_eq!(fixed_str_iter, vec![&[65_u8], &[66], &[67]]);
+                let fixed_str_iter: Vec<_> =
+                    block.get_column("fixed_str")?.iter::<&[u8]>()?.collect();
+                assert_eq!(fixed_str_iter, vec![&[65_u8], &[66], &[67]]);
 
-                    let opt_str_iter: Vec<_> = block
-                        .get_column("opt_str")?
-                        .iter::<Option<&[u8]>>()?
-                        .collect();
-                    let expected: Vec<Option<&[u8]>> = vec![Some(&[65_u8]), None, None];
-                    assert_eq!(opt_str_iter, expected);
+                let opt_str_iter: Vec<_> = block
+                    .get_column("opt_str")?
+                    .iter::<Option<&[u8]>>()?
+                    .collect();
+                let expected: Vec<Option<&[u8]>> = vec![Some(&[65_u8]), None, None];
+                assert_eq!(opt_str_iter, expected);
 
-                    let date_iter: Vec<_> = block.get_column("date")?.iter::<Date<Tz>>()?.collect();
-                    assert_eq!(date_iter, vec![date_value, date_value, date_value]);
+                let date_iter: Vec<_> = block.get_column("date")?.iter::<Date<Tz>>()?.collect();
+                assert_eq!(date_iter, vec![date_value, date_value, date_value]);
 
-                    let datetime_iter: Vec<_> = block
-                        .get_column("datetime")?
-                        .iter::<DateTime<Tz>>()?
-                        .collect();
-                    assert_eq!(
-                        datetime_iter,
-                        vec![date_time_value, date_time_value, date_time_value]
-                    );
+                let datetime_iter: Vec<_> = block
+                    .get_column("datetime")?
+                    .iter::<DateTime<Tz>>()?
+                    .collect();
+                assert_eq!(
+                    datetime_iter,
+                    vec![date_time_value, date_time_value, date_time_value]
+                );
 
-                    let decimal_iter: Vec<_> = block.get_column("decimal")?.iter::<Decimal>()?.collect();
-                    assert_eq!(
-                        decimal_iter,
-                        vec![Decimal::of(1.234, 3), Decimal::of(5, 3), Decimal::of(5, 3)]
-                    );
+                let decimal_iter: Vec<_> =
+                    block.get_column("decimal")?.iter::<Decimal>()?.collect();
+                assert_eq!(
+                    decimal_iter,
+                    vec![Decimal::of(1.234, 3), Decimal::of(5, 3), Decimal::of(5, 3)]
+                );
 
-                    let array_iter: Vec<_> = block.get_column("array")?.iter::<Vec<u32>>()?.collect();
-                    assert_eq!(array_iter, vec![vec![&42_u32], Vec::new(), Vec::new()]);
+                let array_iter: Vec<_> = block.get_column("array")?.iter::<Vec<u32>>()?.collect();
+                assert_eq!(array_iter, vec![vec![&42_u32], Vec::new(), Vec::new()]);
 
-                    let ipv4_iter: Vec<_> = block.get_column("ipv4")?.iter::<Ipv4Addr>()?.collect();
-                    assert_eq!(ipv4_iter, vec![Ipv4Addr::new(127, 0, 0, 1); 3]);
+                let ipv4_iter: Vec<_> = block.get_column("ipv4")?.iter::<Ipv4Addr>()?.collect();
+                assert_eq!(ipv4_iter, vec![Ipv4Addr::new(127, 0, 0, 1); 3]);
 
-                    let ipv6_iter: Vec<_> = block.get_column("ipv6")?.iter::<Ipv6Addr>()?.collect();
-                    assert_eq!(ipv6_iter, vec![Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1); 3]);
+                let ipv6_iter: Vec<_> = block.get_column("ipv6")?.iter::<Ipv6Addr>()?.collect();
+                assert_eq!(ipv6_iter, vec![Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1); 3]);
 
-                    let uuid_iter: Vec<_> = block.get_column("uuid")?.iter::<Uuid>()?.collect();
-                    assert_eq!(uuid_iter, vec![uuid::Uuid::nil(); 3]);
+                let uuid_iter: Vec<_> = block.get_column("uuid")?.iter::<Uuid>()?.collect();
+                assert_eq!(uuid_iter, vec![uuid::Uuid::nil(); 3]);
 
-                    Ok(())
-                })
+                Ok(())
+            })
         });
 
     run(done).unwrap();
@@ -944,11 +951,33 @@ fn test_non_alphanumeric_columns() {
         .and_then(move |c| c.execute("DROP TABLE IF EXISTS clickhouse_non_alphanumeric_columns"))
         .and_then(move |c| c.execute(ddl))
         .and_then(move |c| c.insert("clickhouse_non_alphanumeric_columns", block))
-        .and_then(move |c| c.query("SELECT count(*) FROM clickhouse_non_alphanumeric_columns").fetch_all())
+        .and_then(move |c| {
+            c.query("SELECT count(*) FROM clickhouse_non_alphanumeric_columns")
+                .fetch_all()
+        })
         .map(move |(_, block)| {
             let count: u64 = block.get(0, 0).unwrap();
             assert_eq!(count, 1)
         });
 
     run(done).unwrap()
+}
+
+#[test]
+fn test_syntax_error() {
+    let pool = Pool::new(database_url());
+    let done = pool
+        .get_handle()
+        .and_then(move |c| c.query("SYNTAX ERROR").fetch_all())
+        .map(move |_| panic!())
+        .map_err(|err| {
+            if let Error::Server(e) = err {
+                assert_eq!(e.code, codes::SYNTAX_ERROR);
+                assert!(e.handle.is_some());
+            } else {
+                panic!();
+            }
+        });
+
+    run(done).unwrap_err()
 }

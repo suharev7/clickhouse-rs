@@ -216,39 +216,81 @@ fn parse_decimal(source: &str) -> Option<(u8, u8, NoBits)> {
         return None;
     }
 
-    if source.chars().nth(7) != Some('(') {
-        return None;
-    }
+    let mut nobits = None;
+    let mut precision = None;
+    let mut scale = None;
 
-    if !source.ends_with(')') {
-        return None;
-    }
+    let mut params_indexes = (None, None);
 
-    let mut params: Vec<u8> = Vec::with_capacity(2);
-    for cell in source[8..source.len() - 1].split(',').map(|s| s.trim()) {
-        if let Ok(value) = cell.parse() {
-            params.push(value)
-        } else {
-            return None;
+    for (idx, byte) in source.as_bytes().iter().enumerate() {
+        if *byte == b'(' {
+            match &source.as_bytes()[..idx] {
+                b"Decimal" => {}
+                b"Decimal32" => {
+                    nobits = Some(NoBits::N32);
+                }
+                b"Decimal64" => {
+                    nobits = Some(NoBits::N64);
+                }
+                _ => return None,
+            }
+            params_indexes.0 = Some(idx);
+        }
+        if *byte == b')' {
+            params_indexes.1 = Some(idx);
         }
     }
 
-    if params.len() != 2 {
-        return None;
+    let params_indexes = match params_indexes {
+        (Some(start), Some(end)) => (start, end),
+        _ => return None,
+    };
+
+    match nobits {
+        Some(_) => {
+            scale = std::str::from_utf8(&source.as_bytes()[params_indexes.0 + 1..params_indexes.1])
+                .unwrap()
+                .parse()
+                .ok()
+        }
+        None => {
+            for (idx, cell) in
+                std::str::from_utf8(&source.as_bytes()[params_indexes.0 + 1..params_indexes.1])
+                    .unwrap()
+                    .split(',')
+                    .map(|s| s.trim())
+                    .enumerate()
+            {
+                match idx {
+                    0 => precision = cell.parse().ok(),
+                    1 => scale = cell.parse().ok(),
+                    _ => return None,
+                }
+            }
+        }
     }
 
-    let precision = params[0];
-    let scale = params[1];
+    match (precision, scale, nobits) {
+        (Some(precision), Some(scale), None) => {
+            if scale > precision {
+                return None;
+            }
 
-    if scale > precision {
-        return None;
+            if let Some(nobits) = NoBits::from_precision(precision) {
+                Some((precision, scale, nobits))
+            } else {
+                None
+            }
+        }
+        (None, Some(scale), Some(bits)) => {
+            let precision = match bits {
+                NoBits::N32 => 9,
+                NoBits::N64 => 18,
+            };
+            Some((precision, scale, bits))
+        }
+        _ => None,
     }
-
-    if let Some(nobits) = NoBits::from_precision(precision) {
-        return Some((precision, scale, nobits));
-    }
-
-    None
 }
 
 fn remove_white_spaces(input: &str) -> String {
@@ -325,6 +367,7 @@ mod test {
         assert_eq!(parse_decimal("Decimal(20, -4)"), None);
         assert_eq!(parse_decimal("Decimal(0)"), None);
         assert_eq!(parse_decimal("Decimal(1, 2, 3)"), None);
+        assert_eq!(parse_decimal("Decimal64(9)"), Some((18, 9, NoBits::N64)));
     }
 
     #[test]

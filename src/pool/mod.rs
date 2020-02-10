@@ -180,18 +180,18 @@ impl Pool {
         match self.take_conn() {
             Some(client) => Ok(Async::Ready(client)),
             None => {
-                let new_conn_created = {
+                let new_conn_created = || {
                     let conn_count = self.inner.conn_count();
 
-                    if self.inner.new.is_empty() && conn_count < self.max {
-                        let _ = self.inner.new.push(self.new_connection());
-                        true
-                    } else {
-                        self.inner.tasks.push(task::current());
-                        false
+                    if conn_count < self.max {
+                        if let Ok(_) = self.inner.new.push(self.new_connection()) {
+                            return true
+                        }
                     }
+                    self.inner.tasks.push(task::current());
+                    false
                 };
-                if new_conn_created {
+                if new_conn_created() {
                     self.poll()
                 } else {
                     Ok(Async::NotReady)
@@ -212,6 +212,9 @@ impl Pool {
                     inner.idle.push(client).unwrap();
                 }
                 Ok(Async::NotReady) => {
+                    // NOTE: it is okay to drop the construction task
+                    // because another construction will be attempted
+                    // later in Pool::poll
                     let _ = self.inner.new.push(new);
                 },
                 Err(err) => {

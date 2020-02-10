@@ -180,16 +180,17 @@ impl Pool {
         match self.take_conn() {
             Some(client) => Ok(Async::Ready(client)),
             None => {
-                let new_conn_created = || {
+                let new_conn_created = {
                     let conn_count = self.inner.conn_count();
 
                     if conn_count < self.max && self.inner.new.push(self.new_connection()).is_ok() {
-                        return true;
+                        true
+                    } else {
+                        self.inner.tasks.push(task::current());
+                        false
                     }
-                    self.inner.tasks.push(task::current());
-                    false
                 };
-                if new_conn_created() {
+                if new_conn_created {
                     self.poll()
                 } else {
                     Ok(Async::NotReady)

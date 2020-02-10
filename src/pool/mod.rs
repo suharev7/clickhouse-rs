@@ -183,10 +183,8 @@ impl Pool {
                 let new_conn_created = || {
                     let conn_count = self.inner.conn_count();
 
-                    if conn_count < self.max {
-                        if let Ok(_) = self.inner.new.push(self.new_connection()) {
-                            return true
-                        }
+                    if conn_count < self.max && self.inner.new.push(self.new_connection()).is_ok() {
+                        return true;
                     }
                     self.inner.tasks.push(task::current());
                     false

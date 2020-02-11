@@ -2,6 +2,7 @@ use std::iter;
 
 use crate::{
     binary::Encoder,
+    errors::{Result, Error, FromSqlError},
     types::{SqlType, Value, ValueRef},
 };
 
@@ -63,6 +64,15 @@ impl ColumnData for ConcatColumnData {
 
     fn clone_instance(&self) -> BoxColumnData {
         unimplemented!()
+    }
+
+    unsafe fn get_internal(&self, pointers: &[*mut *const u8], level: u8) -> Result<()> {
+        if level == 0xff {
+            *pointers[0] = &self.data as *const Vec<ArcColumnData> as *mut u8;
+            Ok(())
+        } else {
+            Err(Error::FromSql(FromSqlError::UnsupportedOperation))
+        }
     }
 }
 

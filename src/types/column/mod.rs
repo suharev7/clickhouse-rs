@@ -11,13 +11,13 @@ use crate::{
     binary::{Encoder, ReadEx},
     errors::{Error, FromSqlError, Result},
     types::{
-        column::iter::SimpleIterable,
         column::{
             column_data::ArcColumnData,
             decimal::{DecimalAdapter, NullableDecimalAdapter},
             fixed_string::{FixedStringAdapter, NullableFixedStringAdapter},
             ip::{Ipv6, IpColumnData, Ipv4},
             string::StringAdapter,
+            iter::Iterable,
         },
         decimal::NoBits,
         SqlType, Value, ValueRef,
@@ -37,7 +37,7 @@ mod decimal;
 mod factory;
 pub(crate) mod fixed_string;
 mod ip;
-mod iter;
+pub(crate) mod iter;
 mod list;
 mod nullable;
 mod numeric;
@@ -139,7 +139,9 @@ impl Column<Simple> {
             }
         }
     }
+}
 
+impl<K: ColumnType> Column<K> {
     /// Returns an iterator over the column.
     ///
     /// ### Example
@@ -154,7 +156,7 @@ impl Column<Simple> {
     /// #     let pool = Pool::new(database_url);
     /// #     let mut client = pool.get_handle().await?;
     ///       let mut stream = client
-    ///             .query("SELECT number as n1, number as n2, number as n3 FROM numbers(10000000)")
+    ///             .query("SELECT number as n1, number as n2, number as n3 FROM numbers(100000000)")
     ///             .stream_blocks();
     ///
     ///       let mut sum = 0;
@@ -175,11 +177,8 @@ impl Column<Simple> {
     /// # });
     /// # ret.unwrap()
     /// ```
-    pub fn iter<'a, T>(&'a self) -> Result<T::Iter>
-    where
-        T: SimpleIterable<'a>,
-    {
-        T::iter(self, self.sql_type())
+    pub fn iter<'a, T: Iterable<'a, K>>(&'a self) -> Result<T::Iter> {
+        <T as Iterable<'a, K>>::iter(self, self.sql_type())
     }
 }
 

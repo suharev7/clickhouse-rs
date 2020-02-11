@@ -1,7 +1,7 @@
 use std::{borrow::Cow, collections::HashMap, fmt, mem, pin::Pin, sync::Mutex};
 
 use chrono_tz::Tz;
-use hostname::get_hostname;
+use hostname::get;
 
 use lazy_static::lazy_static;
 
@@ -114,7 +114,7 @@ impl Default for Context {
     fn default() -> Self {
         Self {
             server_info: ServerInfo::default(),
-            hostname: get_hostname().unwrap(),
+            hostname: get().unwrap().into_string().unwrap(),
             options: OptionsSource::default(),
         }
     }

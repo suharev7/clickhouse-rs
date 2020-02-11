@@ -186,8 +186,7 @@ impl Pool {
                 let new_conn_created = {
                     let conn_count = self.inner.conn_count();
 
-                    if self.inner.new.is_empty() && conn_count < self.max {
-                        let _ = self.inner.new.push(self.new_connection());
+                    if conn_count < self.max && self.inner.new.push(self.new_connection()).is_ok() {
                         true
                     } else {
                         self.inner.tasks.push(cx.waker().clone());
@@ -216,6 +215,9 @@ impl Pool {
                     self.inner.idle.push(client).unwrap();
                 },
                 Poll::Pending => {
+                    // NOTE: it is okay to drop the construction task
+                    // because another construction will be attempted
+                    // later in Pool::poll
                     let _ = self.inner.new.push(new);
                 },
                 Poll::Ready(Err(err)) => {

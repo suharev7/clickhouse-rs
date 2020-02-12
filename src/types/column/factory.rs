@@ -13,12 +13,18 @@ use crate::{
     binary::ReadEx,
     errors::Result,
     types::column::{
-        array::ArrayColumnData, column_data::ColumnData, date::DateColumnData,
-        decimal::DecimalColumnData, fixed_string::FixedStringColumnData, list::List,
-        nullable::NullableColumnData, numeric::VectorColumnData, string::StringColumnData,
-        BoxColumnWrapper, ColumnWrapper, enums::Enum8ColumnData,
+        array::ArrayColumnData,
+        column_data::ColumnData,
+        date::DateColumnData,
+        decimal::DecimalColumnData,
+        enums::{Enum16ColumnData, Enum8ColumnData},
+        fixed_string::FixedStringColumnData,
         ip::{IpColumnData, Ipv4, Ipv6, Uuid},
-        BoxColumnWrapper, ColumnWrapper,enums::{Enum8ColumnData},
+        list::List,
+        nullable::NullableColumnData,
+        numeric::VectorColumnData,
+        string::StringColumnData,
+        BoxColumnWrapper, ColumnWrapper,
     },
     types::decimal::NoBits,
     SqlType,
@@ -47,7 +53,7 @@ impl dyn ColumnData {
         size: usize,
         tz: Tz,
     ) -> Result<W::Wrapper> {
-        Ok(match type_name {
+        Ok(match_str!(type_name, {
             "UInt8" => W::wrap(VectorColumnData::<u8>::load(reader, size)?),
             "UInt16" => W::wrap(VectorColumnData::<u16>::load(reader, size)?),
             "UInt32" => W::wrap(VectorColumnData::<u32>::load(reader, size)?),
@@ -61,6 +67,9 @@ impl dyn ColumnData {
             "String" => W::wrap(StringColumnData::load(reader, size)?),
             "Date" => W::wrap(DateColumnData::<u16>::load(reader, size, tz)?),
             "DateTime" => W::wrap(DateColumnData::<u32>::load(reader, size, tz)?),
+            "IPv4" => W::wrap(IpColumnData::<Ipv4>::load(reader, size)?),
+            "IPv6" => W::wrap(IpColumnData::<Ipv6>::load(reader, size)?),
+            "UUID" => W::wrap(IpColumnData::<Uuid>::load(reader, size)?),
             _ => {
                 if let Some(inner_type) = parse_nullable_type(type_name) {
                     W::wrap(NullableColumnData::load(reader, inner_type, size, tz)?)
@@ -81,43 +90,49 @@ impl dyn ColumnData {
                     return Err(message.into());
                 }
             }
-        })
+        }))
     }
 
     pub(crate) fn from_type<W: ColumnWrapper>(
         sql_type: SqlType,
         timezone: Tz,
+        capacity: usize,
     ) -> Result<W::Wrapper> {
         Ok(match sql_type {
-            SqlType::UInt8 => W::wrap(VectorColumnData::<u8>::with_capacity(DEFAULT_CAPACITY)),
-            SqlType::UInt16 => W::wrap(VectorColumnData::<u16>::with_capacity(DEFAULT_CAPACITY)),
-            SqlType::UInt32 => W::wrap(VectorColumnData::<u32>::with_capacity(DEFAULT_CAPACITY)),
-            SqlType::UInt64 => W::wrap(VectorColumnData::<u64>::with_capacity(DEFAULT_CAPACITY)),
-            SqlType::Int8 => W::wrap(VectorColumnData::<i8>::with_capacity(DEFAULT_CAPACITY)),
-            SqlType::Int16 => W::wrap(VectorColumnData::<i16>::with_capacity(DEFAULT_CAPACITY)),
-            SqlType::Int32 => W::wrap(VectorColumnData::<i32>::with_capacity(DEFAULT_CAPACITY)),
-            SqlType::Int64 => W::wrap(VectorColumnData::<i64>::with_capacity(DEFAULT_CAPACITY)),
-            SqlType::String => W::wrap(StringColumnData::with_capacity(DEFAULT_CAPACITY)),
+            SqlType::UInt8 => W::wrap(VectorColumnData::<u8>::with_capacity(capacity)),
+            SqlType::UInt16 => W::wrap(VectorColumnData::<u16>::with_capacity(capacity)),
+            SqlType::UInt32 => W::wrap(VectorColumnData::<u32>::with_capacity(capacity)),
+            SqlType::UInt64 => W::wrap(VectorColumnData::<u64>::with_capacity(capacity)),
+            SqlType::Int8 => W::wrap(VectorColumnData::<i8>::with_capacity(capacity)),
+            SqlType::Int16 => W::wrap(VectorColumnData::<i16>::with_capacity(capacity)),
+            SqlType::Int32 => W::wrap(VectorColumnData::<i32>::with_capacity(capacity)),
+            SqlType::Int64 => W::wrap(VectorColumnData::<i64>::with_capacity(capacity)),
+            SqlType::String => W::wrap(StringColumnData::with_capacity(capacity)),
             SqlType::FixedString(len) => {
-                W::wrap(FixedStringColumnData::with_capacity(DEFAULT_CAPACITY, len))
+                W::wrap(FixedStringColumnData::with_capacity(capacity, len))
             }
-            SqlType::Float32 => W::wrap(VectorColumnData::<f32>::with_capacity(DEFAULT_CAPACITY)),
-            SqlType::Float64 => W::wrap(VectorColumnData::<f64>::with_capacity(DEFAULT_CAPACITY)),
-            SqlType::Date => W::wrap(DateColumnData::<u16>::with_capacity(
-                DEFAULT_CAPACITY,
-                timezone,
-            )),
-            SqlType::DateTime => W::wrap(DateColumnData::<u32>::with_capacity(
-                DEFAULT_CAPACITY,
-                timezone,
-            )),
+            SqlType::Float32 => W::wrap(VectorColumnData::<f32>::with_capacity(capacity)),
+            SqlType::Float64 => W::wrap(VectorColumnData::<f64>::with_capacity(capacity)),
+            SqlType::Ipv4 => W::wrap(IpColumnData::<Ipv4>::with_capacity(capacity)),
+            SqlType::Ipv6 => W::wrap(IpColumnData::<Ipv6>::with_capacity(capacity)),
+            SqlType::Uuid => W::wrap(IpColumnData::<Uuid>::with_capacity(capacity)),
+            SqlType::Date => W::wrap(DateColumnData::<u16>::with_capacity(capacity, timezone)),
+            SqlType::DateTime => W::wrap(DateColumnData::<u32>::with_capacity(capacity, timezone)),
             SqlType::Nullable(inner_type) => W::wrap(NullableColumnData {
-                inner: ColumnData::from_type::<BoxColumnWrapper>(inner_type.clone(), timezone)?,
+                inner: ColumnData::from_type::<BoxColumnWrapper>(
+                    inner_type.clone(),
+                    timezone,
+                    capacity,
+                )?,
                 nulls: Vec::new(),
             }),
             SqlType::Array(inner_type) => W::wrap(ArrayColumnData {
-                inner: ColumnData::from_type::<BoxColumnWrapper>(inner_type.clone(), timezone)?,
-                offsets: List::with_capacity(DEFAULT_CAPACITY),
+                inner: ColumnData::from_type::<BoxColumnWrapper>(
+                    inner_type.clone(),
+                    timezone,
+                    capacity,
+                )?,
+                offsets: List::with_capacity(capacity),
             }),
             SqlType::Decimal(precision, scale) => {
                 let nobits = NoBits::from_precision(precision).unwrap();
@@ -128,7 +143,9 @@ impl dyn ColumnData {
                 };
 
                 W::wrap(DecimalColumnData {
-                    inner: ColumnData::from_type::<BoxColumnWrapper>(inner_type, timezone)?,
+                    inner: ColumnData::from_type::<BoxColumnWrapper>(
+                        inner_type, timezone, capacity,
+                    )?,
                     precision,
                     scale,
                     nobits,
@@ -136,11 +153,19 @@ impl dyn ColumnData {
             }
             SqlType::Enum8(enum_values) => W::wrap(Enum8ColumnData {
                 enum_values,
-                inner: ColumnData::from_type::<BoxColumnWrapper>(SqlType::Int8, timezone)?,
+                inner: ColumnData::from_type::<BoxColumnWrapper>(
+                    SqlType::Int8,
+                    timezone,
+                    capacity,
+                )?,
             }),
             SqlType::Enum16(enum_values) => W::wrap(Enum16ColumnData {
                 enum_values,
-                inner: ColumnData::from_type::<BoxColumnWrapper>(SqlType::Int8, timezone)?,
+                inner: ColumnData::from_type::<BoxColumnWrapper>(
+                    SqlType::Int8,
+                    timezone,
+                    capacity,
+                )?,
             }),
         })
     }
@@ -230,13 +255,13 @@ fn remove_white_spaces(input: &str) -> String {
     input
 }
 
-enum EnumSize1 {
+enum EnumSize {
     Enum8,
     Enum16,
 }
 
 fn parse_enum8(input: &str) -> Option<Vec<(String, i8)>> {
-    match parse_enum(EnumSize1::Enum8, input) {
+    match parse_enum(EnumSize::Enum8, input) {
         Ok((tail, result)) => {
             if tail != "" {
                 return None;
@@ -256,7 +281,7 @@ fn parse_enum8(input: &str) -> Option<Vec<(String, i8)>> {
     }
 }
 fn parse_enum16(input: &str) -> Option<Vec<(String, i16)>> {
-    match parse_enum(EnumSize1::Enum16, input) {
+    match parse_enum(EnumSize::Enum16, input) {
         Ok((tail, result)) => {
             if tail != "" {
                 return None;
@@ -276,10 +301,10 @@ fn parse_enum16(input: &str) -> Option<Vec<(String, i16)>> {
     }
 }
 
-fn parse_enum(size: EnumSize1, input: &str) -> IResult<&str, Vec<(&str, &str)>> {
+fn parse_enum(size: EnumSize, input: &str) -> IResult<&str, Vec<(&str, &str)>> {
     let size = match size {
-        EnumSize1::Enum8 => "8",
-        EnumSize1::Enum16 => "16",
+        EnumSize::Enum8 => "8",
+        EnumSize::Enum16 => "16",
     };
     let (input, _) = tag(format!("Enum{}", size).as_str())(input)?;
 
@@ -295,6 +320,7 @@ fn parse_enum(size: EnumSize1, input: &str) -> IResult<&str, Vec<(&str, &str)>> 
     res.push(last_enum);
     Ok((tail, res))
 }
+
 #[cfg(test)]
 mod test {
     use super::*;

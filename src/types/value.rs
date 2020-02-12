@@ -1,4 +1,9 @@
-use std::{convert, fmt, mem, str, sync::Arc, net::{Ipv4Addr, Ipv6Addr}}; 
+use std::{
+    convert, fmt, mem,
+    net::{Ipv4Addr, Ipv6Addr},
+    str,
+    sync::Arc,
+};
 
 use chrono::prelude::*;
 use chrono_tz::Tz;
@@ -101,6 +106,9 @@ impl Value {
                 scale,
                 nobits: NoBits::N64,
             }),
+            SqlType::Ipv4 => Value::Ipv4([0_u8; 4]),
+            SqlType::Ipv6 => Value::Ipv6([0_u8; 16]),
+            SqlType::Uuid => Value::Uuid([0_u8; 16]),
             SqlType::Enum8(values) => Value::Enum8(values, Enum8(0)),
             SqlType::Enum16(values) => Value::Enum16(values, Enum16(0)),
         }
@@ -151,6 +159,12 @@ impl fmt::Display for Value {
                 write!(f, "[{}]", cells.join(", "))
             }
             Value::Decimal(v) => fmt::Display::fmt(v, f),
+            Value::Ipv4(v) => write!(f, "{}", Ipv4Addr::from(*v)),
+            Value::Ipv6(v) => write!(f, "{}", Ipv6Addr::from(*v)),
+            Value::Uuid(v) => match Uuid::from_slice(v) {
+                Ok(uuid) => write!(f, "{}", uuid),
+                Err(e) => write!(f, "{}", e),
+            },
             Value::Enum8(ref _v1, ref v2) => write!(f, "Enum8, {}", v2),
             Value::Enum16(ref _v1, ref v2) => write!(f, "Enum16, {}", v2),
         }
@@ -182,6 +196,9 @@ impl convert::From<Value> for SqlType {
             },
             Value::Array(t, _) => SqlType::Array(t),
             Value::Decimal(v) => SqlType::Decimal(v.precision, v.scale),
+            Value::Ipv4(_) => SqlType::Ipv4,
+            Value::Ipv6(_) => SqlType::Ipv6,
+            Value::Uuid(_) => SqlType::Uuid,
             Value::Enum8(values, _) => SqlType::Enum8(values),
             Value::Enum16(values, _) => SqlType::Enum16(values),
         }
@@ -225,18 +242,12 @@ impl convert::From<AppDate> for Value {
 
 impl convert::From<Enum8> for Value {
     fn from(v: Enum8) -> Value {
-        Value::Enum8 {
-            0: vec![],
-            1: v,
-        }
+        Value::Enum8 { 0: vec![], 1: v }
     }
 }
 impl convert::From<Enum16> for Value {
     fn from(v: Enum16) -> Value {
-        Value::Enum16 {
-            0: vec![],
-            1: v,
-        }
+        Value::Enum16 { 0: vec![], 1: v }
     }
 }
 

@@ -34,6 +34,7 @@ lz4 = "1.23.1"
 pin-project = "0.4.5"
 url="^2"
 uuid = "0.8.1"
+nom = "5.1.0"
 
 [dependencies.futures-util]
 version = "0.3.0"

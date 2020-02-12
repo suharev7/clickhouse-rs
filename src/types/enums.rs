@@ -1,6 +1,6 @@
 use std::fmt;
 
-// TODO implement for using strings as a keys
+// TODO Using strings as a keys
 #[derive(Clone, Copy)]
 pub struct Enum8(pub(crate) i8);
 

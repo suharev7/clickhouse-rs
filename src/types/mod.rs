@@ -238,6 +238,9 @@ impl SqlType {
             SqlType::Float64 => "Float64".into(),
             SqlType::Date => "Date".into(),
             SqlType::DateTime => "DateTime".into(),
+            SqlType::Ipv4 => "IPv4".into(),
+            SqlType::Ipv6 => "IPv6".into(),
+            SqlType::Uuid => "UUID".into(),
             SqlType::Nullable(nested) => format!("Nullable({})", &nested).into(),
             SqlType::Array(nested) => format!("Array({})", &nested).into(),
             SqlType::Decimal(precision, scale) => {

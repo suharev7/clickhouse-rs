@@ -14,14 +14,13 @@ use crate::{
     binary::{Encoder, ReadEx},
     errors::{Error, FromSqlError, Result},
     types::{
-        column::iter::SimpleIterable,
         column::{
             column_data::ArcColumnData,
             decimal::{DecimalAdapter, NullableDecimalAdapter},
             fixed_string::{FixedStringAdapter, NullableFixedStringAdapter},
-            ip::{Ipv6, IpColumnData, Ipv4},
-            string::StringAdapter,
+            ip::{IpColumnData, Ipv4, Ipv6},
             iter::Iterable,
+            string::StringAdapter,
         },
         decimal::NoBits,
         SqlType, Value, ValueRef,
@@ -31,7 +30,6 @@ use crate::{
 use self::chunk::ChunkColumnData;
 pub(crate) use self::{column_data::ColumnData, string_pool::StringPool};
 pub use self::{concat::ConcatColumnData, numeric::VectorColumnData};
-use crate::types::column::enums::Enum8Adapter;
 
 mod array;
 mod chunk;
@@ -43,7 +41,7 @@ mod enums;
 mod factory;
 pub(crate) mod fixed_string;
 mod ip;
-pub(crate) mod iter;
+mod iter;
 mod list;
 mod nullable;
 mod numeric;
@@ -425,19 +423,19 @@ impl<K: ColumnType> Column<K> {
         }
     }
 
-	pub(crate) fn push(&mut self, value: Value) {
-		loop {
-			match Arc::get_mut(&mut self.data) {
-				None => {
-					self.data = Arc::from(self.data.clone_instance());
-				}
-				Some(data) => {
-					data.push(value);
-					break;
-				}
-			}
-		}
-	}
+    pub(crate) fn push(&mut self, value: Value) {
+        loop {
+            match Arc::get_mut(&mut self.data) {
+                None => {
+                    self.data = Arc::from(self.data.clone_instance());
+                }
+                Some(data) => {
+                    data.push(value);
+                    break;
+                }
+            }
+        }
+    }
 
     pub(crate) unsafe fn get_internal(&self, pointers: &[*mut *const u8], level: u8) -> Result<()> {
         self.data.get_internal(pointers, level)

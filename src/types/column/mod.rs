@@ -7,10 +7,14 @@ use std::{
 
 use chrono_tz::Tz;
 
+use crate::types::column::enums::{
+    Enum16Adapter, Enum8Adapter, NullableEnum16Adapter, NullableEnum8Adapter,
+};
 use crate::{
     binary::{Encoder, ReadEx},
     errors::{Error, FromSqlError, Result},
     types::{
+        column::iter::SimpleIterable,
         column::{
             column_data::ArcColumnData,
             decimal::{DecimalAdapter, NullableDecimalAdapter},
@@ -23,7 +27,6 @@ use crate::{
         SqlType, Value, ValueRef,
     },
 };
-use crate::types::column::enums::{EnumAdapter, NullableEnumAdapter};
 
 use self::chunk::ChunkColumnData;
 pub(crate) use self::{column_data::ColumnData, string_pool::StringPool};
@@ -36,6 +39,7 @@ mod column_data;
 mod concat;
 mod date;
 mod decimal;
+mod enums;
 mod factory;
 pub(crate) mod fixed_string;
 mod ip;
@@ -45,7 +49,6 @@ mod nullable;
 mod numeric;
 mod string;
 mod string_pool;
-mod enums;
 
 /// Represents Clickhouse Column
 pub struct Column<K: ColumnType> {
@@ -124,8 +127,8 @@ impl<K: ColumnType> Clone for Column<K> {
 
 impl Column<Simple> {
     pub(crate) fn concat<'a, I>(items: I) -> Column<Complex>
-        where
-            I: Iterator<Item=&'a Self>,
+    where
+        I: Iterator<Item = &'a Self>,
     {
         let items_vec: Vec<&Self> = items.collect();
         let chunks: Vec<_> = items_vec.iter().map(|column| column.data.clone()).collect();
@@ -309,7 +312,50 @@ impl<K: ColumnType> Column<K> {
                     _marker: marker::PhantomData,
                 })
             }
-            // TODO Nullable enum
+            (SqlType::Enum16(enum_values), SqlType::Enum8(_)) => {
+                let name = self.name().to_owned();
+                let adapter = Enum16Adapter {
+                    column: self,
+                    enum_values: enum_values.clone(),
+                };
+                Ok(Column {
+                    name,
+                    data: Arc::new(adapter),
+                    _marker: marker::PhantomData,
+                })
+            }
+            (
+                SqlType::Nullable(SqlType::Enum8(enum_values)),
+                SqlType::Nullable(SqlType::Enum8(_)),
+            ) => {
+                let name = self.name().to_owned();
+                let enum_values = enum_values.clone();
+                let adapter = NullableEnum8Adapter {
+                    column: self,
+                    enum_values: enum_values.clone(),
+                };
+                Ok(Column {
+                    name,
+                    data: Arc::new(adapter),
+                    _marker: marker::PhantomData,
+                })
+            }
+            (
+                SqlType::Nullable(SqlType::Enum16(enum_values)),
+                SqlType::Nullable(SqlType::Enum16(_)),
+            ) => {
+                let name = self.name().to_owned();
+                let enum_values = enum_values.clone();
+                let adapter = NullableEnum16Adapter {
+                    column: self,
+                    enum_values: enum_values.clone(),
+                };
+                Ok(Column {
+                    name,
+                    data: Arc::new(adapter),
+                    _marker: marker::PhantomData,
+                })
+            }
             (
                 SqlType::Nullable(SqlType::Decimal(dst_p, dst_s)),
                 SqlType::Nullable(SqlType::Decimal(_, _)),
@@ -411,9 +457,9 @@ pub(crate) fn new_column<K: ColumnType>(
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Either<L, R>
-    where
-        L: fmt::Debug + PartialEq + Clone,
-        R: fmt::Debug + PartialEq + Clone,
+where
+    L: fmt::Debug + PartialEq + Clone,
+    R: fmt::Debug + PartialEq + Clone,
 {
     Left(L),
     Right(R),

@@ -22,9 +22,9 @@ use futures_util::{
 };
 
 use clickhouse_rs::{
-    Block,
     errors::Error,
-    Pool, types::{Decimal, Enum, FromSql},
+    types::{Decimal, Enum16, Enum8, FromSql},
+    Block, Pool,
 };
 use uuid::Uuid;
 use Tz::UTC;
@@ -398,7 +398,7 @@ async fn test_temporary_table() -> Result<(), Error> {
         "INSERT INTO clickhouse_test_temporary_table (ID) \
          SELECT number AS ID FROM system.numbers LIMIT 10",
     )
-        .await?;
+    .await?;
     let block = c
         .query("SELECT ID AS ID FROM clickhouse_test_temporary_table")
         .fetch_all()
@@ -642,8 +642,8 @@ async fn test_nullable() -> Result<(), Error> {
 #[test]
 fn test_generic_column() {
     fn extract_to_vec<'a, T>(name: &str, block: &'a Block) -> Vec<T>
-        where
-            T: FromSql<'a> + fmt::Debug + 'static,
+    where
+        T: FromSql<'a> + fmt::Debug + 'static,
     {
         let n = block.row_count();
         let mut result = Vec::with_capacity(n);
@@ -767,22 +767,20 @@ async fn test_enum_16() -> Result<(), Error> {
             enum_16_row
         FROM clickhouse_enum";
 
-    let block = Block::new()
-        .column("enum_16_row", vec![Enum::of(5), Enum::of(6)]);
+    let block = Block::new().column("enum_16_row", vec![Enum16::of(5), Enum16::of(6)]);
 
     let pool = Pool::new(database_url());
     let mut c = pool.get_handle().await?;
-    c.execute("DROP TABLE IF EXISTS clickhouse_enum")
-        .await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_enum").await?;
     c.execute(ddl).await?;
     c.insert("clickhouse_enum", block).await?;
     let block = c.query(query).fetch_all().await?;
 
-    let enum_8_a: Enum = block.get(0, "enum_16_row")?;
-    let enum_8_b: Enum = block.get(1, "enum_16_row")?;
+    let enum_16_a: Enum16 = block.get(0, "enum_16_row")?;
+    let enum_16_b: Enum16 = block.get(1, "enum_16_row")?;
 
     assert_eq!(2, block.row_count());
-    assert_eq!(vec!([Enum::of(5), Enum::of(6)]), vec!([enum_8_a, enum_8_b]));
+    assert_eq!(vec!([Enum16::of(5), Enum16::of(6)]), vec!([enum_16_a, enum_16_b]));
 
     Ok(())
 }
@@ -802,22 +800,26 @@ async fn test_enum_16_nullable() -> Result<(), Error> {
             enum_16_row
         FROM clickhouse_enum";
 
-    let block = Block::new()
-        .column("enum_16_row", vec![Some(Enum::of(5)), Some(Enum::of(6)), Option::<Enum>::None]);
+    let block = Block::new().column(
+        "enum_16_row",
+        vec![Some(Enum16::of(5)), Some(Enum16::of(6)), Option::<Enum16>::None],
+    );
 
     let pool = Pool::new(database_url());
     let mut c = pool.get_handle().await?;
-    c.execute("DROP TABLE IF EXISTS clickhouse_enum")
-        .await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_enum").await?;
     c.execute(ddl).await?;
     c.insert("clickhouse_enum", block).await?;
     let block = c.query(query).fetch_all().await?;
 
-    let enum_8_a: Option<Enum> = block.get(0, "enum_16_row")?;
-    let enum_8_b: Option<Enum> = block.get(1, "enum_16_row")?;
+    let enum_16_a: Option<Enum16> = block.get(0, "enum_16_row")?;
+    let enum_16_b: Option<Enum16> = block.get(1, "enum_16_row")?;
 
     assert_eq!(3, block.row_count());
-    assert_eq!(vec!([Some(Enum::of(5)), Some(Enum::of(6))]), vec!([enum_8_a, enum_8_b]));
+    assert_eq!(
+        vec!([Some(Enum16::of(5)), Some(Enum16::of(6))]),
+        vec!([enum_16_a, enum_16_b])
+    );
 
     Ok(())
 }
@@ -837,22 +839,20 @@ async fn test_enum_8() -> Result<(), Error> {
             enum_8_row
         FROM clickhouse_Enum";
 
-    let block = Block::new()
-        .column("enum_8_row", vec![Enum::of(1), Enum::of(2)]);
+    let block = Block::new().column("enum_8_row", vec![Enum8::of(1), Enum8::of(2)]);
 
     let pool = Pool::new(database_url());
     let mut c = pool.get_handle().await?;
-    c.execute("DROP TABLE IF EXISTS clickhouse_Enum")
-        .await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_Enum").await?;
     c.execute(ddl).await?;
     c.insert("clickhouse_Enum", block).await?;
     let block = c.query(query).fetch_all().await?;
 
-    let enum_8_a: Enum = block.get(0, "enum_8_row")?;
-    let enum_8_b: Enum = block.get(1, "enum_8_row")?;
+    let enum_8_a: Enum8 = block.get(0, "enum_8_row")?;
+    let enum_8_b: Enum8 = block.get(1, "enum_8_row")?;
 
     assert_eq!(2, block.row_count());
-    assert_eq!(vec!([Enum::of(5), Enum::of(6)]), vec!([enum_8_a, enum_8_b]));
+    assert_eq!(vec!([Enum8::of(5), Enum8::of(6)]), vec!([enum_8_a, enum_8_b]));
 
     Ok(())
 }

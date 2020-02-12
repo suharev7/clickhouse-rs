@@ -3,8 +3,11 @@ use std::{convert, fmt, mem, str, sync::Arc, net::{Ipv4Addr, Ipv6Addr}};
 use chrono::prelude::*;
 use chrono_tz::Tz;
 
-use crate::types::{column::Either, decimal::{Decimal, NoBits}, DateConverter, SqlType, Enum};
-use crate::types::enums::EnumSize;
+use crate::types::{
+    column::Either,
+    decimal::{Decimal, NoBits},
+    DateConverter, Enum16, Enum8, SqlType,
+};
 
 use uuid::Uuid;
 
@@ -33,7 +36,8 @@ pub enum Value {
     Nullable(Either<&'static SqlType, Box<Value>>),
     Array(&'static SqlType, Arc<Vec<Value>>),
     Decimal(Decimal),
-    Enum(EnumSize, Vec<(String, i16)>, Enum),
+    Enum8(Vec<(String, i8)>, Enum8),
+    Enum16(Vec<(String, i16)>, Enum16),
 }
 
 impl PartialEq for Value {
@@ -63,7 +67,9 @@ impl PartialEq for Value {
             (Value::Nullable(a), Value::Nullable(b)) => *a == *b,
             (Value::Array(ta, a), Value::Array(tb, b)) => *ta == *tb && *a == *b,
             (Value::Decimal(a), Value::Decimal(b)) => *a == *b,
-            (Value::Enum(size_a, value_a, all_enum_values_a), Value::Enum(size_b, value_b, all_enum_values_b)) => *size_a == *size_b && *all_enum_values_a == *all_enum_values_b && value_a == value_b,
+            (Value::Enum16(values_a, val_a), Value::Enum16(values_b, val_b)) => {
+                *values_a == *values_b && *val_a == *val_b
+            }
 
             _ => false,
         }
@@ -96,12 +102,7 @@ impl Value {
                 nobits: NoBits::N64,
             }),
             SqlType::Enum8(values) => Value::Enum8(values, Enum8(0)),
-            SqlType::Enum16 => Value::Enum16(0)
-            SqlType::Ipv4 => Value::Ipv4([0_u8; 4]),
-            SqlType::Ipv6 => Value::Ipv6([0_u8; 16]),
-            SqlType::Uuid => Value::Uuid([0_u8; 16]),
-            SqlType::Enum8 => Value::Enum8(0),
-            SqlType::Enum16 => Value::Enum8(0)
+            SqlType::Enum16(values) => Value::Enum16(values, Enum16(0)),
         }
     }
 }
@@ -150,20 +151,8 @@ impl fmt::Display for Value {
                 write!(f, "[{}]", cells.join(", "))
             }
             Value::Decimal(v) => fmt::Display::fmt(v, f),
-            Value::Enum8(ref _v1, ref v2) => fmt::Display::fmt(v2, f),
-            Value::Enum16(ref v) => fmt::Display::fmt(v, f),
-            Value::Ipv4(v) => {
-                write!(f, "{}", Ipv4Addr::from(*v))
-            },
-            Value::Ipv6(v) => {
-                write!(f, "{}", Ipv6Addr::from(*v))
-            }
-            Value::Uuid(v) => {
-                match Uuid::from_slice(v) {
-                    Ok(uuid) => write!(f, "{}", uuid),
-                    Err(e) => write!(f, "{}", e),
-                }
-            }
+            Value::Enum8(ref _v1, ref v2) => write!(f, "Enum8, {}", v2),
+            Value::Enum16(ref _v1, ref v2) => write!(f, "Enum16, {}", v2),
         }
     }
 }
@@ -193,19 +182,16 @@ impl convert::From<Value> for SqlType {
             },
             Value::Array(t, _) => SqlType::Array(t),
             Value::Decimal(v) => SqlType::Decimal(v.precision, v.scale),
-            Value::Ipv4(_) => SqlType::Ipv4,
-            Value::Ipv6(_) => SqlType::Ipv6,
-            Value::Uuid(_) => SqlType::Uuid,
-            Value::Enum8(_) => SqlType::Enum8,
-            Value::Enum16(_) => SqlType::Enum16
+            Value::Enum8(values, _) => SqlType::Enum8(values),
+            Value::Enum16(values, _) => SqlType::Enum16(values),
         }
     }
 }
 
 impl<T> convert::From<Option<T>> for Value
-    where
-        Value: convert::From<T>,
-        T: Default,
+where
+    Value: convert::From<T>,
+    T: Default,
 {
     fn from(value: Option<T>) -> Value {
         match value {
@@ -237,12 +223,19 @@ impl convert::From<AppDate> for Value {
     }
 }
 
-impl convert::From<Enum> for Value {
-    fn from(v: Enum) -> Value {
-        Value::Enum {
-            0: EnumSize::ENUM16,
-            1: vec![],
-            2: v,
+impl convert::From<Enum8> for Value {
+    fn from(v: Enum8) -> Value {
+        Value::Enum8 {
+            0: vec![],
+            1: v,
+        }
+    }
+}
+impl convert::From<Enum16> for Value {
+    fn from(v: Enum16) -> Value {
+        Value::Enum16 {
+            0: vec![],
+            1: v,
         }
     }
 }
@@ -384,19 +377,19 @@ mod test {
     };
 
     fn test_into_t<T>(v: Value, x: &T)
-        where
-            Value: convert::Into<T>,
-            T: PartialEq + fmt::Debug,
+    where
+        Value: convert::Into<T>,
+        T: PartialEq + fmt::Debug,
     {
         let a: T = v.into();
         assert_eq!(a, *x);
     }
 
     fn test_from_rnd<T>()
-        where
-            Value: convert::Into<T> + convert::From<T>,
-            T: PartialEq + fmt::Debug + Clone,
-            Standard: Distribution<T>,
+    where
+        Value: convert::Into<T> + convert::From<T>,
+        T: PartialEq + fmt::Debug + Clone,
+        Standard: Distribution<T>,
     {
         for _ in 0..100 {
             let value = random::<T>();
@@ -405,9 +398,9 @@ mod test {
     }
 
     fn test_from_t<T>(value: &T)
-        where
-            Value: convert::Into<T> + convert::From<T>,
-            T: PartialEq + fmt::Debug + Clone,
+    where
+        Value: convert::Into<T> + convert::From<T>,
+        T: PartialEq + fmt::Debug + Clone,
     {
         test_into_t::<T>(Value::from(value.clone()), &value);
     }

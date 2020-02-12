@@ -2,11 +2,11 @@ use chrono::prelude::*;
 use chrono_tz::Tz;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
+use crate::types::{Enum16, Enum8};
 use crate::{
     errors::{Error, FromSqlError, Result},
     types::{column::Either, Decimal, SqlType, ValueRef},
 };
-use crate::types::Enum;
 
 pub type FromSqlResult<T> = Result<T>;
 
@@ -47,17 +47,32 @@ impl<'a> FromSql<'a> for Decimal {
     }
 }
 
-impl<'a> FromSql<'a> for Enum {
+impl<'a> FromSql<'a> for Enum8 {
     fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
         match value {
-            ValueRef::Enum(_size, _enum_values, v) => Ok(v),
+            ValueRef::Enum8(_enum_values, v) => Ok(v),
             _ => {
-
                 let from = SqlType::from(value.clone()).to_string();
 
                 Err(Error::FromSql(FromSqlError::InvalidType {
                     src: from,
-                    dst: "Enum".into(), // TODO generate full name include Option Nullable error
+                    dst: "Enum8".into(), // TODO generate full name include Option Nullable error
+                }))
+            }
+        }
+    }
+}
+
+impl<'a> FromSql<'a> for Enum16 {
+    fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
+        match value {
+            ValueRef::Enum16(_enum_values, v) => Ok(v),
+            _ => {
+                let from = SqlType::from(value.clone()).to_string();
+
+                Err(Error::FromSql(FromSqlError::InvalidType {
+                    src: from,
+                    dst: "Enum16".into(), // TODO generate full name include Option Nullable error
                 }))
             }
         }
@@ -218,8 +233,8 @@ from_sql_vec_impl! {
 }
 
 impl<'a, T> FromSql<'a> for Option<T>
-    where
-        T: FromSql<'a>,
+where
+    T: FromSql<'a>,
 {
     fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
         match value {

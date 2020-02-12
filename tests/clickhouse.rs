@@ -753,9 +753,9 @@ async fn test_binary_string() -> Result<(), Error> {
 
 #[cfg(feature = "tokio_io")]
 #[tokio::test]
-async fn test_enum_16() -> Result<(), Error> {
+async fn test_enum_16_not_nullable() -> Result<(), Error> {
     let ddl = "
-        CREATE TABLE IF NOT EXISTS clickhouse_enum (
+        CREATE TABLE IF NOT EXISTS clickhouse_enum16_non_nul (
             enum_16_row        Enum16(
                                 'zero' = 5,
                                 'first' = 6
@@ -765,15 +765,15 @@ async fn test_enum_16() -> Result<(), Error> {
     let query = "
         SELECT
             enum_16_row
-        FROM clickhouse_enum";
+        FROM clickhouse_enum16_non_nul";
 
     let block = Block::new().column("enum_16_row", vec![Enum16::of(5), Enum16::of(6)]);
 
     let pool = Pool::new(database_url());
     let mut c = pool.get_handle().await?;
-    c.execute("DROP TABLE IF EXISTS clickhouse_enum").await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_enum16_non_nul").await?;
     c.execute(ddl).await?;
-    c.insert("clickhouse_enum", block).await?;
+    c.insert("clickhouse_enum16_non_nul", block).await?;
     let block = c.query(query).fetch_all().await?;
 
     let enum_16_a: Enum16 = block.get(0, "enum_16_row")?;
@@ -852,7 +852,7 @@ async fn test_enum_8() -> Result<(), Error> {
     let enum_8_b: Enum8 = block.get(1, "enum_8_row")?;
 
     assert_eq!(2, block.row_count());
-    assert_eq!(vec!([Enum8::of(5), Enum8::of(6)]), vec!([enum_8_a, enum_8_b]));
+    assert_eq!(vec!([Enum8::of(1), Enum8::of(2)]), vec!([enum_8_a, enum_8_b]));
 
     Ok(())
 }

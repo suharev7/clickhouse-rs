@@ -403,6 +403,13 @@ mod test {
     }
 
     #[test]
+    fn test_parse_enum8_starting_comma() {
+        let enum8 = remove_white_spaces("Enum8 ( , 'a' = 1)");
+
+        assert!(dbg!(parse_enum8(enum8.as_str())).is_none());
+    }
+
+    #[test]
     fn test_parse_enum16() {
         let enum16 = remove_white_spaces("Enum16 ('a' = 1, 'b' = 2)");
 
@@ -462,4 +469,10 @@ mod test {
         assert!(dbg!(parse_enum16(enum16.as_str())).is_none());
     }
 
+    #[test]
+    fn test_parse_enum16_starting_comma() {
+        let enum16 = remove_white_spaces("Enum16 ( , 'a' = 1)");
+
+        assert!(dbg!(parse_enum16(enum16.as_str())).is_none());
+    }
 }

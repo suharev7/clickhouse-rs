@@ -300,7 +300,7 @@ fn parse_enum(size: EnumSize, input: &str) -> Option<Vec<(&str, &str)>>{
         EnumSize::Enum8 => "Enum8",
         EnumSize::Enum16 => "Enum16",
     };
-    let identifier = token('\'').with(recognize(skip_many(alpha_num()))).skip(token('\''));
+    let identifier = between(token('\''), token('\''), recognize(skip_many(alpha_num())));
     let value = recognize(skip_many1(digit()));
     let variant = identifier.skip(token('=')).and(value);
     let parens = between(token('('), token(')'), sep_by1(variant, token(',')));

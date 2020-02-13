@@ -268,12 +268,12 @@ fn parse_enum8(input: &str) -> Option<Vec<(String, i8)>> {
                 .iter()
                 .map(|(key, val)| {
                     (
-                        key.to_string(),
+                        (*key).to_string(),
                         i8::from_str(val).expect("In Enum8 should used i8 values"),
                     )
                 })
                 .collect();
-            return Some(res);
+            Some(res)
         }
         None => None,
     }
@@ -285,12 +285,12 @@ fn parse_enum16(input: &str) -> Option<Vec<(String, i16)>> {
                 .iter()
                 .map(|(key, val)| {
                     (
-                        key.to_string(),
+                        (*key).to_string(),
                         i16::from_str(val).expect("In Enum16 should used i16 values"),
                     )
                 })
                 .collect();
-            return Some(res);
+            Some(res)
         }
         None => None,
     }

@@ -771,7 +771,8 @@ async fn test_enum_16_not_nullable() -> Result<(), Error> {
 
     let pool = Pool::new(database_url());
     let mut c = pool.get_handle().await?;
-    c.execute("DROP TABLE IF EXISTS clickhouse_enum16_non_nul").await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_enum16_non_nul")
+        .await?;
     c.execute(ddl).await?;
     c.insert("clickhouse_enum16_non_nul", block).await?;
     let block = c.query(query).fetch_all().await?;
@@ -780,7 +781,10 @@ async fn test_enum_16_not_nullable() -> Result<(), Error> {
     let enum_16_b: Enum16 = block.get(1, "enum_16_row")?;
 
     assert_eq!(2, block.row_count());
-    assert_eq!(vec!([Enum16::of(5), Enum16::of(6)]), vec!([enum_16_a, enum_16_b]));
+    assert_eq!(
+        vec!([Enum16::of(5), Enum16::of(6)]),
+        vec!([enum_16_a, enum_16_b])
+    );
 
     Ok(())
 }
@@ -802,7 +806,11 @@ async fn test_enum_16_nullable() -> Result<(), Error> {
 
     let block = Block::new().column(
         "enum_16_row",
-        vec![Some(Enum16::of(5)), Some(Enum16::of(6)), Option::<Enum16>::None],
+        vec![
+            Some(Enum16::of(5)),
+            Some(Enum16::of(6)),
+            Option::<Enum16>::None,
+        ],
     );
 
     let pool = Pool::new(database_url());
@@ -852,7 +860,10 @@ async fn test_enum_8() -> Result<(), Error> {
     let enum_8_b: Enum8 = block.get(1, "enum_8_row")?;
 
     assert_eq!(2, block.row_count());
-    assert_eq!(vec!([Enum8::of(1), Enum8::of(2)]), vec!([enum_8_a, enum_8_b]));
+    assert_eq!(
+        vec!([Enum8::of(1), Enum8::of(2)]),
+        vec!([enum_8_a, enum_8_b])
+    );
 
     Ok(())
 }
@@ -1049,7 +1060,7 @@ async fn test_column_iter() -> Result<(), Error> {
         assert_eq!(uuid_iter, vec![uuid::Uuid::nil(); 3]);
     }
 
-	Ok(())
+    Ok(())
 }
 
 #[cfg(feature = "tokio_io")]
@@ -1155,4 +1166,3 @@ async fn test_non_alphanumeric_columns() -> Result<(), Error> {
     assert_eq!(count, 1);
     Ok(())
 }
-

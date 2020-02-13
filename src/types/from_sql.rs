@@ -56,7 +56,7 @@ impl<'a> FromSql<'a> for Enum8 {
 
                 Err(Error::FromSql(FromSqlError::InvalidType {
                     src: from,
-                    dst: "Enum8".into(), // TODO generate full name include Option Nullable error
+                    dst: "Enum8".into(),
                 }))
             }
         }
@@ -72,7 +72,7 @@ impl<'a> FromSql<'a> for Enum16 {
 
                 Err(Error::FromSql(FromSqlError::InvalidType {
                     src: from,
-                    dst: "Enum16".into(), // TODO generate full name include Option Nullable error
+                    dst: "Enum16".into(),
                 }))
             }
         }
@@ -109,7 +109,6 @@ impl<'a> FromSql<'a> for Ipv4Addr {
                 }))
             }
         }
-
     }
 }
 
@@ -125,7 +124,6 @@ impl<'a> FromSql<'a> for Ipv6Addr {
                 }))
             }
         }
-
     }
 }
 
@@ -141,7 +139,6 @@ impl<'a> FromSql<'a> for uuid::Uuid {
                 }))
             }
         }
-
     }
 }
 

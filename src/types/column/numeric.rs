@@ -18,8 +18,8 @@ use super::{
 };
 
 pub struct VectorColumnData<T>
-    where
-        T: StatBuffer
+where
+    T: StatBuffer
         + Unmarshal<T>
         + Marshal
         + Copy
@@ -33,8 +33,8 @@ pub struct VectorColumnData<T>
 }
 
 impl<T> ColumnFrom for Vec<T>
-    where
-        T: StatBuffer
+where
+    T: StatBuffer
         + Unmarshal<T>
         + Marshal
         + Copy
@@ -55,9 +55,9 @@ impl<T> ColumnFrom for Vec<T>
 }
 
 impl<T> ColumnFrom for Vec<Option<T>>
-    where
-        Value: convert::From<T>,
-        T: StatBuffer
+where
+    Value: convert::From<T>,
+    T: StatBuffer
         + Unmarshal<T>
         + Marshal
         + Copy
@@ -86,9 +86,9 @@ impl<T> ColumnFrom for Vec<Option<T>>
 }
 
 impl<T> ColumnFrom for Vec<Vec<T>>
-    where
-        Value: convert::From<T>,
-        T: StatBuffer
+where
+    Value: convert::From<T>,
+    T: StatBuffer
         + Unmarshal<T>
         + Marshal
         + Copy
@@ -118,9 +118,9 @@ impl<T> ColumnFrom for Vec<Vec<T>>
 }
 
 fn to_array<T>(sql_type: SqlType, vs: Vec<T>) -> Value
-    where
-        Value: convert::From<T>,
-        T: StatBuffer
+where
+    Value: convert::From<T>,
+    T: StatBuffer
         + Unmarshal<T>
         + Marshal
         + Copy
@@ -140,8 +140,8 @@ fn to_array<T>(sql_type: SqlType, vs: Vec<T>) -> Value
 }
 
 impl<T> VectorColumnData<T>
-    where
-        T: StatBuffer
+where
+    T: StatBuffer
         + Unmarshal<T>
         + Marshal
         + Copy
@@ -168,8 +168,8 @@ impl<T> VectorColumnData<T>
 }
 
 impl<T> ColumnData for VectorColumnData<T>
-    where
-        T: StatBuffer
+where
+    T: StatBuffer
         + Unmarshal<T>
         + Marshal
         + Copy

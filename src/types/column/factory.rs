@@ -2,11 +2,12 @@ use std::str::FromStr;
 
 use chrono_tz::Tz;
 use combine::{
-    token, skip_many1, skip_many, sep_by1, between, Parser,
+    between,
     parser::{
-        char::{digit, alpha_num, string},
-        range::recognize
-    }
+        char::{alpha_num, digit, string},
+        range::recognize,
+    },
+    sep_by1, skip_many, skip_many1, token, Parser,
 };
 
 use crate::{
@@ -295,7 +296,7 @@ fn parse_enum16(input: &str) -> Option<Vec<(String, i16)>> {
     }
 }
 
-fn parse_enum(size: EnumSize, input: &str) -> Option<Vec<(&str, &str)>>{
+fn parse_enum(size: EnumSize, input: &str) -> Option<Vec<(&str, &str)>> {
     let size = match size {
         EnumSize::Enum8 => "Enum8",
         EnumSize::Enum16 => "Enum16",

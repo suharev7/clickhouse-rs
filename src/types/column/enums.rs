@@ -61,7 +61,6 @@ impl ColumnData for Enum16ColumnData {
 
     fn push(&mut self, value: Value) {
         if let Value::Enum16(_values, enum_value) = value {
-            // TODO Validate enum or get string or smth else
             self.inner.push(Value::Int16(enum_value.internal()))
         } else {
             panic!("value should be Enum ({:?})", value);
@@ -276,7 +275,6 @@ impl ColumnData for Enum8ColumnData {
 
     fn push(&mut self, value: Value) {
         if let Value::Enum8(_values, enum_value) = value {
-            // TODO Validate enum or get string or smth else
             self.inner.push(Value::Int8(enum_value.internal()))
         } else {
             panic!("value should be Enum ({:?})", value);

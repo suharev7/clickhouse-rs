@@ -1,6 +1,13 @@
 use std::str::FromStr;
 
 use chrono_tz::Tz;
+use combine::{
+    token, skip_many1, skip_many, sep_by1, between, Parser,
+    parser::{
+        char::{digit, alpha_num, string},
+        range::recognize
+    }
+};
 
 use crate::{
     binary::ReadEx,
@@ -287,10 +294,6 @@ fn parse_enum16(input: &str) -> Option<Vec<(String, i16)>> {
         None => None,
     }
 }
-
-use combine::*;
-use combine::parser::range::recognize;
-use combine::parser::char::{digit, alpha_num, string};
 
 fn parse_enum(size: EnumSize, input: &str) -> Option<Vec<(&str, &str)>>{
     let size = match size {

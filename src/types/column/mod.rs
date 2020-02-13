@@ -302,7 +302,7 @@ impl<K: ColumnType> Column<K> {
                 let name = self.name().to_owned();
                 let adapter = Enum8Adapter {
                     column: self,
-                    enum_values: enum_values.clone(),
+                    enum_values,
                 };
                 Ok(Column {
                     name,
@@ -314,7 +314,7 @@ impl<K: ColumnType> Column<K> {
                 let name = self.name().to_owned();
                 let adapter = Enum16Adapter {
                     column: self,
-                    enum_values: enum_values.clone(),
+                    enum_values,
                 };
                 Ok(Column {
                     name,
@@ -330,7 +330,7 @@ impl<K: ColumnType> Column<K> {
                 let enum_values = enum_values.clone();
                 let adapter = NullableEnum8Adapter {
                     column: self,
-                    enum_values: enum_values.clone(),
+                    enum_values,
                 };
                 Ok(Column {
                     name,
@@ -346,7 +346,7 @@ impl<K: ColumnType> Column<K> {
                 let enum_values = enum_values.clone();
                 let adapter = NullableEnum16Adapter {
                     column: self,
-                    enum_values: enum_values.clone(),
+                    enum_values,
                 };
                 Ok(Column {
                     name,
@@ -417,8 +417,8 @@ impl<K: ColumnType> Column<K> {
                 })
             }
             _ => Err(Error::FromSql(FromSqlError::InvalidType {
-                src: src_type.clone().to_string(),
-                dst: dst_type.clone().to_string(),
+                src: src_type.to_string(),
+                dst: dst_type.to_string(),
             })),
         }
     }

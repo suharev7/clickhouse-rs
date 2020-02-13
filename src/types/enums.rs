@@ -42,7 +42,7 @@ impl Enum16 {
         Self(source)
     }
     #[inline(always)]
-    pub fn internal(&self) -> i16 {
+    pub fn internal(self) -> i16 {
         self.0
     }
 }
@@ -69,7 +69,7 @@ impl Enum8 {
         Self(source)
     }
     #[inline(always)]
-    pub fn internal(&self) -> i8 {
+    pub fn internal(self) -> i8 {
         self.0
     }
 }

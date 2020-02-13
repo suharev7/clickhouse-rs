@@ -251,14 +251,14 @@ impl SqlType {
                     .iter()
                     .map(|(name, value)| format!("'{}' = {}", name, value))
                     .collect();
-                format!("Enum8({})", a.join(",")).to_string().into()
+                format!("Enum8({})", a.join(",")).into()
             }
             SqlType::Enum16(values) => {
                 let a: Vec<String> = values
                     .iter()
                     .map(|(name, value)| format!("'{}' = {}", name, value))
                     .collect();
-                format!("Enum16({})", a.join(",")).to_string().into()
+                format!("Enum16({})", a.join(",")).into()
             }
         }
     }

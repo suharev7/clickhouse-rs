@@ -344,7 +344,7 @@ fn parse_enum(size: EnumSize, input: &str) -> Option<Vec<(&str, &str)>> {
         EnumSize::Enum16 => "Enum16",
     };
     let identifier = between(token('\''), token('\''), recognize(skip_many(alpha_num())));
-    let value = recognize(skip_many1(digit()));
+    let value = recognize(skip_many1(digit().or(token('-'))));
     let variant = identifier.skip(token('=')).and(value);
     let parens = between(token('('), token(')'), sep_by1(variant, token(',')));
     let mut tag = string(size).with(parens);
@@ -395,6 +395,13 @@ mod test {
 
         let res = parse_enum8(enum8.as_str()).unwrap();
         assert_eq!(res, vec![("a".to_owned(), 1), ("b".to_owned(), 2)])
+    }
+    #[test]
+    fn test_parse_enum8_neg() {
+        let enum8 = remove_white_spaces("Enum8 ('a' = 1, 'b' = -2)");
+
+        let res = parse_enum8(enum8.as_str()).unwrap();
+        assert_eq!(res, vec![("a".to_owned(), 1), ("b".to_owned(), -2)])
     }
 
     #[test]

@@ -163,7 +163,7 @@ impl dyn ColumnData {
             SqlType::Enum16(enum_values) => W::wrap(Enum16ColumnData {
                 enum_values,
                 inner: ColumnData::from_type::<BoxColumnWrapper>(
-                    SqlType::Int8,
+                    SqlType::Int16,
                     timezone,
                     capacity,
                 )?,

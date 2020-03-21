@@ -24,9 +24,6 @@ before_install:
   - docker --version
   - docker-compose --version
   - docker-compose up -d
-  - rustup toolchain install nightly-2019-10-30
-  - cargo +nightly-2019-10-30 build
-  - rustup default nightly-2019-10-30
   - rustup component add clippy
   - cargo install -f cargo-travis;
   - export PATH=$HOME/.cargo/bin:$PATH;

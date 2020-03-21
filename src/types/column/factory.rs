@@ -1,13 +1,10 @@
-use std::str::FromStr;
-
 use chrono_tz::Tz;
 use combine::{
-    between,
-    parser::{
-        char::{alpha_num, digit, string},
-        range::recognize,
-    },
-    sep_by1, skip_many, skip_many1, token, Parser,
+    any,
+    error::StringStreamError,
+    many, many1, none_of, optional,
+    parser::char::{digit, spaces, string},
+    sep_by1, token, Parser,
 };
 
 use crate::{
@@ -82,9 +79,9 @@ impl dyn ColumnData {
                     W::wrap(DecimalColumnData::load(
                         reader, precision, scale, nobits, size, tz,
                     )?)
-                } else if let Some(items) = parse_enum8(remove_white_spaces(type_name).as_str()) {
+                } else if let Some(items) = parse_enum8(type_name) {
                     W::wrap(Enum8ColumnData::load(reader, items, size, tz)?)
-                } else if let Some(items) = parse_enum16(remove_white_spaces(type_name).as_str()) {
+                } else if let Some(items) = parse_enum16(type_name) {
                     W::wrap(Enum16ColumnData::load(reader, items, size, tz)?)
                 } else {
                     let message = format!("Unsupported column type \"{}\".", type_name);
@@ -251,11 +248,6 @@ fn parse_decimal(source: &str) -> Option<(u8, u8, NoBits)> {
     None
 }
 
-fn remove_white_spaces(input: &str) -> String {
-    let input: String = input.split_whitespace().collect();
-    input
-}
-
 enum EnumSize {
     Enum8,
     Enum16,
@@ -266,12 +258,7 @@ fn parse_enum8(input: &str) -> Option<Vec<(String, i8)>> {
         Some(result) => {
             let res: Vec<(String, i8)> = result
                 .iter()
-                .map(|(key, val)| {
-                    (
-                        (*key).to_string(),
-                        i8::from_str(val).expect("In Enum8 should used i8 values"),
-                    )
-                })
+                .map(|(key, val)| (key.clone(), *val as i8))
                 .collect();
             Some(res)
         }
@@ -279,36 +266,54 @@ fn parse_enum8(input: &str) -> Option<Vec<(String, i8)>> {
     }
 }
 fn parse_enum16(input: &str) -> Option<Vec<(String, i16)>> {
-    match parse_enum(EnumSize::Enum16, input) {
-        Some(result) => {
-            let res: Vec<(String, i16)> = result
-                .iter()
-                .map(|(key, val)| {
-                    (
-                        (*key).to_string(),
-                        i16::from_str(val).expect("In Enum16 should used i16 values"),
-                    )
-                })
-                .collect();
-            Some(res)
-        }
-        None => None,
-    }
+    parse_enum(EnumSize::Enum16, input)
 }
 
-fn parse_enum(size: EnumSize, input: &str) -> Option<Vec<(&str, &str)>> {
+fn parse_enum(size: EnumSize, input: &str) -> Option<Vec<(String, i16)>> {
     let size = match size {
         EnumSize::Enum8 => "Enum8",
         EnumSize::Enum16 => "Enum16",
     };
-    let identifier = between(token('\''), token('\''), recognize(skip_many(alpha_num())));
-    let value = recognize(skip_many1(digit()));
-    let variant = identifier.skip(token('=')).and(value);
-    let parens = between(token('('), token(')'), sep_by1(variant, token(',')));
-    let mut tag = string(size).with(parens);
-    let result = tag.parse(input).map(|x| x.0);
 
-    result.ok()
+    let integer = optional(token('-'))
+        .and(many1::<String, _, _>(digit()))
+        .and_then(|(x, mut digits)| {
+            if let Some(x) = x {
+                digits.insert(0, x);
+            }
+            digits
+                .parse::<i16>()
+                .map_err(|_| StringStreamError::UnexpectedParse)
+        });
+
+    let word_syms = token('\\').with(any()).or(none_of("'".chars()));
+    let word = token('\'').with(many(word_syms)).skip(token('\''));
+
+    let pair = spaces()
+        .with(word)
+        .skip(spaces())
+        .skip(token('='))
+        .skip(spaces())
+        .and(integer)
+        .skip(spaces());
+    let enum_body = sep_by1::<Vec<(String, i16)>, _, _, _>(pair, token(','));
+
+    let mut parser = spaces()
+        .with(string(size))
+        .skip(spaces())
+        .skip(token('('))
+        .skip(spaces())
+        .with(enum_body)
+        .skip(token(')'));
+    let result = parser.parse(input);
+    if let Ok((res, remain)) = result {
+        if remain != "" {
+            return None;
+        }
+        Some(res)
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]
@@ -348,135 +353,142 @@ mod test {
 
     #[test]
     fn test_parse_enum8() {
-        let enum8 = remove_white_spaces("Enum8 ('a' = 1, 'b' = 2)");
+        let enum8 = "Enum8 ('a' = 1, 'b' = 2)";
 
-        let res = parse_enum8(enum8.as_str()).unwrap();
+        let res = parse_enum8(enum8).unwrap();
         assert_eq!(res, vec![("a".to_owned(), 1), ("b".to_owned(), 2)])
+    }
+    #[test]
+    fn test_parse_enum16_special_chars() {
+        let enum16 = "Enum16('a_' = -128, 'b&' = 0)";
+
+        let res = parse_enum16(enum16).unwrap();
+        assert_eq!(res, vec![("a_".to_owned(), -128), ("b&".to_owned(), 0)])
     }
 
     #[test]
     fn test_parse_enum8_single() {
-        let enum8 = remove_white_spaces("Enum8 ('a' = 1)");
+        let enum8 = "Enum8 ('a' = 1)";
 
-        let res = parse_enum8(enum8.as_str()).unwrap();
+        let res = parse_enum8(enum8).unwrap();
         assert_eq!(res, vec![("a".to_owned(), 1)])
     }
 
     #[test]
     fn test_parse_enum8_empty_id() {
-        let enum8 = remove_white_spaces("Enum8 ('' = 1, '' = 2)");
+        let enum8 = "Enum8 ('' = 1, '' = 2)";
 
-        let res = parse_enum8(enum8.as_str()).unwrap();
+        let res = parse_enum8(enum8).unwrap();
         assert_eq!(res, vec![("".to_owned(), 1), ("".to_owned(), 2)])
     }
 
     #[test]
     fn test_parse_enum8_single_empty_id() {
-        let enum8 = remove_white_spaces("Enum8 ('' = 1)");
+        let enum8 = "Enum8 ('' = 1)";
 
-        let res = parse_enum8(enum8.as_str()).unwrap();
+        let res = parse_enum8(enum8).unwrap();
         assert_eq!(res, vec![("".to_owned(), 1)])
     }
 
     #[test]
     fn test_parse_enum8_extra_comma() {
-        let enum8 = remove_white_spaces("Enum8 ('a' = 1, 'b' = 2,)");
+        let enum8 = "Enum8 ('a' = 1, 'b' = 2,)";
 
-        assert!(dbg!(parse_enum8(enum8.as_str())).is_none());
+        assert!(dbg!(parse_enum8(enum8)).is_none());
     }
 
     #[test]
     fn test_parse_enum8_empty() {
-        let enum8 = remove_white_spaces("Enum8 ()");
+        let enum8 = "Enum8 ()";
 
-        assert!(dbg!(parse_enum8(enum8.as_str())).is_none());
+        assert!(dbg!(parse_enum8(enum8)).is_none());
     }
 
     #[test]
     fn test_parse_enum8_no_value() {
-        let enum8 = remove_white_spaces("Enum8 ('a' =)");
+        let enum8 = "Enum8 ('a' =)";
 
-        assert!(dbg!(parse_enum8(enum8.as_str())).is_none());
+        assert!(dbg!(parse_enum8(enum8)).is_none());
     }
 
     #[test]
     fn test_parse_enum8_no_ident() {
-        let enum8 = remove_white_spaces("Enum8 ( = 1)");
+        let enum8 = "Enum8 ( = 1)";
 
-        assert!(dbg!(parse_enum8(enum8.as_str())).is_none());
+        assert!(dbg!(parse_enum8(enum8)).is_none());
     }
 
     #[test]
     fn test_parse_enum8_starting_comma() {
-        let enum8 = remove_white_spaces("Enum8 ( , 'a' = 1)");
+        let enum8 = "Enum8 ( , 'a' = 1)";
 
-        assert!(dbg!(parse_enum8(enum8.as_str())).is_none());
+        assert!(dbg!(parse_enum8(enum8)).is_none());
     }
 
     #[test]
     fn test_parse_enum16() {
-        let enum16 = remove_white_spaces("Enum16 ('a' = 1, 'b' = 2)");
+        let enum16 = "Enum16 ('a' = 1, 'b' = 2)";
 
-        let res = parse_enum16(enum16.as_str()).unwrap();
+        let res = parse_enum16(enum16).unwrap();
         assert_eq!(res, vec![("a".to_owned(), 1), ("b".to_owned(), 2)])
     }
 
     #[test]
     fn test_parse_enum16_single() {
-        let enum16 = remove_white_spaces("Enum16 ('a' = 1)");
+        let enum16 = "Enum16 ('a' = 1)";
 
-        let res = parse_enum16(enum16.as_str()).unwrap();
+        let res = parse_enum16(enum16).unwrap();
         assert_eq!(res, vec![("a".to_owned(), 1)])
     }
 
     #[test]
     fn test_parse_enum16_empty_id() {
-        let enum16 = remove_white_spaces("Enum16 ('' = 1, '' = 2)");
+        let enum16 = "Enum16 ('' = 1, '' = 2)";
 
-        let res = parse_enum16(enum16.as_str()).unwrap();
+        let res = parse_enum16(enum16).unwrap();
         assert_eq!(res, vec![("".to_owned(), 1), ("".to_owned(), 2)])
     }
 
     #[test]
     fn test_parse_enum16_single_empty_id() {
-        let enum16 = remove_white_spaces("Enum16 ('' = 1)");
+        let enum16 = "Enum16 ('' = 1)";
 
-        let res = parse_enum16(enum16.as_str()).unwrap();
+        let res = parse_enum16(enum16).unwrap();
         assert_eq!(res, vec![("".to_owned(), 1)])
     }
 
     #[test]
     fn test_parse_enum16_extra_comma() {
-        let enum16 = remove_white_spaces("Enum16 ('a' = 1, 'b' = 2,)");
+        let enum16 = "Enum16 ('a' = 1, 'b' = 2,)";
 
-        assert!(dbg!(parse_enum16(enum16.as_str())).is_none());
+        assert!(dbg!(parse_enum16(enum16)).is_none());
     }
 
     #[test]
     fn test_parse_enum16_empty() {
-        let enum16 = remove_white_spaces("Enum16 ()");
+        let enum16 = "Enum16 ()";
 
-        assert!(dbg!(parse_enum16(enum16.as_str())).is_none());
+        assert!(dbg!(parse_enum16(enum16)).is_none());
     }
 
     #[test]
     fn test_parse_enum16_no_value() {
-        let enum16 = remove_white_spaces("Enum16 ('a' =)");
+        let enum16 = "Enum16 ('a' =)";
 
-        assert!(dbg!(parse_enum16(enum16.as_str())).is_none());
+        assert!(dbg!(parse_enum16(enum16)).is_none());
     }
 
     #[test]
     fn test_parse_enum16_no_ident() {
-        let enum16 = remove_white_spaces("Enum16 ( = 1)");
+        let enum16 = "Enum16 ( = 1)";
 
-        assert!(dbg!(parse_enum16(enum16.as_str())).is_none());
+        assert!(dbg!(parse_enum16(enum16)).is_none());
     }
 
     #[test]
     fn test_parse_enum16_starting_comma() {
-        let enum16 = remove_white_spaces("Enum16 ( , 'a' = 1)");
+        let enum16 = "Enum16 ( , 'a' = 1)";
 
-        assert!(dbg!(parse_enum16(enum16.as_str())).is_none());
+        assert!(dbg!(parse_enum16(enum16)).is_none());
     }
 }

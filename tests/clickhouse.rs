@@ -75,7 +75,6 @@ async fn test_create_table() -> Result<(), Error> {
     c.execute("DROP TABLE IF EXISTS clickhouse_test_create_table")
         .await?;
     c.execute(ddl).await?;
-<<<<<<< HEAD
 
     if let Err(err) = c.execute(ddl).await {
         assert_eq!(
@@ -86,18 +85,6 @@ async fn test_create_table() -> Result<(), Error> {
         panic!("should fail")
     }
 
-=======
-
-    if let Err(err) = c.execute(ddl).await {
-        assert_eq!(
-            "Server error: `ERROR DB::Exception (57): DB::Exception: Table default.clickhouse_test_create_table already exists.`",
-            format!("{}", err)
-        );
-    } else {
-        panic!("should fail")
-    }
-
->>>>>>> e3ca9a1... Fix nullable  converting
     Ok(())
 }
 
@@ -285,7 +272,6 @@ async fn test_select() -> Result<(), Error> {
                 UTC.ymd(2014, 7, 8).and_hms(13, 0, 0),
             ],
         );
-<<<<<<< HEAD
 
     let pool = Pool::new(database_url());
     let mut c = pool.get_handle().await?;
@@ -339,61 +325,6 @@ async fn test_select() -> Result<(), Error> {
     assert_eq!(2, r.get::<i32, _>(0, "id")?);
     assert_eq!(3, r.get::<i32, _>(1, 0)?);
 
-=======
-
-    let pool = Pool::new(database_url());
-    let mut c = pool.get_handle().await?;
-    c.execute("DROP TABLE IF EXISTS clickhouse_test_select")
-        .await?;
-    c.execute(ddl).await?;
-    c.insert("clickhouse_test_select", block).await?;
-
-    let r = c
-        .query("SELECT COUNT(*) FROM clickhouse_test_select")
-        .fetch_all()
-        .await?;
-    assert_eq!(4, r.get::<u64, _>(0, 0)?);
-
-    let r = c
-        .query("SELECT COUNT(*) FROM clickhouse_test_select WHERE date = '2014-07-08'")
-        .fetch_all()
-        .await?;
-    assert_eq!(3, r.get::<u64, _>(0, 0)?);
-
-    let r = c
-        .query("SELECT COUNT(*) FROM clickhouse_test_select WHERE datetime = '2014-07-08 14:00:00'")
-        .fetch_all()
-        .await?;
-    assert_eq!(2, r.get::<u64, _>(0, 0)?);
-
-    let r = c
-        .query("SELECT COUNT(*) FROM clickhouse_test_select WHERE id IN (1, 2, 3)")
-        .fetch_all()
-        .await?;
-    assert_eq!(3, r.get::<u64, _>(0, 0)?);
-
-    let r = c
-        .query("SELECT COUNT(*) FROM clickhouse_test_select WHERE code IN ('US', 'DE', 'RU')")
-        .fetch_all()
-        .await?;
-    assert_eq!(3, r.get::<u64, _>(0, 0)?);
-
-    let r = c
-        .query("SELECT id FROM clickhouse_test_select ORDER BY id LIMIT 1")
-        .fetch_all()
-        .await?;
-    assert_eq!(r.row_count(), 1);
-    assert_eq!(1, r.get::<i32, _>(0, "id")?);
-
-    let r = c
-        .query("SELECT id FROM clickhouse_test_select ORDER BY id LIMIT 1, 2")
-        .fetch_all()
-        .await?;
-    assert_eq!(r.row_count(), 2);
-    assert_eq!(2, r.get::<i32, _>(0, "id")?);
-    assert_eq!(3, r.get::<i32, _>(1, 0)?);
-
->>>>>>> e3ca9a1... Fix nullable  converting
     Ok(())
 }
 
@@ -422,7 +353,6 @@ async fn test_simple_select() -> Result<(), Error> {
     let pool = Pool::new(database_url());
     let mut c = pool.get_handle().await?;
     let actual = c.query("SELECT a FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a) ORDER BY a ASC").fetch_all().await?;
-<<<<<<< HEAD
 
     let expected = Block::new().column("a", vec![1_u8, 2, 3]);
     assert_eq!(expected, actual);
@@ -453,7 +383,6 @@ async fn test_simple_select() -> Result<(), Error> {
         .await?;
     assert!((2_f64 - r.get::<f64, _>(0, 0)?).abs() < EPSILON);
 
-=======
 
     let expected = Block::new().column("a", vec![1_u8, 2, 3]);
     assert_eq!(expected, actual);
@@ -484,7 +413,6 @@ async fn test_simple_select() -> Result<(), Error> {
         .await?;
     assert!((2_f64 - r.get::<f64, _>(0, 0)?).abs() < EPSILON);
 
->>>>>>> e3ca9a1... Fix nullable  converting
     Ok(())
 }
 
@@ -830,7 +758,6 @@ async fn test_binary_string() -> Result<(), Error> {
         .column("fx_text", vec![vec![0_u8, 159, 146, 150]])
         .column("opt_text", vec![Some(vec![0_u8, 159, 146, 150])])
         .column("fx_opt_text", vec![Some(vec![0_u8, 159, 146, 150])]);
-<<<<<<< HEAD
 
     let pool = Pool::new(database_url());
     let mut c = pool.get_handle().await?;
@@ -851,28 +778,6 @@ async fn test_binary_string() -> Result<(), Error> {
     assert_eq!(Some([0, 159, 146, 150].as_ref()), opt_text);
     assert_eq!(Some([0, 159, 146, 150].as_ref()), fx_opt_text);
 
-=======
-
-    let pool = Pool::new(database_url());
-    let mut c = pool.get_handle().await?;
-    c.execute("DROP TABLE IF EXISTS clickhouse_binary_string")
-        .await?;
-    c.execute(ddl).await?;
-    c.insert("clickhouse_binary_string", block).await?;
-    let block = c.query(query).fetch_all().await?;
-
-    let text: &[u8] = block.get(0, "text")?;
-    let fx_text: &[u8] = block.get(0, "fx_text")?;
-    let opt_text: Option<&[u8]> = block.get(0, "opt_text")?;
-    let fx_opt_text: Option<&[u8]> = block.get(0, "fx_opt_text")?;
-
-    assert_eq!(1, block.row_count());
-    assert_eq!([0, 159, 146, 150].as_ref(), text);
-    assert_eq!([0, 159, 146, 150].as_ref(), fx_text);
-    assert_eq!(Some([0, 159, 146, 150].as_ref()), opt_text);
-    assert_eq!(Some([0, 159, 146, 150].as_ref()), fx_opt_text);
-
->>>>>>> e3ca9a1... Fix nullable  converting
     Ok(())
 }
 
@@ -912,8 +817,6 @@ async fn test_enum_16_not_nullable() -> Result<(), Error> {
     );
 
     Ok(())
-<<<<<<< HEAD
-=======
 }
 
 #[tokio::test]
@@ -957,7 +860,6 @@ async fn test_enum_16_nullable() -> Result<(), Error> {
     );
 
     Ok(())
->>>>>>> e3ca9a1... Fix nullable  converting
 }
 
 #[tokio::test]
@@ -1012,7 +914,6 @@ async fn test_array() -> Result<(), Error> {
 
     let date_value: Date<Tz> = UTC.ymd(2016, 10, 22);
     let date_time_value: DateTime<Tz> = UTC.ymd(2014, 7, 8).and_hms(14, 0, 0);
-<<<<<<< HEAD
 
     let block = Block::new()
         .column("u8", vec![vec![41_u8]])
@@ -1045,7 +946,6 @@ async fn test_array() -> Result<(), Error> {
     assert_eq!(vec![date_value], date_vec);
     assert_eq!(vec![date_time_value], time_vec);
 
-=======
 
     let block = Block::new()
         .column("u8", vec![vec![41_u8]])
@@ -1078,7 +978,6 @@ async fn test_array() -> Result<(), Error> {
     assert_eq!(vec![date_value], date_vec);
     assert_eq!(vec![date_time_value], time_vec);
 
->>>>>>> e3ca9a1... Fix nullable  converting
     Ok(())
 }
 

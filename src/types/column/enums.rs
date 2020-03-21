@@ -64,7 +64,6 @@ impl ColumnData for Enum16ColumnData {
             self.inner.push(Value::Int16(enum_value.internal()))
         } else {
             panic!("value should be Enum ({:?})", value);
->>>>>>> c74dcbf... Work with enum8 and enum16
         }
     }
 
@@ -92,7 +91,6 @@ impl<K: ColumnType> ColumnData for Enum16Adapter<K> {
                 encoder.write(value.internal())
             } else {
                 panic!("should be Enum");
->>>>>>> c74dcbf... Work with enum8 and enum16
             }
         }
     }
@@ -110,7 +108,6 @@ impl<K: ColumnType> ColumnData for Enum16Adapter<K> {
             ValueRef::Enum16(enum_values, value)
         } else {
             panic!("should be Enum");
->>>>>>> c74dcbf... Work with enum8 and enum16
         }
     }
 
@@ -136,8 +133,6 @@ impl<K: ColumnType> ColumnData for NullableEnum16Adapter<K> {
                 None => nulls[i] = 1,
             }
         }
->>>>>>> c74dcbf... Work with enum8 and enum16
-
         encoder.write_bytes(nulls.as_ref());
 
         for value in values {
@@ -154,18 +149,6 @@ impl<K: ColumnType> ColumnData for NullableEnum16Adapter<K> {
         unimplemented!()
     }
 
-<<<<<<< HEAD
-	fn at(&self, index: usize) -> ValueRef {
-		let value: Option<i8> = Option::from_sql(self.column.at(index)).unwrap();
-		match value {
-			None => ValueRef::Nullable(Either::Left(self.sql_type().into())),
-			Some(v) => {
-				let inner = ValueRef::Enum8(self.enum_values.clone(), Enum8(v));
-				ValueRef::Nullable(Either::Right(Box::new(inner)))
-			}
-		}
-	}
-=======
     fn at(&self, index: usize) -> ValueRef {
         let value: Option<Enum16> = Option::from_sql(self.column.at(index)).unwrap();
         match value {
@@ -176,7 +159,6 @@ impl<K: ColumnType> ColumnData for NullableEnum16Adapter<K> {
             }
         }
     }
->>>>>>> c74dcbf... Work with enum8 and enum16
 
     fn clone_instance(&self) -> BoxColumnData {
         unimplemented!()
@@ -186,7 +168,6 @@ impl<K: ColumnType> ColumnData for NullableEnum16Adapter<K> {
 impl ColumnFrom for Vec<Enum16> {
     fn column_from<W: ColumnWrapper>(source: Self) -> W::Wrapper {
         let mut data = List::<i16>::with_capacity(source.len());
->>>>>>> c74dcbf... Work with enum8 and enum16
 
         for s in source {
             data.push(s.internal());

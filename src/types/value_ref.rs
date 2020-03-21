@@ -389,6 +389,6 @@ mod test {
     #[test]
     fn test_size_of() {
         use std::mem;
-        assert_eq!(24, mem::size_of::<[ValueRef<'_>; 1]>());
+        assert_eq!(32, mem::size_of::<[ValueRef<'_>; 1]>());
     }
 }

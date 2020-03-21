@@ -15,9 +15,7 @@ use crate::{
         from_sql::FromSql, SqlType, Value, ValueRef,
     },
 };
-
-use crate::types::column::decimal::DecimalColumnData;
-use crate::types::column::numeric::save_data;
+use crate::types::column::Either;
 use crate::types::enums::Enum8;
 
 pub(crate) struct Enum8ColumnData {
@@ -83,20 +81,12 @@ impl ColumnData for Enum8ColumnData {
         ValueRef::Enum8(self.enum_values.clone(), Enum8(value))
     }
 
-    fn clone_instance(&self) -> BoxColumnData {
-        Box::new(Self {
-            inner: self.inner.clone_instance(),
-            enum_values: self.enum_values.clone(),
-        })
-    }
-
-    unsafe fn get_internal(&self, _pointers: &[*mut *const u8], _level: u8) -> Result<()> {
-// TODO
-//        assert_eq!(level, 0);
-//        self.inner.get_internal(pointers, 0)?;
-//        *(pointers[2] as *mut NoBits) = self.nobits;
-        Ok(())
-    }
+	fn clone_instance(&self) -> BoxColumnData {
+		Box::new(Self {
+			inner: self.inner.clone_instance(),
+			enum_values: self.enum_values.clone(),
+		})
+	}
 }
 
 impl<K: ColumnType> ColumnData for Enum8Adapter<K> {
@@ -140,17 +130,16 @@ impl<K: ColumnType> ColumnData for NullableEnum8Adapter<K> {
         SqlType::Nullable(SqlType::Enum8(self.enum_values.clone()).into())
     }
 
-    fn save(&self, encoder: &mut Encoder, start: usize, end: usize) {
-        let size = end - start;
-        let mut nulls = vec![0; size];
-        let mut values: Vec<Option<i8>> = vec![None; size];
-        // TODO Check this code
-        for (i, index) in (start..end).enumerate() {
-            values[i] = Option::from_sql(self.at(index)).unwrap();
-            if values[i].is_none() {
-                nulls[i] = 1;
-            }
-        }
+	fn save(&self, encoder: &mut Encoder, start: usize, end: usize) {
+		let size = end - start;
+		let mut nulls = vec![0; size];
+		let mut values: Vec<Option<i8>> = vec![None; size];
+		for (i, index) in (start..end).enumerate() {
+			values[i] = Option::from_sql(self.at(index)).unwrap();
+			if values[i].is_none() {
+				nulls[i] = 1;
+			}
+		}
 
         encoder.write_bytes(nulls.as_ref());
 
@@ -168,17 +157,16 @@ impl<K: ColumnType> ColumnData for NullableEnum8Adapter<K> {
         unimplemented!()
     }
 
-    fn at(&self, index: usize) -> ValueRef {
-        unimplemented!();
-//        let value: Option<i8> = Option::from_sql(self.column.at(index)).unwrap();
-//        match value {
-//            None => ValueRef::Nullable(Either::Left(self.sql_type().into())),
-//            Some(v) => {
-//                let inner = ValueRef::Enum8(Enum8(v));
-//                ValueRef::Nullable(Either::Right(Box::new(inner)))
-//            }
-//        }
-    }
+	fn at(&self, index: usize) -> ValueRef {
+		let value: Option<i8> = Option::from_sql(self.column.at(index)).unwrap();
+		match value {
+			None => ValueRef::Nullable(Either::Left(self.sql_type().into())),
+			Some(v) => {
+				let inner = ValueRef::Enum8(self.enum_values.clone(), Enum8(v));
+				ValueRef::Nullable(Either::Right(Box::new(inner)))
+			}
+		}
+	}
 
     fn clone_instance(&self) -> BoxColumnData {
         unimplemented!()
@@ -204,31 +192,29 @@ impl ColumnFrom for Vec<Enum8> {
 }
 
 impl ColumnFrom for Vec<Option<Enum8>> {
-    fn column_from<W: ColumnWrapper>(source: Self) -> W::Wrapper {
-        unimplemented!()
-    }
-//        let mut nulls: Vec<u8> = Vec::with_capacity(source.len());
-//        let mut data = List::<i8>::with_capacity(source.len());
-//
-//        for os in source {
-//            if let Some(s) = os {
-//                data.push(s.internal());
-//                nulls.push(0);
-//            } else {
-//                data.push(0);
-//                nulls.push(1);
-//            }
-//        }
-//        let inner = Box::new(VectorColumnData { data });
-//
-//        let inner = Enum8ColumnData {
-//            data,
-//            inner,
-//        };
-//
-//        W::wrap(NullableColumnData {
-//            nulls,
-//            inner: Box::new(inner),
-//        })
-//    }
+	fn column_from<W: ColumnWrapper>(source: Self) -> W::Wrapper {
+		let mut nulls: Vec<u8> = Vec::with_capacity(source.len());
+		let mut data = List::<i8>::with_capacity(source.len());
+
+		for os in source {
+			if let Some(s) = os {
+				data.push(s.internal());
+				nulls.push(0);
+			} else {
+				data.push(0);
+				nulls.push(1);
+			}
+		}
+		let inner = Box::new(VectorColumnData { data });
+
+		let inner = Enum8ColumnData {
+			enum_values: vec![],
+			inner,
+		};
+
+		W::wrap(NullableColumnData {
+			nulls,
+			inner: Box::new(inner),
+		})
+	}
 }

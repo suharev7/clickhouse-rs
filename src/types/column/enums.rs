@@ -256,7 +256,7 @@ impl<K: ColumnType> ColumnData for NullableEnumAdapter<K> {
     fn save(&self, encoder: &mut Encoder, start: usize, end: usize) {
         let size = end - start;
         let mut nulls = vec![0; size];
-        let mut values: Vec<Option<i8>> = vec![None; size];
+        let mut values: Vec<Option<i16>> = vec![None; size];
         for (i, index) in (start..end).enumerate() {
             values[i] = Option::from_sql(self.at(index)).unwrap();
             if values[i].is_none() {
@@ -268,8 +268,8 @@ impl<K: ColumnType> ColumnData for NullableEnumAdapter<K> {
         encoder.write_bytes(nulls.as_ref());
 
         for value in values {
-            let underlying = if let Some(v) = value { v } else { 0 };
-            encoder.write(underlying);
+            let data_value = value.unwrap_or(0);
+            encoder.write(data_value);
         }
     }
 

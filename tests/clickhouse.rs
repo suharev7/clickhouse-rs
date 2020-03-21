@@ -768,16 +768,15 @@ async fn test_enum8() -> Result<(), Error> {
 async fn test_enum() -> Result<(), Error> {
 	let ddl = "
         CREATE TABLE IF NOT EXISTS clickhouse_Enum (
-            enum_8_row        Enum16(
->>>>>>> c74dcbf... Work with enum8 and enum16
-                                'zero' = 0,
-                                'first' = 1
+            enum_16_row        Enum16(
+                                'zero' = 5,
+                                'first' = 6
                           )
         ) Engine=Memory";
 
     let query = "
         SELECT
-            enum_8_row
+            enum_16_row
         FROM clickhouse_Enum";
 
 <<<<<<< HEAD
@@ -798,7 +797,7 @@ async fn test_enum() -> Result<(), Error> {
 //    assert_eq!(vec!([0, 1]), enum_8);
 =======
 	let block = Block::new()
-		.column("enum_8_row", vec![Enum::of(0), Enum::of(1)]);
+		.column("enum_16_row", vec![Enum::of(5), Enum::of(6)]);
 
 	let pool = Pool::new(database_url());
 	let mut c = pool.get_handle().await?;
@@ -808,12 +807,11 @@ async fn test_enum() -> Result<(), Error> {
 	c.insert("clickhouse_Enum", block).await?;
 	let block = c.query(query).fetch_all().await?;
 
-	let enum_8_a: Enum = block.get(0, "enum_8_row")?;
-	let enum_8_b: Enum = block.get(1, "enum_8_row")?;
+	let enum_8_a: vec!([Enum = block.get(0, "enum_16_row")?;
+	let enum_8_b: Enum = block.get(1, "enum_16_row")?;
 
 	assert_eq!(2, block.row_count());
-	assert_eq!(vec!([Enum::of(0), Enum::of(1)]), vec!([enum_8_a, enum_8_b]));
->>>>>>> c74dcbf... Work with enum8 and enum16
+	assert_eq!(vec!([Enum::of(5), Enum::of(6)]), vec!([enum_8_a, enum_8_b]));
 
     Ok(())
 }

@@ -23,6 +23,7 @@ use futures_util::{
 
 use clickhouse_rs::{
 <<<<<<< HEAD
+<<<<<<< HEAD
     errors::Error,
     types::{Decimal, FromSql, Enum8},
     Block, Pool,
@@ -31,6 +32,11 @@ use clickhouse_rs::{
 	errors::Error,
 	Pool, types::{Decimal, Enum, FromSql},
 >>>>>>> c74dcbf... Work with enum8 and enum16
+=======
+    Block,
+    errors::Error,
+    Pool, types::{Decimal, Enum, FromSql},
+>>>>>>> e3ca9a1... Fix nullable  converting
 };
 use uuid::Uuid;
 use Tz::UTC;
@@ -81,6 +87,7 @@ async fn test_create_table() -> Result<(), Error> {
     c.execute("DROP TABLE IF EXISTS clickhouse_test_create_table")
         .await?;
     c.execute(ddl).await?;
+<<<<<<< HEAD
 
     if let Err(err) = c.execute(ddl).await {
         assert_eq!(
@@ -91,6 +98,18 @@ async fn test_create_table() -> Result<(), Error> {
         panic!("should fail")
     }
 
+=======
+
+    if let Err(err) = c.execute(ddl).await {
+        assert_eq!(
+            "Server error: `ERROR DB::Exception (57): DB::Exception: Table default.clickhouse_test_create_table already exists.`",
+            format!("{}", err)
+        );
+    } else {
+        panic!("should fail")
+    }
+
+>>>>>>> e3ca9a1... Fix nullable  converting
     Ok(())
 }
 
@@ -278,6 +297,7 @@ async fn test_select() -> Result<(), Error> {
                 UTC.ymd(2014, 7, 8).and_hms(13, 0, 0),
             ],
         );
+<<<<<<< HEAD
 
     let pool = Pool::new(database_url());
     let mut c = pool.get_handle().await?;
@@ -331,6 +351,61 @@ async fn test_select() -> Result<(), Error> {
     assert_eq!(2, r.get::<i32, _>(0, "id")?);
     assert_eq!(3, r.get::<i32, _>(1, 0)?);
 
+=======
+
+    let pool = Pool::new(database_url());
+    let mut c = pool.get_handle().await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_test_select")
+        .await?;
+    c.execute(ddl).await?;
+    c.insert("clickhouse_test_select", block).await?;
+
+    let r = c
+        .query("SELECT COUNT(*) FROM clickhouse_test_select")
+        .fetch_all()
+        .await?;
+    assert_eq!(4, r.get::<u64, _>(0, 0)?);
+
+    let r = c
+        .query("SELECT COUNT(*) FROM clickhouse_test_select WHERE date = '2014-07-08'")
+        .fetch_all()
+        .await?;
+    assert_eq!(3, r.get::<u64, _>(0, 0)?);
+
+    let r = c
+        .query("SELECT COUNT(*) FROM clickhouse_test_select WHERE datetime = '2014-07-08 14:00:00'")
+        .fetch_all()
+        .await?;
+    assert_eq!(2, r.get::<u64, _>(0, 0)?);
+
+    let r = c
+        .query("SELECT COUNT(*) FROM clickhouse_test_select WHERE id IN (1, 2, 3)")
+        .fetch_all()
+        .await?;
+    assert_eq!(3, r.get::<u64, _>(0, 0)?);
+
+    let r = c
+        .query("SELECT COUNT(*) FROM clickhouse_test_select WHERE code IN ('US', 'DE', 'RU')")
+        .fetch_all()
+        .await?;
+    assert_eq!(3, r.get::<u64, _>(0, 0)?);
+
+    let r = c
+        .query("SELECT id FROM clickhouse_test_select ORDER BY id LIMIT 1")
+        .fetch_all()
+        .await?;
+    assert_eq!(r.row_count(), 1);
+    assert_eq!(1, r.get::<i32, _>(0, "id")?);
+
+    let r = c
+        .query("SELECT id FROM clickhouse_test_select ORDER BY id LIMIT 1, 2")
+        .fetch_all()
+        .await?;
+    assert_eq!(r.row_count(), 2);
+    assert_eq!(2, r.get::<i32, _>(0, "id")?);
+    assert_eq!(3, r.get::<i32, _>(1, 0)?);
+
+>>>>>>> e3ca9a1... Fix nullable  converting
     Ok(())
 }
 
@@ -359,6 +434,7 @@ async fn test_simple_select() -> Result<(), Error> {
     let pool = Pool::new(database_url());
     let mut c = pool.get_handle().await?;
     let actual = c.query("SELECT a FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a) ORDER BY a ASC").fetch_all().await?;
+<<<<<<< HEAD
 
     let expected = Block::new().column("a", vec![1_u8, 2, 3]);
     assert_eq!(expected, actual);
@@ -389,6 +465,38 @@ async fn test_simple_select() -> Result<(), Error> {
         .await?;
     assert!((2_f64 - r.get::<f64, _>(0, 0)?).abs() < EPSILON);
 
+=======
+
+    let expected = Block::new().column("a", vec![1_u8, 2, 3]);
+    assert_eq!(expected, actual);
+
+    let r = c
+        .query("SELECT min(a) FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a)")
+        .fetch_all()
+        .await?;
+    assert_eq!(1, r.get::<u8, _>(0, 0)?);
+
+    let r = c
+        .query("SELECT max(a) FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a)")
+        .fetch_all()
+        .await?;
+    assert_eq!(3, r.get::<u8, _>(0, 0)?);
+
+    let r = c
+        .query("SELECT sum(a) FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a)")
+        .fetch_all()
+        .await?;
+    assert_eq!(6, r.get::<u64, _>(0, 0)?);
+
+    let r = c
+        .query(
+            "SELECT median(a) FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a)",
+        )
+        .fetch_all()
+        .await?;
+    assert!((2_f64 - r.get::<f64, _>(0, 0)?).abs() < EPSILON);
+
+>>>>>>> e3ca9a1... Fix nullable  converting
     Ok(())
 }
 
@@ -734,6 +842,7 @@ async fn test_binary_string() -> Result<(), Error> {
         .column("fx_text", vec![vec![0_u8, 159, 146, 150]])
         .column("opt_text", vec![Some(vec![0_u8, 159, 146, 150])])
         .column("fx_opt_text", vec![Some(vec![0_u8, 159, 146, 150])]);
+<<<<<<< HEAD
 
     let pool = Pool::new(database_url());
     let mut c = pool.get_handle().await?;
@@ -754,6 +863,28 @@ async fn test_binary_string() -> Result<(), Error> {
     assert_eq!(Some([0, 159, 146, 150].as_ref()), opt_text);
     assert_eq!(Some([0, 159, 146, 150].as_ref()), fx_opt_text);
 
+=======
+
+    let pool = Pool::new(database_url());
+    let mut c = pool.get_handle().await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_binary_string")
+        .await?;
+    c.execute(ddl).await?;
+    c.insert("clickhouse_binary_string", block).await?;
+    let block = c.query(query).fetch_all().await?;
+
+    let text: &[u8] = block.get(0, "text")?;
+    let fx_text: &[u8] = block.get(0, "fx_text")?;
+    let opt_text: Option<&[u8]> = block.get(0, "opt_text")?;
+    let fx_opt_text: Option<&[u8]> = block.get(0, "fx_opt_text")?;
+
+    assert_eq!(1, block.row_count());
+    assert_eq!([0, 159, 146, 150].as_ref(), text);
+    assert_eq!([0, 159, 146, 150].as_ref(), fx_text);
+    assert_eq!(Some([0, 159, 146, 150].as_ref()), opt_text);
+    assert_eq!(Some([0, 159, 146, 150].as_ref()), fx_opt_text);
+
+>>>>>>> e3ca9a1... Fix nullable  converting
     Ok(())
 }
 
@@ -769,8 +900,12 @@ async fn test_enum8() -> Result<(), Error> {
 async fn test_enum() -> Result<(), Error> {
 =======
 async fn test_enum_16() -> Result<(), Error> {
+<<<<<<< HEAD
 >>>>>>> ece4432... Separate tests
 	let ddl = "
+=======
+    let ddl = "
+>>>>>>> e3ca9a1... Fix nullable  converting
         CREATE TABLE IF NOT EXISTS clickhouse_enum (
             enum_16_row        Enum16(
                                 'zero' = 5,
@@ -783,6 +918,7 @@ async fn test_enum_16() -> Result<(), Error> {
             enum_16_row
         FROM clickhouse_enum";
 
+<<<<<<< HEAD
 <<<<<<< HEAD
     let block = Block::new()
         .column("enum_8_row", vec![Enum8::of(0), Enum8::of(1)]);
@@ -802,27 +938,69 @@ async fn test_enum_16() -> Result<(), Error> {
 =======
 	let block = Block::new()
 		.column("enum_16_row", vec![Enum::of(5), Enum::of(6)]);
+=======
+    let block = Block::new()
+        .column("enum_16_row", vec![Enum::of(5), Enum::of(6)]);
+>>>>>>> e3ca9a1... Fix nullable  converting
 
-	let pool = Pool::new(database_url());
-	let mut c = pool.get_handle().await?;
-	c.execute("DROP TABLE IF EXISTS clickhouse_enum")
-		.await?;
-	c.execute(ddl).await?;
-	c.insert("clickhouse_enum", block).await?;
-	let block = c.query(query).fetch_all().await?;
+    let pool = Pool::new(database_url());
+    let mut c = pool.get_handle().await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_enum")
+        .await?;
+    c.execute(ddl).await?;
+    c.insert("clickhouse_enum", block).await?;
+    let block = c.query(query).fetch_all().await?;
 
-	let enum_8_a: Enum = block.get(0, "enum_16_row")?;
-	let enum_8_b: Enum = block.get(1, "enum_16_row")?;
+    let enum_8_a: Enum = block.get(0, "enum_16_row")?;
+    let enum_8_b: Enum = block.get(1, "enum_16_row")?;
 
-	assert_eq!(2, block.row_count());
-	assert_eq!(vec!([Enum::of(5), Enum::of(6)]), vec!([enum_8_a, enum_8_b]));
+    assert_eq!(2, block.row_count());
+    assert_eq!(vec!([Enum::of(5), Enum::of(6)]), vec!([enum_8_a, enum_8_b]));
 
     Ok(())
+<<<<<<< HEAD
+=======
+}
+
+#[tokio::test]
+async fn test_enum_16_nullable() -> Result<(), Error> {
+    let ddl = "
+        CREATE TABLE IF NOT EXISTS clickhouse_enum (
+            enum_16_row        Nullable(Enum16(
+                                'zero' = 5,
+                                'first' = 6
+                          ))
+        ) Engine=Memory";
+
+    let query = "
+        SELECT
+            enum_16_row
+        FROM clickhouse_enum";
+
+    let block = Block::new()
+        .column("enum_16_row", vec![Some(Enum::of(5)), Some(Enum::of(6)), Option::<Enum>::None]);
+
+    let pool = Pool::new(database_url());
+    let mut c = pool.get_handle().await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_enum")
+        .await?;
+    c.execute(ddl).await?;
+    c.insert("clickhouse_enum", block).await?;
+    let block = c.query(query).fetch_all().await?;
+
+    let enum_8_a: Option<Enum> = block.get(0, "enum_16_row")?;
+    let enum_8_b: Option<Enum> = block.get(1, "enum_16_row")?;
+
+    assert_eq!(3, block.row_count());
+    assert_eq!(vec!([Some(Enum::of(5)), Some(Enum::of(6))]), vec!([enum_8_a, enum_8_b]));
+
+    Ok(())
+>>>>>>> e3ca9a1... Fix nullable  converting
 }
 
 #[tokio::test]
 async fn test_enum_8() -> Result<(), Error> {
-	let ddl = "
+    let ddl = "
         CREATE TABLE IF NOT EXISTS clickhouse_Enum (
             enum_8_row        Enum8(
                                 'zero' = 1,
@@ -830,29 +1008,29 @@ async fn test_enum_8() -> Result<(), Error> {
                           )
         ) Engine=Memory";
 
-	let query = "
+    let query = "
         SELECT
             enum_8_row
         FROM clickhouse_Enum";
 
-	let block = Block::new()
-		.column("enum_8_row", vec![Enum::of(1), Enum::of(2)]);
+    let block = Block::new()
+        .column("enum_8_row", vec![Enum::of(1), Enum::of(2)]);
 
-	let pool = Pool::new(database_url());
-	let mut c = pool.get_handle().await?;
-	c.execute("DROP TABLE IF EXISTS clickhouse_Enum")
-		.await?;
-	c.execute(ddl).await?;
-	c.insert("clickhouse_Enum", block).await?;
-	let block = c.query(query).fetch_all().await?;
+    let pool = Pool::new(database_url());
+    let mut c = pool.get_handle().await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_Enum")
+        .await?;
+    c.execute(ddl).await?;
+    c.insert("clickhouse_Enum", block).await?;
+    let block = c.query(query).fetch_all().await?;
 
-	let enum_8_a: Enum = block.get(0, "enum_8_row")?;
-	let enum_8_b: Enum = block.get(1, "enum_8_row")?;
+    let enum_8_a: Enum = block.get(0, "enum_8_row")?;
+    let enum_8_b: Enum = block.get(1, "enum_8_row")?;
 
-	assert_eq!(2, block.row_count());
-	assert_eq!(vec!([Enum::of(5), Enum::of(6)]), vec!([enum_8_a, enum_8_b]));
+    assert_eq!(2, block.row_count());
+    assert_eq!(vec!([Enum::of(5), Enum::of(6)]), vec!([enum_8_a, enum_8_b]));
 
-	Ok(())
+    Ok(())
 }
 
 #[tokio::test]
@@ -871,6 +1049,7 @@ async fn test_array() -> Result<(), Error> {
 
     let date_value: Date<Tz> = UTC.ymd(2016, 10, 22);
     let date_time_value: DateTime<Tz> = UTC.ymd(2014, 7, 8).and_hms(14, 0, 0);
+<<<<<<< HEAD
 
     let block = Block::new()
         .column("u8", vec![vec![41_u8]])
@@ -903,6 +1082,40 @@ async fn test_array() -> Result<(), Error> {
     assert_eq!(vec![date_value], date_vec);
     assert_eq!(vec![date_time_value], time_vec);
 
+=======
+
+    let block = Block::new()
+        .column("u8", vec![vec![41_u8]])
+        .column("u32", vec![vec![42_u32]])
+        .column("text1", vec![vec!["A"]])
+        .column("text2", vec![vec!["B".to_string()]])
+        .column("date", vec![vec![date_value]])
+        .column("time", vec![vec![date_time_value]]);
+
+    let pool = Pool::new(database_url());
+
+    let mut c = pool.get_handle().await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_array").await?;
+    c.execute(ddl).await?;
+    c.insert("clickhouse_array", block).await?;
+    let block = c.query(query).fetch_all().await?;
+
+    let u8_vec: Vec<u8> = block.get(0, "u8")?;
+    let u32_vec: Vec<u32> = block.get(0, "u32")?;
+    let text1_vec: Vec<&str> = block.get(0, "text1")?;
+    let text2_vec: Vec<String> = block.get(0, "text2")?;
+    let date_vec: Vec<Date<Tz>> = block.get(0, "date")?;
+    let time_vec: Vec<DateTime<Tz>> = block.get(0, "time")?;
+
+    assert_eq!(1, block.row_count());
+    assert_eq!(vec![41_u8], u8_vec);
+    assert_eq!(vec![42_u32], u32_vec);
+    assert_eq!(vec!["A"], text1_vec);
+    assert_eq!(vec!["B".to_string()], text2_vec);
+    assert_eq!(vec![date_value], date_vec);
+    assert_eq!(vec![date_time_value], time_vec);
+
+>>>>>>> e3ca9a1... Fix nullable  converting
     Ok(())
 }
 

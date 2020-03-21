@@ -257,10 +257,12 @@ impl<K: ColumnType> ColumnData for NullableEnumAdapter<K> {
         let size = end - start;
         let mut nulls = vec![0; size];
         let mut values: Vec<Option<i16>> = vec![None; size];
+
         for (i, index) in (start..end).enumerate() {
-            values[i] = Option::from_sql(self.at(index)).unwrap();
-            if values[i].is_none() {
-                nulls[i] = 1;
+            let value: Option<Enum> = Option::from_sql(self.at(index)).unwrap();
+            match value {
+                Some(v) => values[i] = Some(v.internal()),
+                None => nulls[i] = 1
             }
         }
 >>>>>>> c74dcbf... Work with enum8 and enum16

@@ -12,7 +12,8 @@ use crate::{
         SqlType, Value,
     },
 };
-use crate::types::Enum8;
+use crate::types::Enum;
+use crate::types::enums::EnumSize;
 
 use uuid::Uuid;
 
@@ -68,8 +69,7 @@ impl<'a> PartialEq for ValueRef<'a> {
             (ValueRef::Nullable(a), ValueRef::Nullable(b)) => *a == *b,
             (ValueRef::Array(ta, a), ValueRef::Array(tb, b)) => *ta == *tb && *a == *b,
             (ValueRef::Decimal(a), ValueRef::Decimal(b)) => *a == *b,
-            (ValueRef::Enum8(a0, a1), ValueRef::Enum8(b0, b1)) => *a1 == *b1 && *a0 == *b0,
-            (ValueRef::Enum16(a), ValueRef::Enum16(b)) => *a == *b,
+            (ValueRef::Enum(size_a, a0, a1), ValueRef::Enum(size_b, b0, b1)) => *size_a == *size_b && *a1 == *b1 && *a0 == *b0,
             _ => false,
         }
     }

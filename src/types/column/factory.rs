@@ -1,4 +1,8 @@
+extern crate regex;
+
 use chrono_tz::Tz;
+
+use regex::Regex;
 
 use crate::{
     binary::ReadEx,
@@ -14,6 +18,7 @@ use crate::{
     types::decimal::NoBits,
     SqlType,
 };
+use crate::types::enums::EnumSize;
 
 macro_rules! match_str {
     ($arg:ident, {
@@ -67,10 +72,8 @@ impl dyn ColumnData {
                     W::wrap(DecimalColumnData::load(
                         reader, precision, scale, nobits, size, tz,
                     )?)
-                } else if let Some(items) = parse_enum8(type_name) {
-                    W::wrap(Enum8ColumnData::load(reader, items, size, tz)?)
-                } else if let Some(_items) = parse_enum16(type_name) {
-                    W::wrap(VectorColumnData::<i16>::load(reader, size)?)
+                } else if let Some((enum_size, items)) = parse_enum(type_name) {
+                    W::wrap(EnumColumnData::load(reader, enum_size, items, size, tz)?)
                 } else {
                     let message = format!("Unsupported column type \"{}\".", type_name);
                     return Err(message.into());
@@ -131,8 +134,23 @@ impl dyn ColumnData {
                     nobits,
                 })
             }
+<<<<<<< HEAD
             SqlType::Enum8(values) => W::wrap(VectorColumnData::<i8>::with_capacity(DEFAULT_CAPACITY)),
             SqlType::Enum16 => W::wrap(VectorColumnData::<i16>::with_capacity(DEFAULT_CAPACITY)),
+=======
+            SqlType::Enum(size, enum_values) => {
+                let inner_type = match size {
+                    EnumSize::ENUM8 => SqlType::Int8,
+                    EnumSize::ENUM16 => SqlType::Int16,
+                };
+
+                W::wrap(EnumColumnData {
+                    enum_values,
+                    size,
+                    inner: ColumnData::from_type::<BoxColumnWrapper>(inner_type, timezone)?,
+                })
+            }
+>>>>>>> c74dcbf... Work with enum8 and enum16
         })
     }
 }
@@ -258,32 +276,30 @@ fn parse_decimal(source: &str) -> Option<(u8, u8, NoBits)> {
     }
 }
 
-fn parse_enum8(source: &str) -> Option<Vec<(String, i8)>> {
-    let prefix = "Enum8(";
-    let suffix = ")";
-    if !source.starts_with(prefix) || !source.ends_with(suffix) {
-        return None;
-    }
-    let source = String::from(&source[prefix.len()..source.len() - suffix.len()]);
+fn parse_enum(source: &str) -> Option<(EnumSize, Vec<(String, i16)>)> {
+    let re_enum = Regex::new(r"(?P<values>Enum(?P<enum_size>\d{1,3})\(([a-zA-Z' =\-\d,]*\))+)").unwrap();
+    let re_values = Regex::new(r"(?P<name>[^']+)' = (?P<value>\-?\d{1,4})").unwrap();
+
     let mut real_enums = vec![];
+    let mut size = EnumSize::ENUM8;
+    for cap in re_enum.captures_iter(source) {
+        size = match &cap["enum_size"] {
+            "8" => EnumSize::ENUM8,
+            "16" => EnumSize::ENUM16,
+            _ => return None
+        };
 
-    for enum_string in source.split(",").map(|s| s.trim()) {
-        let values: Vec<&str> = enum_string.split("=").map(|s| s.trim()).collect();
-        real_enums.push((values[0].to_string(), values[1].to_string().parse::<i8>().unwrap()));
-    }
-    Some(real_enums) // TODO Catch exceptions use normal names without \'
-}
-
-fn parse_enum16(source: &str) -> Option<Vec<(String, i8)>> {
-    let prefix = "Enum16(";
-    let suffix = ")";
-    if !source.starts_with(prefix) || !source.ends_with(suffix) {
+        for values in re_values.captures_iter(&cap[0]) {
+            real_enums.push((values["name"].to_string(), values["value"].parse::<i16>().unwrap()));
+        }
+        break;
+    };
+    if real_enums.is_empty() {
         return None;
     }
-    let _source = &source[prefix.len()..source.len() - suffix.len()];
-
-    Some(vec![]) // TODO
+    Some((size, real_enums))
 }
+
 
 #[cfg(test)]
 mod test {

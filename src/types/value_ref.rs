@@ -3,6 +3,7 @@ use std::{convert, fmt, str, sync::Arc, net::{Ipv4Addr, Ipv6Addr}};
 use chrono::prelude::*;
 use chrono_tz::Tz;
 
+use crate::types::{Enum16, Enum8};
 use crate::{
     errors::{Error, FromSqlError, Result},
     types::{
@@ -12,8 +13,6 @@ use crate::{
         SqlType, Value,
     },
 };
-use crate::types::Enum;
-use crate::types::enums::EnumSize;
 
 use uuid::Uuid;
 
@@ -35,8 +34,8 @@ pub enum ValueRef<'a> {
     Nullable(Either<&'static SqlType, Box<ValueRef<'a>>>),
     Array(&'static SqlType, Arc<Vec<ValueRef<'a>>>),
     Decimal(Decimal),
+    Enum16(Vec<(String, i16)>, Enum16),
     Enum8(Vec<(String, i8)>, Enum8),
-    Enum16(i16),
     Ipv4([u8; 4]),
     Ipv6([u8; 16]),
     Uuid([u8; 16])
@@ -69,7 +68,8 @@ impl<'a> PartialEq for ValueRef<'a> {
             (ValueRef::Nullable(a), ValueRef::Nullable(b)) => *a == *b,
             (ValueRef::Array(ta, a), ValueRef::Array(tb, b)) => *ta == *tb && *a == *b,
             (ValueRef::Decimal(a), ValueRef::Decimal(b)) => *a == *b,
-            (ValueRef::Enum(size_a, a0, a1), ValueRef::Enum(size_b, b0, b1)) => *size_a == *size_b && *a1 == *b1 && *a0 == *b0,
+            (ValueRef::Enum8(a0, a1), ValueRef::Enum8(b0, b1)) => *a1 == *b1 && *a0 == *b0,
+            (ValueRef::Enum16(a0, a1), ValueRef::Enum16(b0, b1)) => *a1 == *b1 && *a0 == *b0,
             _ => false,
         }
     }
@@ -120,7 +120,7 @@ impl<'a> fmt::Display for ValueRef<'a> {
             }
             ValueRef::Decimal(v) => fmt::Display::fmt(v, f),
             ValueRef::Enum8(_, v) => fmt::Display::fmt(v, f),
-            ValueRef::Enum16(v) => fmt::Display::fmt(v, f),
+            ValueRef::Enum16(_, v) => fmt::Display::fmt(v, f),
             ValueRef::Ipv4(v) => {
                 write!(f, "{}", Ipv4Addr::from(*v))
             }
@@ -159,11 +159,11 @@ impl<'a> convert::From<ValueRef<'a>> for SqlType {
             },
             ValueRef::Array(t, _) => SqlType::Array(t),
             ValueRef::Decimal(v) => SqlType::Decimal(v.precision, v.scale),
+            ValueRef::Enum8(values, _) => SqlType::Enum8(values),
+            ValueRef::Enum16(values, _) => SqlType::Enum16(values),
             ValueRef::Ipv4(_) => SqlType::Ipv4,
             ValueRef::Ipv6(_) => SqlType::Ipv6,
             ValueRef::Uuid(_) => SqlType::Uuid,
-            ValueRef::Enum8(_) => SqlType::Enum8,
-            ValueRef::Enum16(_) => SqlType::Enum16
         }
     }
 }
@@ -229,11 +229,11 @@ impl<'a> From<ValueRef<'a>> for Value {
                 Value::Array(t, Arc::new(value_list))
             }
             ValueRef::Decimal(v) => Value::Decimal(v),
+            ValueRef::Enum8(e_v, v) => Value::Enum8(e_v, v),
+            ValueRef::Enum16(e_v, v) => Value::Enum16(e_v, v),
             ValueRef::Ipv4(v) => Value::Ipv4(v),
             ValueRef::Ipv6(v) => Value::Ipv6(v),
             ValueRef::Uuid(v) => Value::Uuid(v),
-            ValueRef::Enum8(v) => Value::Enum8(v),
-            ValueRef::Enum16(v) => Value::Enum16(v)
         }
     }
 }
@@ -310,7 +310,7 @@ impl<'a> From<&'a Value> for ValueRef<'a> {
             }
             Value::Decimal(v) => ValueRef::Decimal(v.clone()),
             Value::Enum8(values, v) => ValueRef::Enum8(values.to_vec(), v.clone()),
-            Value::Enum16(v) => ValueRef::Enum16(*v),
+            Value::Enum16(values, v) => ValueRef::Enum16(values.to_vec(), v.clone()),
             Value::Ipv4(v) => ValueRef::Ipv4(*v),
             Value::Ipv6(v) => ValueRef::Ipv6(*v),
             Value::Uuid(v) => ValueRef::Uuid(*v)

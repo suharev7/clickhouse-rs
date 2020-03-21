@@ -11,13 +11,14 @@ pub use self::{
     block::{Block, RCons, RNil, Row, RowBuilder, Rows},
     column::{Column, ColumnType, Complex, Simple},
     decimal::Decimal,
+    enums::{Enum16, Enum8},
     from_sql::FromSql,
     options::Options,
     query::Query,
     query_result::QueryResult,
     value::Value,
-    enums::Enum,
 };
+
 pub(crate) use self::{
     cmd::Cmd,
     date_converter::DateConverter,
@@ -27,7 +28,6 @@ pub(crate) use self::{
     unmarshal::Unmarshal,
     value_ref::ValueRef,
 };
-use crate::types::enums::EnumSize;
 
 pub(crate) mod column;
 mod marshal;
@@ -46,8 +46,8 @@ mod query;
 pub(crate) mod query_result;
 
 mod decimal;
-mod options;
 mod enums;
+mod options;
 
 #[derive(Copy, Clone, Debug, Default, PartialEq)]
 pub(crate) struct Progress {
@@ -184,8 +184,8 @@ pub enum SqlType {
     Nullable(&'static SqlType),
     Array(&'static SqlType),
     Decimal(u8, u8),
-    Enum8,
-    Enum16,
+    Enum8(Vec<(String, i8)>),
+    Enum16(Vec<(String, i16)>),
 }
 
 lazy_static! {
@@ -243,15 +243,19 @@ impl SqlType {
             SqlType::Decimal(precision, scale) => {
                 format!("Decimal({}, {})", precision, scale).into()
             }
-            SqlType::Enum(size, values) => {
-                let size_str = match size {
-                    EnumSize::ENUM16 => "16",
-                    EnumSize::ENUM8 => "8",
-                };
-                let a: Vec<String> = values.iter().map(|(name, value)| {
-                    format!("'{}' = {}", name, value)
-                }).collect();
-                format!("Enum{}({})", size_str, a.join(",")).to_string().into()
+            SqlType::Enum8(values) => {
+                let a: Vec<String> = values
+                    .iter()
+                    .map(|(name, value)| format!("'{}' = {}", name, value))
+                    .collect();
+                format!("Enum8({})", a.join(",")).to_string().into()
+            }
+            SqlType::Enum16(values) => {
+                let a: Vec<String> = values
+                    .iter()
+                    .map(|(name, value)| format!("'{}' = {}", name, value))
+                    .collect();
+                format!("Enum16({})", a.join(",")).to_string().into()
             }
         }
     }

@@ -181,6 +181,8 @@ pub enum SqlType {
     Nullable(&'static SqlType),
     Array(&'static SqlType),
     Decimal(u8, u8),
+    Enum8,
+    Enum16,
 }
 
 lazy_static! {
@@ -203,6 +205,8 @@ impl From<SqlType> for &'static SqlType {
             SqlType::Float64 => &SqlType::Float64,
             SqlType::Date => &SqlType::Date,
             SqlType::DateTime => &SqlType::DateTime,
+            SqlType::Enum8 => &SqlType::Enum8,
+            SqlType::Enum16 => &SqlType::Enum16,
             _ => {
                 let mut guard = TYPES_CACHE.lock().unwrap();
                 loop {
@@ -241,6 +245,8 @@ impl SqlType {
             SqlType::Decimal(precision, scale) => {
                 format!("Decimal({}, {})", precision, scale).into()
             }
+            SqlType::Enum8 => "Enum8".into(),
+            SqlType::Enum16 => "Enum16".into(),
         }
     }
 

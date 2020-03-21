@@ -36,6 +36,8 @@ pub enum Value {
     Nullable(Either<&'static SqlType, Box<Value>>),
     Array(&'static SqlType, Arc<Vec<Value>>),
     Decimal(Decimal),
+    Enum8(i8),
+    Enum16(i16),
 }
 
 impl PartialEq for Value {
@@ -65,6 +67,9 @@ impl PartialEq for Value {
             (Value::Nullable(a), Value::Nullable(b)) => *a == *b,
             (Value::Array(ta, a), Value::Array(tb, b)) => *ta == *tb && *a == *b,
             (Value::Decimal(a), Value::Decimal(b)) => *a == *b,
+            (Value::Enum8(a), Value::Enum8(b)) => *a == *b,
+            (Value::Enum16(a), Value::Enum16(b)) => *a == *b,
+
             _ => false,
         }
     }
@@ -98,6 +103,8 @@ impl Value {
             SqlType::Ipv4 => Value::Ipv4([0_u8; 4]),
             SqlType::Ipv6 => Value::Ipv6([0_u8; 16]),
             SqlType::Uuid => Value::Uuid([0_u8; 16]),
+            SqlType::Enum8 => Value::Enum8(0),
+            SqlType::Enum16 => Value::Enum8(0)
         }
     }
 }
@@ -146,6 +153,8 @@ impl fmt::Display for Value {
                 write!(f, "[{}]", cells.join(", "))
             }
             Value::Decimal(v) => fmt::Display::fmt(v, f),
+            Value::Enum8(ref v) => fmt::Display::fmt(v, f),
+            Value::Enum16(ref v) => fmt::Display::fmt(v, f),
             Value::Ipv4(v) => {
                 write!(f, "{}", Ipv4Addr::from(*v))
             },
@@ -190,14 +199,16 @@ impl convert::From<Value> for SqlType {
             Value::Ipv4(_) => SqlType::Ipv4,
             Value::Ipv6(_) => SqlType::Ipv6,
             Value::Uuid(_) => SqlType::Uuid,
+            Value::Enum8(_) => SqlType::Enum8,
+            Value::Enum16(_) => SqlType::Enum16
         }
     }
 }
 
 impl<T> convert::From<Option<T>> for Value
-where
-    Value: convert::From<T>,
-    T: Default,
+    where
+        Value: convert::From<T>,
+        T: Default,
 {
     fn from(value: Option<T>) -> Value {
         match value {
@@ -366,19 +377,19 @@ mod test {
     };
 
     fn test_into_t<T>(v: Value, x: &T)
-    where
-        Value: convert::Into<T>,
-        T: PartialEq + fmt::Debug,
+        where
+            Value: convert::Into<T>,
+            T: PartialEq + fmt::Debug,
     {
         let a: T = v.into();
         assert_eq!(a, *x);
     }
 
     fn test_from_rnd<T>()
-    where
-        Value: convert::Into<T> + convert::From<T>,
-        T: PartialEq + fmt::Debug + Clone,
-        Standard: Distribution<T>,
+        where
+            Value: convert::Into<T> + convert::From<T>,
+            T: PartialEq + fmt::Debug + Clone,
+            Standard: Distribution<T>,
     {
         for _ in 0..100 {
             let value = random::<T>();
@@ -387,9 +398,9 @@ mod test {
     }
 
     fn test_from_t<T>(value: &T)
-    where
-        Value: convert::Into<T> + convert::From<T>,
-        T: PartialEq + fmt::Debug + Clone,
+        where
+            Value: convert::Into<T> + convert::From<T>,
+            T: PartialEq + fmt::Debug + Clone,
     {
         test_into_t::<T>(Value::from(value.clone()), &value);
     }
@@ -452,7 +463,7 @@ mod test {
         assert_eq!(
             Value::DateTime(
                 date_time_value.timestamp() as u32,
-                date_time_value.timezone()
+                date_time_value.timezone(),
             ),
             dt
         );
@@ -519,7 +530,7 @@ mod test {
                 "{}",
                 Value::Array(
                     SqlType::Int32.into(),
-                    Arc::new(vec![Value::Int32(1), Value::Int32(2), Value::Int32(3)])
+                    Arc::new(vec![Value::Int32(1), Value::Int32(2), Value::Int32(3)]),
                 )
             )
         );

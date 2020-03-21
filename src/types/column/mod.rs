@@ -43,7 +43,7 @@ mod nullable;
 mod numeric;
 mod string;
 mod string_pool;
-
+mod enums;
 /// Represents Clickhouse Column
 pub struct Column<K: ColumnType> {
     pub(crate) name: String,

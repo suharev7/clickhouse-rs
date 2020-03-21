@@ -1,7 +1,6 @@
 extern crate regex;
 
 use chrono_tz::Tz;
-
 use regex::Regex;
 
 use crate::{
@@ -120,10 +119,10 @@ impl dyn ColumnData {
             SqlType::Decimal(precision, scale) => {
                 let nobits = NoBits::from_precision(precision).unwrap();
 
-                let inner_type = match nobits {
-                    NoBits::N32 => SqlType::Int32,
-                    NoBits::N64 => SqlType::Int64,
-                };
+				let inner_type = match nobits {
+					NoBits::N32 => SqlType::Int32,
+					NoBits::N64 => SqlType::Int64,
+				};
 
                 W::wrap(DecimalColumnData {
                     inner: ColumnData::from_type::<BoxColumnWrapper>(
@@ -144,6 +143,7 @@ impl dyn ColumnData {
                     EnumSize::ENUM16 => SqlType::Int16,
                 };
 
+<<<<<<< HEAD
                 W::wrap(EnumColumnData {
                     enum_values,
                     size,
@@ -153,51 +153,61 @@ impl dyn ColumnData {
 >>>>>>> c74dcbf... Work with enum8 and enum16
         })
     }
+=======
+				W::wrap(EnumColumnData {
+					enum_values,
+					size,
+					inner: ColumnData::from_type::<BoxColumnWrapper>(inner_type, timezone)?,
+				})
+			}
+		})
+	}
+>>>>>>> 82e3bf9... Fix iterating over regular expression
 }
 
 fn parse_fixed_string(source: &str) -> Option<usize> {
-    if !source.starts_with("FixedString") {
-        return None;
-    }
+	if !source.starts_with("FixedString") {
+		return None;
+	}
 
-    let inner_size = &source[12..source.len() - 1];
-    match inner_size.parse::<usize>() {
-        Err(_) => None,
-        Ok(value) => Some(value),
-    }
+	let inner_size = &source[12..source.len() - 1];
+	match inner_size.parse::<usize>() {
+		Err(_) => None,
+		Ok(value) => Some(value),
+	}
 }
 
 fn parse_nullable_type(source: &str) -> Option<&str> {
-    if !source.starts_with("Nullable") {
-        return None;
-    }
+	if !source.starts_with("Nullable") {
+		return None;
+	}
 
-    let inner_type = &source[9..source.len() - 1];
+	let inner_type = &source[9..source.len() - 1];
 
-    if inner_type.starts_with("Nullable") {
-        return None;
-    }
+	if inner_type.starts_with("Nullable") {
+		return None;
+	}
 
-    Some(inner_type)
+	Some(inner_type)
 }
 
 fn parse_array_type(source: &str) -> Option<&str> {
-    if !source.starts_with("Array") {
-        return None;
-    }
+	if !source.starts_with("Array") {
+		return None;
+	}
 
-    let inner_type = &source[6..source.len() - 1];
-    Some(inner_type)
+	let inner_type = &source[6..source.len() - 1];
+	Some(inner_type)
 }
 
 fn parse_decimal(source: &str) -> Option<(u8, u8, NoBits)> {
-    if source.len() < 12 {
-        return None;
-    }
+	if source.len() < 12 {
+		return None;
+	}
 
-    if !source.starts_with("Decimal") {
-        return None;
-    }
+	if !source.starts_with("Decimal") {
+		return None;
+	}
 
     let mut nobits = None;
     let mut precision = None;
@@ -277,33 +287,31 @@ fn parse_decimal(source: &str) -> Option<(u8, u8, NoBits)> {
 }
 
 fn parse_enum(source: &str) -> Option<(EnumSize, Vec<(String, i16)>)> {
-    let re_enum = Regex::new(r"(?P<values>Enum(?P<enum_size>\d{1,3})\(([a-zA-Z' =\-\d,]*\))+)").unwrap();
-    let re_values = Regex::new(r"(?P<name>[^']+)' = (?P<value>\-?\d{1,4})").unwrap();
+	let re_enum = Regex::new(r"(?P<values>Enum(?P<enum_size>\d{1,3})\(([a-zA-Z' =\-\d,]*\))+)").unwrap();
+	let re_values = Regex::new(r"(?P<name>[^']+)' = (?P<value>\-?\d{1,4})").unwrap();
 
-    let mut real_enums = vec![];
-    let mut size = EnumSize::ENUM8;
-    for cap in re_enum.captures_iter(source) {
-        size = match &cap["enum_size"] {
-            "8" => EnumSize::ENUM8,
-            "16" => EnumSize::ENUM16,
-            _ => return None
-        };
+	let mut real_enums = vec![];
+	let size;
+	if let Some(cap) = re_enum.captures_iter(source).last() {
+		size = match &cap["enum_size"] {
+			"8" => EnumSize::ENUM8,
+			"16" => EnumSize::ENUM16,
+			_ => return None
+		};
 
-        for values in re_values.captures_iter(&cap[0]) {
-            real_enums.push((values["name"].to_string(), values["value"].parse::<i16>().unwrap()));
-        }
-        break;
-    };
-    if real_enums.is_empty() {
-        return None;
+		for values in re_values.captures_iter(&cap[0]) {
+			real_enums.push((values["name"].to_string(), values["value"].parse::<i16>().unwrap()));
+		}
+	} else{
+        return None
     }
-    Some((size, real_enums))
+	Some((size, real_enums))
 }
 
 
 #[cfg(test)]
 mod test {
-    use super::*;
+	use super::*;
 
     #[test]
     fn test_parse_decimal() {
@@ -318,22 +326,22 @@ mod test {
         assert_eq!(parse_decimal("Decimal64(9)"), Some((18, 9, NoBits::N64)));
     }
 
-    #[test]
-    fn test_parse_array_type() {
-        assert_eq!(parse_array_type("Array(UInt8)"), Some("UInt8"));
-    }
+	#[test]
+	fn test_parse_array_type() {
+		assert_eq!(parse_array_type("Array(UInt8)"), Some("UInt8"));
+	}
 
-    #[test]
-    fn test_parse_nullable_type() {
-        assert_eq!(parse_nullable_type("Nullable(Int8)"), Some("Int8"));
-        assert_eq!(parse_nullable_type("Int8"), None);
-        assert_eq!(parse_nullable_type("Nullable(Nullable(Int8))"), None);
-    }
+	#[test]
+	fn test_parse_nullable_type() {
+		assert_eq!(parse_nullable_type("Nullable(Int8)"), Some("Int8"));
+		assert_eq!(parse_nullable_type("Int8"), None);
+		assert_eq!(parse_nullable_type("Nullable(Nullable(Int8))"), None);
+	}
 
-    #[test]
-    fn test_parse_fixed_string() {
-        assert_eq!(parse_fixed_string("FixedString(8)"), Some(8_usize));
-        assert_eq!(parse_fixed_string("FixedString(zz)"), None);
-        assert_eq!(parse_fixed_string("Int8"), None);
-    }
+	#[test]
+	fn test_parse_fixed_string() {
+		assert_eq!(parse_fixed_string("FixedString(8)"), Some(8_usize));
+		assert_eq!(parse_fixed_string("FixedString(zz)"), None);
+		assert_eq!(parse_fixed_string("Int8"), None);
+	}
 }

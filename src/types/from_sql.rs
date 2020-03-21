@@ -51,10 +51,14 @@ impl<'a> FromSql<'a> for Enum {
     fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
         match value {
 <<<<<<< HEAD
+<<<<<<< HEAD
             ValueRef::Enum8(enum_values, v) => Ok(v),
 =======
             ValueRef::Enum(size, _enum_values, v) => Ok(v),
 >>>>>>> c74dcbf... Work with enum8 and enum16
+=======
+            ValueRef::Enum(_size, _enum_values, v) => Ok(v),
+>>>>>>> 82e3bf9... Fix iterating over regular expression
             _ => {
 
                 let from = SqlType::from(value.clone()).to_string();

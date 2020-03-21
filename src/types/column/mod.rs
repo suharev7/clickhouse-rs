@@ -312,7 +312,7 @@ impl<K: ColumnType> Column<K> {
                     _marker: marker::PhantomData,
                 })
             }
-            (SqlType::Enum16(enum_values), SqlType::Enum8(_)) => {
+            (SqlType::Enum16(enum_values), SqlType::Enum16(_)) => {
                 let name = self.name().to_owned();
                 let adapter = Enum16Adapter {
                     column: self,

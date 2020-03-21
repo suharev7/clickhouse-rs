@@ -8,24 +8,24 @@ use lazy_static::lazy_static;
 use crate::errors::ServerError;
 
 pub use self::{
-	block::{Block, RCons, RNil, Row, RowBuilder, Rows},
-	column::{Column, ColumnType, Complex, Simple},
-	decimal::Decimal,
-	from_sql::FromSql,
-	options::Options,
-	query::Query,
-	query_result::QueryResult,
-	value::Value,
-    enums::Enum8
+    block::{Block, RCons, RNil, Row, RowBuilder, Rows},
+    column::{Column, ColumnType, Complex, Simple},
+    decimal::Decimal,
+    from_sql::FromSql,
+    options::Options,
+    query::Query,
+    query_result::QueryResult,
+    value::Value,
+    enums::Enum8,
 };
 pub(crate) use self::{
-	cmd::Cmd,
-	date_converter::DateConverter,
-	marshal::Marshal,
-	options::{IntoOptions, OptionsSource},
-	stat_buffer::StatBuffer,
-	unmarshal::Unmarshal,
-	value_ref::ValueRef,
+    cmd::Cmd,
+    date_converter::DateConverter,
+    marshal::Marshal,
+    options::{IntoOptions, OptionsSource},
+    stat_buffer::StatBuffer,
+    unmarshal::Unmarshal,
+    value_ref::ValueRef,
 };
 
 pub(crate) mod column;
@@ -50,66 +50,66 @@ mod enums;
 
 #[derive(Copy, Clone, Debug, Default, PartialEq)]
 pub(crate) struct Progress {
-	pub rows: u64,
-	pub bytes: u64,
-	pub total_rows: u64,
+    pub rows: u64,
+    pub bytes: u64,
+    pub total_rows: u64,
 }
 
 #[derive(Copy, Clone, Default, Debug, PartialEq)]
 pub(crate) struct ProfileInfo {
-	pub rows: u64,
-	pub bytes: u64,
-	pub blocks: u64,
-	pub applied_limit: bool,
-	pub rows_before_limit: u64,
-	pub calculated_rows_before_limit: bool,
+    pub rows: u64,
+    pub bytes: u64,
+    pub blocks: u64,
+    pub applied_limit: bool,
+    pub rows_before_limit: u64,
+    pub calculated_rows_before_limit: bool,
 }
 
 #[derive(Clone, PartialEq)]
 pub(crate) struct ServerInfo {
-	pub name: String,
-	pub revision: u64,
-	pub minor_version: u64,
-	pub major_version: u64,
-	pub timezone: Tz,
+    pub name: String,
+    pub revision: u64,
+    pub minor_version: u64,
+    pub major_version: u64,
+    pub timezone: Tz,
 }
 
 impl fmt::Debug for ServerInfo {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(
-			f,
-			"{} {}.{}.{} ({:?})",
-			self.name, self.major_version, self.minor_version, self.revision, self.timezone
-		)
-	}
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{} {}.{}.{} ({:?})",
+            self.name, self.major_version, self.minor_version, self.revision, self.timezone
+        )
+    }
 }
 
 #[derive(Clone)]
 pub(crate) struct Context {
-	pub(crate) server_info: ServerInfo,
-	pub(crate) hostname: String,
-	pub(crate) options: OptionsSource,
+    pub(crate) server_info: ServerInfo,
+    pub(crate) hostname: String,
+    pub(crate) options: OptionsSource,
 }
 
 impl Default for ServerInfo {
-	fn default() -> Self {
-		Self {
-			name: String::new(),
-			revision: 0,
-			minor_version: 0,
-			major_version: 0,
-			timezone: Tz::Zulu,
-		}
-	}
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            revision: 0,
+            minor_version: 0,
+            major_version: 0,
+            timezone: Tz::Zulu,
+        }
+    }
 }
 
 impl fmt::Debug for Context {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		f.debug_struct("Context")
-			.field("options", &self.options)
-			.field("hostname", &self.hostname)
-			.finish()
-	}
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("Context")
+            .field("options", &self.options)
+            .field("hostname", &self.hostname)
+            .finish()
+    }
 }
 
 impl Default for Context {
@@ -124,44 +124,44 @@ impl Default for Context {
 
 #[derive(Clone)]
 pub(crate) enum Packet<S> {
-	Hello(S, ServerInfo),
-	Pong(S),
-	Progress(Progress),
-	ProfileInfo(ProfileInfo),
-	Exception(ServerError),
-	Block(Block),
-	Eof(S),
+    Hello(S, ServerInfo),
+    Pong(S),
+    Progress(Progress),
+    ProfileInfo(ProfileInfo),
+    Exception(ServerError),
+    Block(Block),
+    Eof(S),
 }
 
 impl<S> fmt::Debug for Packet<S> {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		match self {
-			Packet::Hello(_, info) => write!(f, "Hello({:?})", info),
-			Packet::Pong(_) => write!(f, "Pong"),
-			Packet::Progress(p) => write!(f, "Progress({:?})", p),
-			Packet::ProfileInfo(info) => write!(f, "ProfileInfo({:?})", info),
-			Packet::Exception(e) => write!(f, "Exception({:?})", e),
-			Packet::Block(b) => write!(f, "Block({:?})", b),
-			Packet::Eof(_) => write!(f, "Eof"),
-		}
-	}
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Packet::Hello(_, info) => write!(f, "Hello({:?})", info),
+            Packet::Pong(_) => write!(f, "Pong"),
+            Packet::Progress(p) => write!(f, "Progress({:?})", p),
+            Packet::ProfileInfo(info) => write!(f, "ProfileInfo({:?})", info),
+            Packet::Exception(e) => write!(f, "Exception({:?})", e),
+            Packet::Block(b) => write!(f, "Block({:?})", b),
+            Packet::Eof(_) => write!(f, "Eof"),
+        }
+    }
 }
 
 impl<S> Packet<S> {
-	pub fn bind<N>(self, transport: &mut Option<N>) -> Packet<N> {
-		match self {
-			Packet::Hello(_, server_info) => Packet::Hello(transport.take().unwrap(), server_info),
-			Packet::Pong(_) => Packet::Pong(transport.take().unwrap()),
-			Packet::Progress(progress) => Packet::Progress(progress),
-			Packet::ProfileInfo(profile_info) => Packet::ProfileInfo(profile_info),
-			Packet::Exception(exception) => Packet::Exception(exception),
-			Packet::Block(block) => Packet::Block(block),
-			Packet::Eof(_) => Packet::Eof(transport.take().unwrap()),
-		}
-	}
+    pub fn bind<N>(self, transport: &mut Option<N>) -> Packet<N> {
+        match self {
+            Packet::Hello(_, server_info) => Packet::Hello(transport.take().unwrap(), server_info),
+            Packet::Pong(_) => Packet::Pong(transport.take().unwrap()),
+            Packet::Progress(progress) => Packet::Progress(progress),
+            Packet::ProfileInfo(profile_info) => Packet::ProfileInfo(profile_info),
+            Packet::Exception(exception) => Packet::Exception(exception),
+            Packet::Block(block) => Packet::Block(block),
+            Packet::Eof(_) => Packet::Eof(transport.take().unwrap()),
+        }
+    }
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum SqlType {
     UInt8,
     UInt16,
@@ -192,39 +192,39 @@ lazy_static! {
 }
 
 impl From<SqlType> for &'static SqlType {
-	fn from(value: SqlType) -> Self {
-		match value {
-			SqlType::UInt8 => &SqlType::UInt8,
-			SqlType::UInt16 => &SqlType::UInt16,
-			SqlType::UInt32 => &SqlType::UInt32,
-			SqlType::UInt64 => &SqlType::UInt64,
-			SqlType::Int8 => &SqlType::Int8,
-			SqlType::Int16 => &SqlType::Int16,
-			SqlType::Int32 => &SqlType::Int32,
-			SqlType::Int64 => &SqlType::Int64,
-			SqlType::String => &SqlType::String,
-			SqlType::Float32 => &SqlType::Float32,
-			SqlType::Float64 => &SqlType::Float64,
-			SqlType::Date => &SqlType::Date,
-			SqlType::DateTime => &SqlType::DateTime,
-			SqlType::Enum8 => &SqlType::Enum8,
-			SqlType::Enum16 => &SqlType::Enum16,
-			_ => {
-				let mut guard = TYPES_CACHE.lock().unwrap();
-				loop {
-					if let Some(value_ref) = guard.get(&value) {
-						return unsafe { mem::transmute(value_ref.as_ref()) };
-					}
-					guard.insert(value, Box::pin(value));
-				}
-			}
-		}
-	}
+    fn from(value: SqlType) -> Self {
+        match value {
+            SqlType::UInt8 => &SqlType::UInt8,
+            SqlType::UInt16 => &SqlType::UInt16,
+            SqlType::UInt32 => &SqlType::UInt32,
+            SqlType::UInt64 => &SqlType::UInt64,
+            SqlType::Int8 => &SqlType::Int8,
+            SqlType::Int16 => &SqlType::Int16,
+            SqlType::Int32 => &SqlType::Int32,
+            SqlType::Int64 => &SqlType::Int64,
+            SqlType::String => &SqlType::String,
+            SqlType::Float32 => &SqlType::Float32,
+            SqlType::Float64 => &SqlType::Float64,
+            SqlType::Date => &SqlType::Date,
+            SqlType::DateTime => &SqlType::DateTime,
+            SqlType::Enum16 => &SqlType::Enum16,
+            _ => {
+                let mut guard = TYPES_CACHE.lock().unwrap();
+                loop {
+                    if let Some(value_ref) = guard.get(&value.clone()) {
+                        return unsafe { mem::transmute(value_ref.as_ref()) };
+                    }
+                    guard.insert(value.clone(), Box::pin(value.clone()));
+                }
+            }
+        }
+    }
 }
 
 impl SqlType {
     pub fn to_string(&self) -> Cow<'static, str> {
-        match self {
+        let self_ = self.clone();
+        match self_ {
             SqlType::UInt8 => "UInt8".into(),
             SqlType::UInt16 => "UInt16".into(),
             SqlType::UInt32 => "UInt32".into(),
@@ -239,44 +239,50 @@ impl SqlType {
             SqlType::Float64 => "Float64".into(),
             SqlType::Date => "Date".into(),
             SqlType::DateTime => "DateTime".into(),
-            SqlType::Ipv4 => "IPv4".into(),
-            SqlType::Ipv6 => "IPv6".into(),
-            SqlType::Uuid => "UUID".into(),
-            SqlType::Nullable(&nested) => format!("Nullable({})", nested).into(),
-            SqlType::Array(&nested) => format!("Array({})", nested).into(),
+            SqlType::Nullable(nested) => format!("Nullable({})", &nested).into(),
+            SqlType::Array(nested) => format!("Array({})", &nested).into(),
             SqlType::Decimal(precision, scale) => {
                 format!("Decimal({}, {})", precision, scale).into()
             }
-            SqlType::Enum8 => "Enum8".into(),
+            SqlType::Enum8(values) => {
+                let mut enum_type = "Enum8(".to_string();
+                let a: Vec<String> = values.iter().map(|(name, value)| {
+                    format!("{} = {}", name, value)
+                }).collect();
+                enum_type += &a.join(",");
+                enum_type += " )";
+
+                enum_type.into()
+            }
             SqlType::Enum16 => "Enum16".into(),
         }
     }
 
-	pub(crate) fn level(&self) -> u8 {
-		match self {
-			SqlType::Nullable(inner) => 1 + inner.level(),
-			SqlType::Array(inner) => 1 + inner.level(),
-			_ => 0,
-		}
-	}
+    pub(crate) fn level(&self) -> u8 {
+        match self {
+            SqlType::Nullable(inner) => 1 + inner.level(),
+            SqlType::Array(inner) => 1 + inner.level(),
+            _ => 0,
+        }
+    }
 }
 
 impl fmt::Display for SqlType {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "{}", Self::to_string(self))
-	}
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", Self::to_string(self))
+    }
 }
 
 #[test]
 fn test_display() {
-	let expected = "UInt8".to_string();
-	let actual = format!("{}", SqlType::UInt8);
-	assert_eq!(expected, actual);
+    let expected = "UInt8".to_string();
+    let actual = format!("{}", SqlType::UInt8);
+    assert_eq!(expected, actual);
 }
 
 #[test]
 fn test_to_string() {
-	let expected: Cow<'static, str> = "Nullable(UInt8)".into();
-	let actual = SqlType::Nullable(&SqlType::UInt8).to_string();
-	assert_eq!(expected, actual)
+    let expected: Cow<'static, str> = "Nullable(UInt8)".into();
+    let actual = SqlType::Nullable(&SqlType::UInt8).to_string();
+    assert_eq!(expected, actual)
 }

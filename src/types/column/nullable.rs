@@ -54,7 +54,7 @@ impl ColumnData for NullableColumnData {
         if let Value::Nullable(e) = value {
             match e {
                 Either::Left(sql_type) => {
-                    let default_value = Value::default(*sql_type);
+                    let default_value = Value::default(sql_type.clone());
                     self.inner.push(default_value);
                     self.nulls.push(true as u8);
                 }

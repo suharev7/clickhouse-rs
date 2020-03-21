@@ -32,7 +32,7 @@ pub enum Value {
     Nullable(Either<&'static SqlType, Box<Value>>),
     Array(&'static SqlType, Arc<Vec<Value>>),
     Decimal(Decimal),
-    Enum8(Enum8),
+    Enum8(Vec<(String, i8)>, Enum8),
     Enum16(i16),
 }
 
@@ -63,7 +63,7 @@ impl PartialEq for Value {
             (Value::Nullable(a), Value::Nullable(b)) => *a == *b,
             (Value::Array(ta, a), Value::Array(tb, b)) => *ta == *tb && *a == *b,
             (Value::Decimal(a), Value::Decimal(b)) => *a == *b,
-            (Value::Enum8(a), Value::Enum8(b)) => *a == *b,
+            (Value::Enum8(value_a, all_enum_values_a), Value::Enum8(value_b, all_enum_values_b)) => *all_enum_values_a == *all_enum_values_b && value_a == value_b,
             (Value::Enum16(a), Value::Enum16(b)) => *a == *b,
 
             _ => false,
@@ -96,7 +96,7 @@ impl Value {
                 scale,
                 nobits: NoBits::N64,
             }),
-            SqlType::Enum8 => Value::Enum8(Enum8(0)),
+            SqlType::Enum8(values) => Value::Enum8(values, Enum8(0)),
             SqlType::Enum16 => Value::Enum16(0)
             SqlType::Ipv4 => Value::Ipv4([0_u8; 4]),
             SqlType::Ipv6 => Value::Ipv6([0_u8; 16]),
@@ -151,7 +151,7 @@ impl fmt::Display for Value {
                 write!(f, "[{}]", cells.join(", "))
             }
             Value::Decimal(v) => fmt::Display::fmt(v, f),
-            Value::Enum8(ref v) => fmt::Display::fmt(v, f),
+            Value::Enum8(ref v1, ref v2) => fmt::Display::fmt(v2, f),
             Value::Enum16(ref v) => fmt::Display::fmt(v, f),
             Value::Ipv4(v) => {
                 write!(f, "{}", Ipv4Addr::from(*v))

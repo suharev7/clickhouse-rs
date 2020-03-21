@@ -110,7 +110,7 @@ impl<T> ColumnFrom for Vec<Vec<T>>
         };
 
         for array in source {
-            data.push(to_array(sql_type, array));
+            data.push(to_array(sql_type.clone(), array));
         }
 
         W::wrap(data)
@@ -211,9 +211,6 @@ impl<T> ColumnData for VectorColumnData<T>
 
             Value::Float32(x) => ValueRef::Float32(x),
             Value::Float64(x) => ValueRef::Float64(x),
-
-            Value::Enum8(x) => ValueRef::Enum8(x),
-            Value::Enum16(x) => ValueRef::Enum16(x),
 
             _ => panic!("can't convert value to value_ref."),
         }

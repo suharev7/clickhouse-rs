@@ -7,6 +7,7 @@ use crate::{
         array::ArrayColumnData, column_data::ColumnData, date::DateColumnData,
         decimal::DecimalColumnData, fixed_string::FixedStringColumnData, list::List,
         nullable::NullableColumnData, numeric::VectorColumnData, string::StringColumnData,
+        BoxColumnWrapper, ColumnWrapper, enums::Enum8ColumnData,
         ip::{IpColumnData, Ipv4, Ipv6, Uuid},
         BoxColumnWrapper, ColumnWrapper,enums::{Enum8ColumnData},
     },
@@ -130,7 +131,7 @@ impl dyn ColumnData {
                     nobits,
                 })
             }
-            SqlType::Enum8 => W::wrap(VectorColumnData::<i8>::with_capacity(DEFAULT_CAPACITY)),
+            SqlType::Enum8(values) => W::wrap(VectorColumnData::<i8>::with_capacity(DEFAULT_CAPACITY)),
             SqlType::Enum16 => W::wrap(VectorColumnData::<i16>::with_capacity(DEFAULT_CAPACITY)),
         })
     }
@@ -270,7 +271,6 @@ fn parse_enum8(source: &str) -> Option<Vec<(String, i8)>> {
         let values: Vec<&str> = enum_string.split("=").map(|s| s.trim()).collect();
         real_enums.push((values[0].to_string(), values[1].to_string().parse::<i8>().unwrap()));
     }
-    println!("{:?}", real_enums);
     Some(real_enums) // TODO Catch exceptions use normal names without \'
 }
 

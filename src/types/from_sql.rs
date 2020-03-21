@@ -109,6 +109,7 @@ impl<'a> FromSql<'a> for Ipv4Addr {
                 }))
             }
         }
+
     }
 }
 
@@ -124,6 +125,7 @@ impl<'a> FromSql<'a> for Ipv6Addr {
                 }))
             }
         }
+
     }
 }
 
@@ -139,6 +141,7 @@ impl<'a> FromSql<'a> for uuid::Uuid {
                 }))
             }
         }
+
     }
 }
 

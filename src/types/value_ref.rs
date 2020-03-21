@@ -1,9 +1,4 @@
-use std::{
-    convert, fmt,
-    net::{Ipv4Addr, Ipv6Addr},
-    str,
-    sync::Arc,
-};
+use std::{convert, fmt, str, sync::Arc, net::{Ipv4Addr, Ipv6Addr}};
 
 use chrono::prelude::*;
 use chrono_tz::Tz;
@@ -39,11 +34,11 @@ pub enum ValueRef<'a> {
     Nullable(Either<&'static SqlType, Box<ValueRef<'a>>>),
     Array(&'static SqlType, Arc<Vec<ValueRef<'a>>>),
     Decimal(Decimal),
-    Enum16(Vec<(String, i16)>, Enum16),
-    Enum8(Vec<(String, i8)>, Enum8),
     Ipv4([u8; 4]),
     Ipv6([u8; 16]),
     Uuid([u8; 16]),
+    Enum16(Vec<(String, i16)>, Enum16),
+    Enum8(Vec<(String, i8)>, Enum8),
 }
 
 impl<'a> PartialEq for ValueRef<'a> {
@@ -124,14 +119,20 @@ impl<'a> fmt::Display for ValueRef<'a> {
                 write!(f, "[{}]", cells.join(", "))
             }
             ValueRef::Decimal(v) => fmt::Display::fmt(v, f),
+            ValueRef::Ipv4(v) => {
+                write!(f, "{}", Ipv4Addr::from(*v))
+            }
+            ValueRef::Ipv6(v) => {
+                write!(f, "{}", Ipv6Addr::from(*v))
+            }
+            ValueRef::Uuid(v) => {
+                match Uuid::from_slice(v) {
+                    Ok(uuid) => write!(f, "{}", uuid),
+                    Err(e) => write!(f, "{}", e),
+                }
+            }
             ValueRef::Enum8(_, v) => fmt::Display::fmt(v, f),
             ValueRef::Enum16(_, v) => fmt::Display::fmt(v, f),
-            ValueRef::Ipv4(v) => write!(f, "{}", Ipv4Addr::from(*v)),
-            ValueRef::Ipv6(v) => write!(f, "{}", Ipv6Addr::from(*v)),
-            ValueRef::Uuid(v) => match Uuid::from_slice(v) {
-                Ok(uuid) => write!(f, "{}", uuid),
-                Err(e) => write!(f, "{}", e),
-            },
         }
     }
 }

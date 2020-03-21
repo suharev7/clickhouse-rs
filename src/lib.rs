@@ -1,4 +1,3 @@
-
 //! ## clickhouse-rs
 //! Asynchronous [Yandex ClickHouse](https://clickhouse.yandex/) client library for rust programming language.
 //!
@@ -509,8 +508,9 @@ impl ClientHandle {
 }
 
 fn column_name_to_string(name: &str) -> Result<String> {
+
     if name.chars().all(|ch| ch.is_alphanumeric()) {
-        return Ok(name.to_string());
+        return Ok(name.to_string())
     }
 
     if name.chars().any(|ch| ch == '`') {
@@ -544,15 +544,14 @@ where
 
 #[cfg(test)]
 pub(crate) mod test_misc {
-    use crate::*;
     use std::env;
+    use crate::*;
 
     use lazy_static::lazy_static;
 
     lazy_static! {
-        pub static ref DATABASE_URL: String = env::var("DATABASE_URL").unwrap_or_else(|_| {
-            "tcp://localhost:9000?compression=lz4&ping_timeout=1s&retry_timeout=2s".into()
-        });
+        pub static ref DATABASE_URL: String = env::var("DATABASE_URL")
+            .unwrap_or_else(|_| "tcp://localhost:9000?compression=lz4&ping_timeout=1s&retry_timeout=2s".into());
     }
 
     #[test]

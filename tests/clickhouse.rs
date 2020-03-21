@@ -1228,3 +1228,4 @@ async fn test_non_alphanumeric_columns() -> Result<(), Error> {
     assert_eq!(count, 1);
     Ok(())
 }
+

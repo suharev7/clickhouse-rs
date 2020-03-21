@@ -11,12 +11,9 @@ use crate::{
     binary::ReadEx,
     errors::Result,
     types::column::{
-        array::ArrayColumnData,
-        column_data::ColumnData,
-        date::DateColumnData,
-        decimal::DecimalColumnData,
-        enums::{Enum16ColumnData, Enum8ColumnData},
-        fixed_string::FixedStringColumnData,
+        array::ArrayColumnData, column_data::ColumnData, date::DateColumnData,
+        decimal::DecimalColumnData, fixed_string::FixedStringColumnData, list::List,
+        nullable::NullableColumnData, numeric::VectorColumnData, string::StringColumnData,
         ip::{IpColumnData, Ipv4, Ipv6, Uuid},
         list::List,
         nullable::NullableColumnData,
@@ -45,6 +42,7 @@ macro_rules! match_str {
 }
 
 impl dyn ColumnData {
+    #[allow(clippy::cognitive_complexity)]
     pub(crate) fn load_data<W: ColumnWrapper, T: ReadEx>(
         reader: &mut T,
         type_name: &str,
@@ -56,15 +54,15 @@ impl dyn ColumnData {
             "UInt16" => W::wrap(VectorColumnData::<u16>::load(reader, size)?),
             "UInt32" => W::wrap(VectorColumnData::<u32>::load(reader, size)?),
             "UInt64" => W::wrap(VectorColumnData::<u64>::load(reader, size)?),
-            "Int8" => W::wrap(VectorColumnData::<i8>::load(reader, size)?),
-            "Int16" => W::wrap(VectorColumnData::<i16>::load(reader, size)?),
-            "Int32" => W::wrap(VectorColumnData::<i32>::load(reader, size)?),
-            "Int64" => W::wrap(VectorColumnData::<i64>::load(reader, size)?),
-            "Float32" => W::wrap(VectorColumnData::<f32>::load(reader, size)?),
-            "Float64" => W::wrap(VectorColumnData::<f64>::load(reader, size)?),
-            "String" => W::wrap(StringColumnData::load(reader, size)?),
+            "Int8" | "TinyInt" => W::wrap(VectorColumnData::<i8>::load(reader, size)?),
+            "Int16" | "SmallInt" => W::wrap(VectorColumnData::<i16>::load(reader, size)?),
+            "Int32" | "Int" | "Integer" => W::wrap(VectorColumnData::<i32>::load(reader, size)?),
+            "Int64" | "BigInt" => W::wrap(VectorColumnData::<i64>::load(reader, size)?),
+            "Float32" | "Float" => W::wrap(VectorColumnData::<f32>::load(reader, size)?),
+            "Float64" | "Double" => W::wrap(VectorColumnData::<f64>::load(reader, size)?),
+            "String" | "Char" | "Varchar" | "Text" | "TinyText" | "MediumText" | "LongText" | "Blob" | "TinyBlob" | "MediumBlob" | "LongBlob" => W::wrap(StringColumnData::load(reader, size)?),
             "Date" => W::wrap(DateColumnData::<u16>::load(reader, size, tz)?),
-            "DateTime" => W::wrap(DateColumnData::<u32>::load(reader, size, tz)?),
+            "DateTime" | "Timestamp" => W::wrap(DateColumnData::<u32>::load(reader, size, tz)?),
             "IPv4" => W::wrap(IpColumnData::<Ipv4>::load(reader, size)?),
             "IPv6" => W::wrap(IpColumnData::<Ipv6>::load(reader, size)?),
             "UUID" => W::wrap(IpColumnData::<Uuid>::load(reader, size)?),
@@ -111,25 +109,19 @@ impl dyn ColumnData {
             }
             SqlType::Float32 => W::wrap(VectorColumnData::<f32>::with_capacity(capacity)),
             SqlType::Float64 => W::wrap(VectorColumnData::<f64>::with_capacity(capacity)),
+
             SqlType::Ipv4 => W::wrap(IpColumnData::<Ipv4>::with_capacity(capacity)),
             SqlType::Ipv6 => W::wrap(IpColumnData::<Ipv6>::with_capacity(capacity)),
             SqlType::Uuid => W::wrap(IpColumnData::<Uuid>::with_capacity(capacity)),
+
             SqlType::Date => W::wrap(DateColumnData::<u16>::with_capacity(capacity, timezone)),
             SqlType::DateTime => W::wrap(DateColumnData::<u32>::with_capacity(capacity, timezone)),
             SqlType::Nullable(inner_type) => W::wrap(NullableColumnData {
-                inner: ColumnData::from_type::<BoxColumnWrapper>(
-                    inner_type.clone(),
-                    timezone,
-                    capacity,
-                )?,
+                inner: ColumnData::from_type::<BoxColumnWrapper>(*inner_type, timezone, capacity)?,
                 nulls: Vec::new(),
             }),
             SqlType::Array(inner_type) => W::wrap(ArrayColumnData {
-                inner: ColumnData::from_type::<BoxColumnWrapper>(
-                    inner_type.clone(),
-                    timezone,
-                    capacity,
-                )?,
+                inner: ColumnData::from_type::<BoxColumnWrapper>(*inner_type, timezone, capacity)?,
                 offsets: List::with_capacity(capacity),
             }),
             SqlType::Decimal(precision, scale) => {
@@ -213,39 +205,81 @@ fn parse_decimal(source: &str) -> Option<(u8, u8, NoBits)> {
         return None;
     }
 
-    if source.chars().nth(7) != Some('(') {
-        return None;
-    }
+    let mut nobits = None;
+    let mut precision = None;
+    let mut scale = None;
 
-    if !source.ends_with(')') {
-        return None;
-    }
+    let mut params_indexes = (None, None);
 
-    let mut params: Vec<u8> = Vec::with_capacity(2);
-    for cell in source[8..source.len() - 1].split(',').map(|s| s.trim()) {
-        if let Ok(value) = cell.parse() {
-            params.push(value)
-        } else {
-            return None;
+    for (idx, byte) in source.as_bytes().iter().enumerate() {
+        if *byte == b'(' {
+            match &source.as_bytes()[..idx] {
+                b"Decimal" => {}
+                b"Decimal32" => {
+                    nobits = Some(NoBits::N32);
+                }
+                b"Decimal64" => {
+                    nobits = Some(NoBits::N64);
+                }
+                _ => return None,
+            }
+            params_indexes.0 = Some(idx);
+        }
+        if *byte == b')' {
+            params_indexes.1 = Some(idx);
         }
     }
 
-    if params.len() != 2 {
-        return None;
+    let params_indexes = match params_indexes {
+        (Some(start), Some(end)) => (start, end),
+        _ => return None,
+    };
+
+    match nobits {
+        Some(_) => {
+            scale = std::str::from_utf8(&source.as_bytes()[params_indexes.0 + 1..params_indexes.1])
+                .unwrap()
+                .parse()
+                .ok()
+        }
+        None => {
+            for (idx, cell) in
+                std::str::from_utf8(&source.as_bytes()[params_indexes.0 + 1..params_indexes.1])
+                    .unwrap()
+                    .split(',')
+                    .map(|s| s.trim())
+                    .enumerate()
+            {
+                match idx {
+                    0 => precision = cell.parse().ok(),
+                    1 => scale = cell.parse().ok(),
+                    _ => return None,
+                }
+            }
+        }
     }
 
-    let precision = params[0];
-    let scale = params[1];
+    match (precision, scale, nobits) {
+        (Some(precision), Some(scale), None) => {
+            if scale > precision {
+                return None;
+            }
 
-    if scale > precision {
-        return None;
+            if let Some(nobits) = NoBits::from_precision(precision) {
+                Some((precision, scale, nobits))
+            } else {
+                None
+            }
+        }
+        (None, Some(scale), Some(bits)) => {
+            let precision = match bits {
+                NoBits::N32 => 9,
+                NoBits::N64 => 18,
+            };
+            Some((precision, scale, bits))
+        }
+        _ => None,
     }
-
-    if let Some(nobits) = NoBits::from_precision(precision) {
-        return Some((precision, scale, nobits));
-    }
-
-    None
 }
 
 enum EnumSize {
@@ -330,6 +364,7 @@ mod test {
         assert_eq!(parse_decimal("Decimal(20, -4)"), None);
         assert_eq!(parse_decimal("Decimal(0)"), None);
         assert_eq!(parse_decimal("Decimal(1, 2, 3)"), None);
+        assert_eq!(parse_decimal("Decimal64(9)"), Some((18, 9, NoBits::N64)));
     }
 
     #[test]

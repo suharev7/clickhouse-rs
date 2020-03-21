@@ -1,4 +1,5 @@
 #![allow(clippy::cast_ptr_alignment)]
+
 use std::{
     iter::FusedIterator,
     marker, mem,

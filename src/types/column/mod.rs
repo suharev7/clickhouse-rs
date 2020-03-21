@@ -19,8 +19,8 @@ use crate::{
             decimal::{DecimalAdapter, NullableDecimalAdapter},
             fixed_string::{FixedStringAdapter, NullableFixedStringAdapter},
             ip::{IpColumnData, Ipv4, Ipv6},
-            iter::Iterable,
             string::StringAdapter,
+            iter::Iterable,
         },
         decimal::NoBits,
         SqlType, Value, ValueRef,
@@ -41,7 +41,7 @@ mod enums;
 mod factory;
 pub(crate) mod fixed_string;
 mod ip;
-mod iter;
+pub(crate) mod iter;
 mod list;
 mod nullable;
 mod numeric;

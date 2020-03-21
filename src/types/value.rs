@@ -1,9 +1,4 @@
-use std::{
-    convert, fmt, mem,
-    net::{Ipv4Addr, Ipv6Addr},
-    str,
-    sync::Arc,
-};
+use std::{convert, fmt, mem, str, sync::Arc, net::{Ipv4Addr, Ipv6Addr}};
 
 use chrono::prelude::*;
 use chrono_tz::Tz;
@@ -75,7 +70,6 @@ impl PartialEq for Value {
             (Value::Enum16(values_a, val_a), Value::Enum16(values_b, val_b)) => {
                 *values_a == *values_b && *val_a == *val_b
             }
-
             _ => false,
         }
     }
@@ -159,12 +153,18 @@ impl fmt::Display for Value {
                 write!(f, "[{}]", cells.join(", "))
             }
             Value::Decimal(v) => fmt::Display::fmt(v, f),
-            Value::Ipv4(v) => write!(f, "{}", Ipv4Addr::from(*v)),
-            Value::Ipv6(v) => write!(f, "{}", Ipv6Addr::from(*v)),
-            Value::Uuid(v) => match Uuid::from_slice(v) {
-                Ok(uuid) => write!(f, "{}", uuid),
-                Err(e) => write!(f, "{}", e),
+            Value::Ipv4(v) => {
+                write!(f, "{}", Ipv4Addr::from(*v))
             },
+            Value::Ipv6(v) => {
+                write!(f, "{}", Ipv6Addr::from(*v))
+            }
+            Value::Uuid(v) => {
+                match Uuid::from_slice(v) {
+                    Ok(uuid) => write!(f, "{}", uuid),
+                    Err(e) => write!(f, "{}", e),
+                }
+            }
             Value::Enum8(ref _v1, ref v2) => write!(f, "Enum8, {}", v2),
             Value::Enum16(ref _v1, ref v2) => write!(f, "Enum16, {}", v2),
         }
@@ -474,7 +474,7 @@ mod test {
         assert_eq!(
             Value::DateTime(
                 date_time_value.timestamp() as u32,
-                date_time_value.timezone(),
+                date_time_value.timezone()
             ),
             dt
         );
@@ -541,7 +541,7 @@ mod test {
                 "{}",
                 Value::Array(
                     SqlType::Int32.into(),
-                    Arc::new(vec![Value::Int32(1), Value::Int32(2), Value::Int32(3)]),
+                    Arc::new(vec![Value::Int32(1), Value::Int32(2), Value::Int32(3)])
                 )
             )
         );

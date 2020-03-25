@@ -15,11 +15,8 @@ use crate::{
         decimal::DecimalColumnData, fixed_string::FixedStringColumnData, list::List,
         nullable::NullableColumnData, numeric::VectorColumnData, string::StringColumnData,
         ip::{IpColumnData, Ipv4, Ipv6, Uuid},
-        list::List,
-        nullable::NullableColumnData,
-        numeric::VectorColumnData,
-        string::StringColumnData,
         BoxColumnWrapper, ColumnWrapper,
+        enums::{Enum16ColumnData, Enum8ColumnData}
     },
     types::decimal::NoBits,
     SqlType,
@@ -117,11 +114,11 @@ impl dyn ColumnData {
             SqlType::Date => W::wrap(DateColumnData::<u16>::with_capacity(capacity, timezone)),
             SqlType::DateTime => W::wrap(DateColumnData::<u32>::with_capacity(capacity, timezone)),
             SqlType::Nullable(inner_type) => W::wrap(NullableColumnData {
-                inner: ColumnData::from_type::<BoxColumnWrapper>(*inner_type, timezone, capacity)?,
+                inner: ColumnData::from_type::<BoxColumnWrapper>(inner_type.clone(), timezone, capacity)?,
                 nulls: Vec::new(),
             }),
             SqlType::Array(inner_type) => W::wrap(ArrayColumnData {
-                inner: ColumnData::from_type::<BoxColumnWrapper>(*inner_type, timezone, capacity)?,
+                inner: ColumnData::from_type::<BoxColumnWrapper>(inner_type.clone(), timezone, capacity)?,
                 offsets: List::with_capacity(capacity),
             }),
             SqlType::Decimal(precision, scale) => {

@@ -12,8 +12,6 @@ use std::{
 use crate::errors::{Error, Result, UrlError};
 #[cfg(feature = "tls")]
 use failure::_core::fmt::Formatter;
-#[cfg(feature = "tls")]
-use native_tls;
 use url::Url;
 use failure::_core::fmt::Debug;
 

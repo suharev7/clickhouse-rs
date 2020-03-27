@@ -17,7 +17,7 @@ extern "C" {
 
 pub fn city_hash_128<B: AsRef<[u8]>>(source: B) -> UInt128 {
     let buffer = source.as_ref();
-    unsafe { CityHash128(buffer.as_ptr() as *const i8, buffer.len()) }
+    unsafe { CityHash128(buffer.as_ptr() as *const c_char, buffer.len()) }
 }
 
 #[test]

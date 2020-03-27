@@ -1,6 +1,6 @@
 [package]
 name = "clickhouse-rs-cityhash-sys"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["mikhail <suharev7@gmail.com>"]
 license = "MIT"
 links = "clickhouse-rs"

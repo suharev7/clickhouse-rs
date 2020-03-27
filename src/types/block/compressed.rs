@@ -97,7 +97,7 @@ where
     let status = unsafe {
         LZ4_decompress_safe(
             (buffer.as_mut_ptr() as *const c_char).add(9),
-            data.as_ptr() as *mut i8,
+            data.as_ptr() as *mut c_char,
             (compressed - 9) as c_int,
             original as c_int,
         )

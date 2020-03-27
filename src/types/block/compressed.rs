@@ -1,4 +1,4 @@
-use std::{io, io::Read, mem, os::raw::c_int};
+use std::{io, io::Read, mem, os::raw::{c_int, c_char}};
 
 use byteorder::{LittleEndian, WriteBytesExt};
 use clickhouse_rs_cityhash_sys::{city_hash_128, UInt128};
@@ -94,8 +94,8 @@ where
     let data = vec![0_u8; original as usize];
     let status = unsafe {
         LZ4_decompress_safe(
-            (buffer.as_mut_ptr() as *const i8).add(9),
-            data.as_ptr() as *mut i8,
+            (buffer.as_mut_ptr() as *const c_char).add(9),
+            data.as_ptr() as *mut c_char,
             (compressed - 9) as c_int,
             original as c_int,
         )

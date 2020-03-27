@@ -3,6 +3,7 @@ use std::{
     default::Default,
     fmt,
     io::{Cursor, Read},
+    os::raw::c_char,
     marker::PhantomData,
 };
 
@@ -335,8 +336,8 @@ impl<K: ColumnType> Block<K> {
             unsafe {
                 buf.resize(9 + LZ4_compressBound(tmp.len() as i32) as usize, 0_u8);
                 size = LZ4_compress_default(
-                    tmp.as_ptr() as *const i8,
-                    (buf.as_mut_ptr() as *mut i8).add(9),
+                    tmp.as_ptr() as *const c_char,
+                    (buf.as_mut_ptr() as *mut c_char).add(9),
                     tmp.len() as i32,
                     buf.len() as i32,
                 );

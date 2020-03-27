@@ -219,19 +219,17 @@ impl From<Utf8Error> for Error {
 
 #[cfg(test)]
 mod tests {
-    use std::error::Error;
-
     #[test]
     fn to_std_error_without_recursion() {
         let src_err: super::Error = From::from("Somth went wrong.");
         let dst_err: Box<dyn std::error::Error> = src_err.into();
-        assert_eq!(dst_err.description(), "Other error: `Somth went wrong.`");
+        assert_eq!(dst_err.to_string(), "Other error: `Somth went wrong.`");
     }
 
     #[test]
     fn to_io_error_without_recursion() {
         let src_err: super::Error = From::from("Somth went wrong.");
         let dst_err: std::io::Error = src_err.into();
-        assert_eq!(dst_err.description(), "Other error: `Somth went wrong.`");
+        assert_eq!(dst_err.to_string(), "Other error: `Somth went wrong.`");
     }
 }

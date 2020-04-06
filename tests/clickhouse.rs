@@ -819,6 +819,7 @@ async fn test_enum_16_not_nullable() -> Result<(), Error> {
     Ok(())
 }
 
+#[cfg(feature = "tokio_io")]
 #[tokio::test]
 async fn test_enum_16_nullable() -> Result<(), Error> {
     let ddl = "
@@ -862,6 +863,7 @@ async fn test_enum_16_nullable() -> Result<(), Error> {
     Ok(())
 }
 
+#[cfg(feature = "tokio_io")]
 #[tokio::test]
 async fn test_enum_8() -> Result<(), Error> {
     let ddl = "
@@ -898,6 +900,7 @@ async fn test_enum_8() -> Result<(), Error> {
     Ok(())
 }
 
+#[cfg(feature = "tokio_io")]
 #[tokio::test]
 async fn test_array() -> Result<(), Error> {
     let ddl = "

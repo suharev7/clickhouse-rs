@@ -35,7 +35,7 @@ impl Stream {
             Self::Plain(ref mut stream) => stream.set_nodelay(nodelay),
             #[cfg(feature = "tls")]
             Self::Secure(ref mut stream) => stream.get_mut().get_mut().set_nodelay(nodelay),
-        }
+        }.map_err(|err| io::Error::new(err.kind(), format!("set_nodelay error: {}", err)))
     }
 
     pub(crate) fn set_keepalive(&mut self, keepalive: Option<Duration>) -> io::Result<()> {
@@ -43,7 +43,7 @@ impl Stream {
             Self::Plain(ref mut stream) => stream.set_keepalive(keepalive),
             #[cfg(feature = "tls")]
             Self::Secure(ref mut stream) => stream.get_mut().get_mut().set_keepalive(keepalive),
-        }
+        }.map_err(|err| io::Error::new(err.kind(), format!("set_keepalive error: {}", err)))
     }
 }
 

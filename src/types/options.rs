@@ -196,7 +196,10 @@ pub struct Options {
     pub(crate) certificate: Option<Certificate>,
 
     /// Restricts permissions for read data, write data and change settings queries.
-    pub(crate) readonly: Option<u8>
+    pub(crate) readonly: Option<u8>,
+
+    /// Comma separated list of single address host for load-balancing.
+    pub(crate) alt_hosts: Vec<Url>,
 }
 
 impl fmt::Debug for Options {
@@ -215,6 +218,7 @@ impl fmt::Debug for Options {
             .field("ping_timeout", &self.ping_timeout)
             .field("connection_timeout", &self.connection_timeout)
             .field("readonly", &self.readonly)
+            .field("alt_hosts", &self.alt_hosts)
             .finish()
     }
 }
@@ -243,6 +247,7 @@ impl Default for Options {
             #[cfg(feature = "tls")]
             certificate: None,
             readonly: None,
+            alt_hosts: Vec::new(),
         }
     }
 }
@@ -369,6 +374,11 @@ impl Options {
         /// Restricts permissions for read data, write data and change settings queries.
         => readonly: Option<u8>
     }
+
+    property! {
+        /// Comma separated list of single address host for load-balancing.
+        => alt_hosts: Vec<Url>
+    }
 }
 
 impl FromStr for Options {
@@ -445,6 +455,7 @@ where
             #[cfg(feature = "tls")]
             "skip_verify" => options.skip_verify = parse_param(key, value, bool::from_str)?,
             "readonly" => options.readonly = parse_param(key, value, parse_opt_u8)?,
+            "alt_hosts" => options.alt_hosts = parse_param(key, value, parse_hosts)?,
             _ => return Err(UrlError::UnknownParameter { param: key.into() }),
         };
     }
@@ -550,9 +561,30 @@ fn parse_compression(source: &str) -> std::result::Result<bool, ()> {
     }
 }
 
+fn parse_hosts(source: &str) -> std::result::Result<Vec<Url>, ()> {
+    let mut result = Vec::new();
+    for host in source.split(",") {
+        match Url::from_str(&format!("tcp://{}", host)) {
+            Ok(url) => result.push(url),
+            Err(_) => return Err(()),
+        }
+    }
+    Ok(result)
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn test_parse_hosts() {
+        let source = "host2:9000,host3:9000";
+        let expected = vec![
+            Url::from_str("tcp://host2:9000").unwrap(),
+            Url::from_str("tcp://host3:9000").unwrap()];
+        let actual = parse_hosts(source).unwrap();
+        assert_eq!(actual, expected)
+    }
 
     #[test]
     fn test_parse_default() {

@@ -16,6 +16,7 @@ use crate::{
 
 pub use self::futures::GetHandle;
 use futures_util::FutureExt;
+use url::Url;
 
 mod futures;
 
@@ -24,6 +25,8 @@ pub(crate) struct Inner {
     idle: crossbeam::queue::ArrayQueue<ClientHandle>,
     tasks: crossbeam::queue::SegQueue<Waker>,
     ongoing: atomic::AtomicUsize,
+    hosts: Vec<Url>,
+    connections_num: atomic::AtomicUsize,
 }
 
 impl Inner {
@@ -139,11 +142,14 @@ impl Pool {
 
         let mut min = 5;
         let mut max = 10;
+        let mut hosts = vec![];
 
         match options_src.get() {
             Ok(opt) => {
                 min = opt.pool_min;
                 max = opt.pool_max;
+                hosts.push(opt.addr.clone());
+                hosts.extend(opt.alt_hosts.iter().cloned());
             }
             Err(err) => error!("{}", err),
         }
@@ -153,6 +159,8 @@ impl Pool {
             idle: crossbeam::queue::ArrayQueue::new(max),
             tasks: crossbeam::queue::SegQueue::new(),
             ongoing: atomic::AtomicUsize::new(0),
+            connections_num: atomic::AtomicUsize::new(0),
+            hosts,
         });
 
         Self {
@@ -256,6 +264,12 @@ impl Pool {
             task.wake()
         }
     }
+
+    pub(crate) fn get_addr(&self) -> &Url {
+        let n = self.inner.hosts.len();
+        let index = self.inner.connections_num.fetch_add(1, Ordering::SeqCst);
+        &self.inner.hosts[index % n]
+    }
 }
 
 impl Drop for ClientHandle {
@@ -294,6 +308,7 @@ mod test {
     use crate::{Block, errors::Result, Options, test_misc::DATABASE_URL};
 
     use super::Pool;
+    use url::Url;
 
     #[tokio::test]
     async fn test_connect() -> Result<()> {
@@ -432,5 +447,16 @@ mod test {
         assert_eq!(info.tasks_len, 0);
         assert_eq!(info.idle_len, 0);
         Ok(())
+    }
+
+    #[test]
+    fn test_get_addr() {
+        let options = Options::from_str("tcp://host1:9000?alt_hosts=host2:9000,host3:9000").unwrap();
+        let pool = Pool::new(options);
+
+        assert_eq!(pool.get_addr(), &Url::from_str("tcp://host1:9000").unwrap());
+        assert_eq!(pool.get_addr(), &Url::from_str("tcp://host2:9000").unwrap());
+        assert_eq!(pool.get_addr(), &Url::from_str("tcp://host3:9000").unwrap());
+        assert_eq!(pool.get_addr(), &Url::from_str("tcp://host1:9000").unwrap())
     }
 }

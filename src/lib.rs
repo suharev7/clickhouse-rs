@@ -107,8 +107,9 @@
 
 use std::{fmt, future::Future, time::Duration};
 
-use futures_util::{future::BoxFuture, stream::BoxStream};
-use futures_util::{future, future::FutureExt, stream, StreamExt};
+use futures_util::{
+    future, future::BoxFuture, future::FutureExt, stream, stream::BoxStream, StreamExt,
+};
 use log::info;
 
 use crate::{
@@ -246,7 +247,13 @@ impl Client {
 
         with_timeout(
             async move {
-                let mut stream = ConnectingStream::new(&options.addr, &options).await?;
+                let addr = match &pool {
+                    None => &options.addr,
+                    Some(p) => p.get_addr(),
+                };
+
+                info!("try to connect to {}", addr);
+                let mut stream = ConnectingStream::new(addr, &options).await?;
                 stream.set_nodelay(options.nodelay)?;
                 stream.set_keepalive(options.keepalive)?;
 
@@ -508,9 +515,8 @@ impl ClientHandle {
 }
 
 fn column_name_to_string(name: &str) -> Result<String> {
-
     if name.chars().all(|ch| ch.is_alphanumeric()) {
-        return Ok(name.to_string())
+        return Ok(name.to_string());
     }
 
     if name.chars().any(|ch| ch == '`') {
@@ -544,14 +550,15 @@ where
 
 #[cfg(test)]
 pub(crate) mod test_misc {
-    use std::env;
     use crate::*;
+    use std::env;
 
     use lazy_static::lazy_static;
 
     lazy_static! {
-        pub static ref DATABASE_URL: String = env::var("DATABASE_URL")
-            .unwrap_or_else(|_| "tcp://localhost:9000?compression=lz4&ping_timeout=1s&retry_timeout=2s".into());
+        pub static ref DATABASE_URL: String = env::var("DATABASE_URL").unwrap_or_else(|_| {
+            "tcp://localhost:9000?compression=lz4&ping_timeout=1s&retry_timeout=2s".into()
+        });
     }
 
     #[test]

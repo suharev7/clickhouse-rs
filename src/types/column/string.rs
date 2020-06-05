@@ -5,7 +5,7 @@ use crate::{
     errors::Result,
     types::{
         column::{
-            array::ArrayColumnData, list::List, nullable::NullableColumnData, BoxColumnWrapper,
+            array::ArrayColumnData, list::List, nullable::NullableColumnData, ArcColumnWrapper,
             ColumnWrapper, Either, StringPool,
         },
         Column, FromSql, SqlType, Value, ValueRef, ColumnType,
@@ -100,7 +100,7 @@ fn make_array_of_array<W: ColumnWrapper, S: StringSource>(
     source: Vec<Vec<S>>,
 ) -> <W as ColumnWrapper>::Wrapper {
     let fake: Vec<String> = Vec::with_capacity(source.len());
-    let inner = Vec::column_from::<BoxColumnWrapper>(fake);
+    let inner = Vec::column_from::<ArcColumnWrapper>(fake);
     let sql_type = inner.sql_type();
 
     let mut data = ArrayColumnData {
@@ -139,7 +139,7 @@ impl ColumnFrom for Vec<Option<String>> {
 }
 
 fn make_opt_column<W: ColumnWrapper, S: StringSource>(source: Vec<Option<S>>) -> W::Wrapper {
-    let inner = Box::new(StringColumnData::with_capacity(source.len()));
+    let inner = Arc::new(StringColumnData::with_capacity(source.len()));
 
     let mut data = NullableColumnData {
         inner,

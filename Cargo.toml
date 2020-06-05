@@ -24,7 +24,7 @@ tokio = "0.1.22"
 tokio-timer = "0.2.11"
 tokio-tls = { version = "0.2.1", optional = true }
 native-tls = { version = "0.2.3", optional = true }
-hostname = "^0.2"
+hostname = "^0.3"
 
 chrono = "0.4"
 chrono-tz = "0.5"

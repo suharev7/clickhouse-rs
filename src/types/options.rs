@@ -7,13 +7,11 @@ use std::{
     str::FromStr,
     sync::{Arc, Mutex},
     time::Duration,
+    fmt::Debug,
 };
 
 use crate::errors::{Error, Result, UrlError};
-#[cfg(feature = "tls")]
-use failure::_core::fmt::Formatter;
 use url::Url;
-use failure::_core::fmt::Debug;
 
 const DEFAULT_MIN_CONNS: usize = 10;
 
@@ -125,7 +123,7 @@ impl Certificate {
 
 #[cfg(feature = "tls")]
 impl fmt::Debug for Certificate {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "[Certificate]")
     }
 }
@@ -612,7 +610,7 @@ fn parse_compression(source: &str) -> std::result::Result<bool, ()> {
 
 fn parse_hosts(source: &str) -> std::result::Result<Vec<Url>, ()> {
     let mut result = Vec::new();
-    for host in source.split(",") {
+    for host in source.split(',') {
         match Url::from_str(&format!("tcp://{}", host)) {
             Ok(url) => result.push(url),
             Err(_) => return Err(()),
@@ -658,6 +656,7 @@ mod test {
                 ping_timeout: Duration::from_millis(42),
                 connection_timeout: Duration::from_secs(10),
                 compression: true,
+                secure: true,
                 ..Options::default()
             },
             from_url(url).unwrap(),

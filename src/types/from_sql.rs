@@ -5,7 +5,7 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 use crate::types::{Enum16, Enum8};
 use crate::{
     errors::{Error, FromSqlError},
-    types::{column::Either, Decimal, SqlType, ValueRef},
+    types::{column::{Either, datetime64::to_datetime}, Decimal, SqlType, ValueRef},
 };
 
 pub type FromSqlResult<T> = Result<T, Error>;
@@ -109,7 +109,6 @@ impl<'a> FromSql<'a> for Ipv4Addr {
                 }))
             }
         }
-
     }
 }
 
@@ -125,7 +124,6 @@ impl<'a> FromSql<'a> for Ipv6Addr {
                 }))
             }
         }
-
     }
 }
 
@@ -141,17 +139,16 @@ impl<'a> FromSql<'a> for uuid::Uuid {
                 }))
             }
         }
-
     }
 }
 
 macro_rules! from_sql_vec_impl {
-    ( $( $t:ty: $k:ident => $f:expr ),* ) => {
+    ( $( $t:ty: $k:pat => $f:expr ),* ) => {
         $(
             impl<'a> FromSql<'a> for Vec<$t> {
                 fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
                     match value {
-                        ValueRef::Array(SqlType::$k, vs) => {
+                        ValueRef::Array($k, vs) => {
                             let f: fn(ValueRef<'a>) -> FromSqlResult<$t> = $f;
                             let mut result = Vec::with_capacity(vs.len());
                             for v in vs.iter() {
@@ -175,10 +172,10 @@ macro_rules! from_sql_vec_impl {
 }
 
 from_sql_vec_impl! {
-    &'a str: String => |v| v.as_str(),
-    String: String => |v| v.as_string(),
-    Date<Tz>: Date => |z| Ok(z.into()),
-    DateTime<Tz>: DateTime => |z| Ok(z.into())
+    &'a str: SqlType::String => |v| v.as_str(),
+    String: SqlType::String => |v| v.as_string(),
+    Date<Tz>: SqlType::Date => |z| Ok(z.into()),
+    DateTime<Tz>: SqlType::DateTime(_) => |z| Ok(z.into())
 }
 
 impl<'a> FromSql<'a> for Vec<u8> {
@@ -280,6 +277,10 @@ impl<'a> FromSql<'a> for DateTime<Tz> {
             ValueRef::DateTime(v, tz) => {
                 let time = tz.timestamp(i64::from(v), 0);
                 Ok(time)
+            }
+            ValueRef::DateTime64(v, params) => {
+                let (precision, tz) = *params;
+                Ok(to_datetime(v, precision, tz))
             }
             _ => {
                 let from = SqlType::from(value).to_string();

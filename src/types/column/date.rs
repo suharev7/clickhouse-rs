@@ -12,7 +12,7 @@ use crate::{
         list::List,
         nullable::NullableColumnData,
         numeric::save_data,
-        BoxColumnWrapper, ColumnFrom, ColumnWrapper, Either,
+        ArcColumnWrapper, ColumnFrom, ColumnWrapper, Either,
     },
     types::{DateConverter, Marshal, SqlType, StatBuffer, Unmarshal, Value, ValueRef},
 };
@@ -68,18 +68,6 @@ where
     }
 }
 
-impl ColumnFrom for Vec<DateTime<Tz>> {
-    fn column_from<W: ColumnWrapper>(source: Self) -> W::Wrapper {
-        let mut data = List::<u32>::with_capacity(source.len());
-        for s in source {
-            data.push(s.timestamp() as u32);
-        }
-
-        let column: DateColumnData<u32> = DateColumnData { data, tz: Tz::Zulu };
-        W::wrap(column)
-    }
-}
-
 impl ColumnFrom for Vec<Date<Tz>> {
     fn column_from<W: ColumnWrapper>(source: Self) -> W::Wrapper {
         let mut data = List::<u16>::with_capacity(source.len());
@@ -95,7 +83,7 @@ impl ColumnFrom for Vec<Date<Tz>> {
 impl ColumnFrom for Vec<Vec<Date<Tz>>> {
     fn column_from<W: ColumnWrapper>(source: Self) -> W::Wrapper {
         let fake: Vec<Date<Tz>> = Vec::with_capacity(source.len());
-        let inner = Vec::column_from::<BoxColumnWrapper>(fake);
+        let inner = Vec::column_from::<ArcColumnWrapper>(fake);
         let sql_type = inner.sql_type();
 
         let mut data = ArrayColumnData {
@@ -120,7 +108,7 @@ impl ColumnFrom for Vec<Vec<Date<Tz>>> {
 impl ColumnFrom for Vec<Vec<DateTime<Tz>>> {
     fn column_from<W: ColumnWrapper>(source: Self) -> W::Wrapper {
         let fake: Vec<DateTime<Tz>> = Vec::with_capacity(source.len());
-        let inner = Vec::column_from::<BoxColumnWrapper>(fake);
+        let inner = Vec::column_from::<ArcColumnWrapper>(fake);
         let sql_type = inner.sql_type();
 
         let mut data = ArrayColumnData {
@@ -141,34 +129,10 @@ impl ColumnFrom for Vec<Vec<DateTime<Tz>>> {
     }
 }
 
-impl ColumnFrom for Vec<Option<DateTime<Tz>>> {
-    fn column_from<W: ColumnWrapper>(source: Self) -> <W as ColumnWrapper>::Wrapper {
-        let fake: Vec<DateTime<Tz>> = Vec::with_capacity(source.len());
-        let inner = Vec::column_from::<BoxColumnWrapper>(fake);
-
-        let mut data = NullableColumnData {
-            inner,
-            nulls: Vec::with_capacity(source.len()),
-        };
-
-        for value in source {
-            match value {
-                None => data.push(Value::Nullable(Either::Left(SqlType::DateTime.into()))),
-                Some(d) => {
-                    let value = Value::DateTime(d.timestamp() as u32, d.timezone());
-                    data.push(Value::Nullable(Either::Right(Box::new(value))))
-                }
-            }
-        }
-
-        W::wrap(data)
-    }
-}
-
 impl ColumnFrom for Vec<Option<Date<Tz>>> {
     fn column_from<W: ColumnWrapper>(source: Self) -> <W as ColumnWrapper>::Wrapper {
         let fake: Vec<Date<Tz>> = Vec::with_capacity(source.len());
-        let inner = Vec::column_from::<BoxColumnWrapper>(fake);
+        let inner = Vec::column_from::<ArcColumnWrapper>(fake);
 
         let mut data = NullableColumnData {
             inner,
@@ -264,6 +228,5 @@ mod test {
         let column =
             Vec::column_from::<ArcColumnWrapper>(vec![tz.ymd(2016, 10, 22).and_hms(12, 0, 0)]);
         assert_eq!("2016-10-22 12:00:00", format!("{}", column.at(0)));
-        assert_eq!(SqlType::DateTime, column.sql_type());
     }
 }

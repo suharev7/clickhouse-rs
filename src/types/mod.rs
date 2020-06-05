@@ -1,5 +1,6 @@
 use std::{borrow::Cow, collections::HashMap, fmt, sync::Mutex};
 
+use chrono::prelude::*;
 use chrono_tz::Tz;
 use hostname::get;
 
@@ -170,6 +171,46 @@ impl<S> Packet<S> {
     }
 }
 
+pub trait HasSqlType {
+    fn get_sql_type() -> SqlType;
+}
+
+macro_rules! has_sql_type {
+    ( $( $t:ty : $k:expr ),* ) => {
+        $(
+            impl HasSqlType for $t {
+                fn get_sql_type() -> SqlType {
+                    $k
+                }
+            }
+        )*
+    };
+}
+
+has_sql_type! {
+    u8: SqlType::UInt8,
+    u16: SqlType::UInt16,
+    u32: SqlType::UInt32,
+    u64: SqlType::UInt64,
+    i8: SqlType::Int8,
+    i16: SqlType::Int16,
+    i32: SqlType::Int32,
+    i64: SqlType::Int64,
+    &str: SqlType::String,
+    String: SqlType::String,
+    f32: SqlType::Float32,
+    f64: SqlType::Float64,
+    Date<Tz>: SqlType::Date,
+    DateTime<Tz>: SqlType::DateTime(DateTimeType::DateTime32)
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub enum DateTimeType {
+    DateTime32,
+    DateTime64(u32, Tz),
+    Chrono
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum SqlType {
     UInt8,
@@ -185,7 +226,7 @@ pub enum SqlType {
     Float32,
     Float64,
     Date,
-    DateTime,
+    DateTime(DateTimeType),
     Ipv4,
     Ipv6,
     Uuid,
@@ -215,7 +256,6 @@ impl From<SqlType> for &'static SqlType {
             SqlType::Float32 => &SqlType::Float32,
             SqlType::Float64 => &SqlType::Float64,
             SqlType::Date => &SqlType::Date,
-            SqlType::DateTime => &SqlType::DateTime,
             _ => {
                 let mut guard = TYPES_CACHE.lock().unwrap();
                 loop {
@@ -230,6 +270,13 @@ impl From<SqlType> for &'static SqlType {
 }
 
 impl SqlType {
+    pub(crate) fn is_datetime(&self) -> bool {
+        match self {
+            SqlType::DateTime(_) => true,
+            _ => false,
+        }
+    }
+
     pub fn to_string(&self) -> Cow<'static, str> {
         match self.clone() {
             SqlType::UInt8 => "UInt8".into(),
@@ -245,7 +292,8 @@ impl SqlType {
             SqlType::Float32 => "Float32".into(),
             SqlType::Float64 => "Float64".into(),
             SqlType::Date => "Date".into(),
-            SqlType::DateTime => "DateTime".into(),
+            SqlType::DateTime(DateTimeType::DateTime64(precision, tz)) => format!("DateTime64({}, '{:?}')", precision, tz).into(),
+            SqlType::DateTime(_) => "DateTime".into(),
             SqlType::Ipv4 => "IPv4".into(),
             SqlType::Ipv6 => "IPv6".into(),
             SqlType::Uuid => "UUID".into(),

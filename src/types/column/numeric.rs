@@ -5,9 +5,9 @@ use crate::{
     errors::Result,
     types::{
         column::{
-            array::ArrayColumnData, nullable::NullableColumnData, BoxColumnWrapper, ColumnWrapper,
+            array::ArrayColumnData, nullable::NullableColumnData, ArcColumnWrapper, ColumnWrapper,
         },
-        Marshal, SqlType, StatBuffer, Unmarshal, Value, ValueRef,
+        Marshal, SqlType, StatBuffer, Unmarshal, Value, ValueRef, HasSqlType,
     },
 };
 
@@ -26,7 +26,7 @@ where
         + convert::Into<Value>
         + convert::From<Value>
         + Sync
-        + Default
+        + HasSqlType
         + 'static,
 {
     pub(crate) data: List<T>,
@@ -42,7 +42,7 @@ where
         + convert::From<Value>
         + Send
         + Sync
-        + Default
+        + HasSqlType
         + 'static,
 {
     fn column_from<W: ColumnWrapper>(source: Self) -> W::Wrapper {
@@ -66,11 +66,12 @@ where
         + Send
         + Sync
         + Default
+        + HasSqlType
         + 'static,
 {
     fn column_from<W: ColumnWrapper>(source: Self) -> W::Wrapper {
         let fake: Vec<T> = Vec::with_capacity(source.len());
-        let inner = Vec::column_from::<BoxColumnWrapper>(fake);
+        let inner = Vec::column_from::<ArcColumnWrapper>(fake);
 
         let mut data = NullableColumnData {
             inner,
@@ -96,12 +97,12 @@ where
         + convert::From<Value>
         + Send
         + Sync
-        + Default
+        + HasSqlType
         + 'static,
 {
     fn column_from<W: ColumnWrapper>(source: Self) -> W::Wrapper {
         let fake: Vec<T> = Vec::with_capacity(source.len());
-        let inner = Vec::column_from::<BoxColumnWrapper>(fake);
+        let inner = Vec::column_from::<ArcColumnWrapper>(fake);
         let sql_type = inner.sql_type();
 
         let mut data = ArrayColumnData {
@@ -128,7 +129,7 @@ where
         + convert::From<Value>
         + Send
         + Sync
-        + Default
+        + HasSqlType
         + 'static,
 {
     let mut inner = Vec::with_capacity(vs.len());
@@ -148,7 +149,7 @@ where
         + convert::Into<Value>
         + convert::From<Value>
         + Sync
-        + Default
+        + HasSqlType
         + 'static,
 {
     pub(crate) fn with_capacity(capacity: usize) -> VectorColumnData<T> {
@@ -177,7 +178,7 @@ where
         + convert::From<Value>
         + Send
         + Sync
-        + Default
+        + HasSqlType
         + 'static,
 {
     fn sql_type(&self) -> SqlType {

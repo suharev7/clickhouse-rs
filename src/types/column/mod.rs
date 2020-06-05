@@ -31,6 +31,8 @@ mod chunk;
 mod column_data;
 mod concat;
 mod date;
+pub(crate) mod datetime64;
+pub(crate) mod chrono_datetime;
 mod decimal;
 mod enums;
 mod factory;
@@ -410,10 +412,21 @@ impl<K: ColumnType> Column<K> {
                     _marker: marker::PhantomData,
                 })
             }
-            _ => Err(Error::FromSql(FromSqlError::InvalidType {
-                src: src_type.to_string(),
-                dst: dst_type.to_string(),
-            })),
+            _ => {
+                if let Some(data) = self.data.cast_to(&self.data, &dst_type) {
+                    let name = self.name().to_owned();
+                    Ok(Column {
+                        name,
+                        data,
+                        _marker: marker::PhantomData,
+                    })
+                } else {
+                    Err(Error::FromSql(FromSqlError::InvalidType {
+                        src: src_type.to_string(),
+                        dst: dst_type.to_string(),
+                    }))
+                }
+            },
         }
     }
 

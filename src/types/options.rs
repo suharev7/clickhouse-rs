@@ -563,7 +563,7 @@ fn parse_compression(source: &str) -> std::result::Result<bool, ()> {
 
 fn parse_hosts(source: &str) -> std::result::Result<Vec<Url>, ()> {
     let mut result = Vec::new();
-    for host in source.split(",") {
+    for host in source.split(',') {
         match Url::from_str(&format!("tcp://{}", host)) {
             Ok(url) => result.push(url),
             Err(_) => return Err(()),

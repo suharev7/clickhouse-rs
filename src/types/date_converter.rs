@@ -1,7 +1,7 @@
 use chrono::{prelude::*, Date};
 use chrono_tz::Tz;
 
-use crate::types::{SqlType, Value, ValueRef};
+use crate::types::{SqlType, Value, ValueRef, DateTimeType};
 
 pub trait DateConverter {
     fn to_date(&self, tz: Tz) -> ValueRef<'static>;
@@ -39,6 +39,6 @@ impl DateConverter for u32 {
     }
 
     fn date_type() -> SqlType {
-        SqlType::DateTime
+        SqlType::DateTime(DateTimeType::DateTime32)
     }
 }

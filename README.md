@@ -57,6 +57,8 @@ parameters:
 - `retry_timeout` - Amount of time to wait before next retry. (defaults to `5 sec`).
 - `ping_timeout` - Timeout for ping (defaults to `500 ms`).
 
+- `alt_hosts` - Comma separated list of single address host for load-balancing.
+
 example:
 ```url
 tcp://user:password@host:9000/clicks?compression=lz4&ping_timeout=42ms

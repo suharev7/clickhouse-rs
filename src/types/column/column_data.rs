@@ -22,6 +22,10 @@ pub trait ColumnData {
     unsafe fn get_internal(&self, _pointers: &[*mut *const u8], _level: u8) -> Result<()> {
         Err(Error::FromSql(FromSqlError::UnsupportedOperation))
     }
+
+    fn cast_to(&self, _this: &ArcColumnData, _target: &SqlType) -> Option<ArcColumnData> {
+        None
+    }
 }
 
 pub(crate) trait ColumnDataExt {

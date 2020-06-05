@@ -3,14 +3,14 @@ use std::{convert, fmt, str, sync::Arc, net::{Ipv4Addr, Ipv6Addr}};
 use chrono::prelude::*;
 use chrono_tz::Tz;
 
-use crate::types::{Enum16, Enum8};
 use crate::{
     errors::{Error, FromSqlError, Result},
     types::{
-        column::Either,
+        Enum8, Enum16,
+        column::{Either, datetime64::to_datetime},
         decimal::Decimal,
         value::{AppDate, AppDateTime},
-        SqlType, Value,
+        SqlType, DateTimeType, Value,
     },
 };
 
@@ -31,6 +31,7 @@ pub enum ValueRef<'a> {
     Float64(f64),
     Date(u16, Tz),
     DateTime(u32, Tz),
+    DateTime64(i64, &'a (u32, Tz)),
     Nullable(Either<&'static SqlType, Box<ValueRef<'a>>>),
     Array(&'static SqlType, Arc<Vec<ValueRef<'a>>>),
     Decimal(Decimal),
@@ -70,6 +71,15 @@ impl<'a> PartialEq for ValueRef<'a> {
             (ValueRef::Decimal(a), ValueRef::Decimal(b)) => *a == *b,
             (ValueRef::Enum8(a0, a1), ValueRef::Enum8(b0, b1)) => *a1 == *b1 && *a0 == *b0,
             (ValueRef::Enum16(a0, a1), ValueRef::Enum16(b0, b1)) => *a1 == *b1 && *a0 == *b0,
+            (ValueRef::DateTime64(this, this_params), ValueRef::DateTime64(that, that_params)) => {
+                let (this_precision, this_tz) = **this_params;
+                let (that_precision2, that_tz) = **that_params;
+
+                let this_time = to_datetime(*this, this_precision, this_tz);
+                let that_time = to_datetime(*that, that_precision2, that_tz);
+
+                this_time == that_time
+            }
             _ => false,
         }
     }
@@ -108,7 +118,12 @@ impl<'a> fmt::Display for ValueRef<'a> {
             }
             ValueRef::DateTime(u, tz) => {
                 let time = tz.timestamp(i64::from(*u), 0);
-                fmt::Display::fmt(&time, f)
+                fmt::Display::fmt(&time.format("%Y-%m-%d %H:%M:%S"), f)
+            }
+            ValueRef::DateTime64(u, params) => {
+                let (precision, tz) = **params;
+                let time = to_datetime(*u, precision, tz);
+                fmt::Display::fmt(&time.format("%Y-%m-%d %H:%M:%S"), f)
             }
             ValueRef::Nullable(v) => match v {
                 Either::Left(_) => write!(f, "NULL"),
@@ -152,10 +167,10 @@ impl<'a> convert::From<ValueRef<'a>> for SqlType {
             ValueRef::Float32(_) => SqlType::Float32,
             ValueRef::Float64(_) => SqlType::Float64,
             ValueRef::Date(_, _) => SqlType::Date,
-            ValueRef::DateTime(_, _) => SqlType::DateTime,
+            ValueRef::DateTime(_, _) => SqlType::DateTime(DateTimeType::DateTime32),
             ValueRef::Nullable(u) => match u {
-                Either::Left(sql_type) => sql_type.to_owned(),
-                Either::Right(value_ref) => SqlType::from(*value_ref),
+                Either::Left(sql_type) => SqlType::Nullable(sql_type),
+                Either::Right(value_ref) => SqlType::Nullable(SqlType::from(*value_ref).into()),
             },
             ValueRef::Array(t, _) => SqlType::Array(t),
             ValueRef::Decimal(v) => SqlType::Decimal(v.precision, v.scale),
@@ -164,6 +179,10 @@ impl<'a> convert::From<ValueRef<'a>> for SqlType {
             ValueRef::Ipv4(_) => SqlType::Ipv4,
             ValueRef::Ipv6(_) => SqlType::Ipv6,
             ValueRef::Uuid(_) => SqlType::Uuid,
+            ValueRef::DateTime64(_, params) => {
+                let (precision, tz) = params;
+                SqlType::DateTime(DateTimeType::DateTime64(*precision, *tz))
+            }
         }
     }
 }
@@ -234,6 +253,7 @@ impl<'a> From<ValueRef<'a>> for Value {
             ValueRef::Ipv4(v) => Value::Ipv4(v),
             ValueRef::Ipv6(v) => Value::Ipv6(v),
             ValueRef::Uuid(v) => Value::Uuid(v),
+            ValueRef::DateTime64(v, params) => Value::DateTime64(v, *params),
         }
     }
 }
@@ -293,6 +313,7 @@ impl<'a> From<&'a Value> for ValueRef<'a> {
             Value::Float64(v) => ValueRef::Float64(*v),
             Value::Date(v, tz) => ValueRef::Date(*v, *tz),
             Value::DateTime(v, tz) => ValueRef::DateTime(*v, *tz),
+            Value::DateTime64(v, params) => ValueRef::DateTime64(*v, params),
             Value::Nullable(u) => match u {
                 Either::Left(sql_type) => ValueRef::Nullable(Either::Left(sql_type.to_owned())),
                 Either::Right(v) => {
@@ -348,12 +369,17 @@ impl<'a> From<ValueRef<'a>> for AppDate {
 
 impl<'a> From<ValueRef<'a>> for AppDateTime {
     fn from(value: ValueRef<'a>) -> Self {
-        if let ValueRef::DateTime(x, tz) = value {
-            let time = tz.timestamp(i64::from(x), 0);
-            return time;
+        match value {
+            ValueRef::DateTime(x, tz) => tz.timestamp(i64::from(x), 0),
+            ValueRef::DateTime64(x, params) => {
+                let (precision, tz) = *params;
+                to_datetime(x, precision, tz)
+            },
+            _ => {
+                let from = format!("{}", SqlType::from(value.clone()));
+                panic!("Can't convert ValueRef::{} into {}.", from, "DateTime<Tz>")
+            }
         }
-        let from = format!("{}", SqlType::from(value.clone()));
-        panic!("Can't convert ValueRef::{} into {}.", from, stringify!($t))
     }
 }
 
@@ -384,11 +410,178 @@ mod test {
         );
 
         assert_eq!("text".to_string(), format!("{}", ValueRef::String(b"text")));
+
+        assert_eq!("42".to_string(), format!("{}", ValueRef::UInt8(42)));
+        assert_eq!("42".to_string(), format!("{}", ValueRef::UInt16(42)));
+        assert_eq!("42".to_string(), format!("{}", ValueRef::UInt32(42)));
+        assert_eq!("42".to_string(), format!("{}", ValueRef::UInt64(42)));
+
+        assert_eq!("42".to_string(), format!("{}", ValueRef::Int8(42)));
+        assert_eq!("42".to_string(), format!("{}", ValueRef::Int16(42)));
+        assert_eq!("42".to_string(), format!("{}", ValueRef::Int32(42)));
+        assert_eq!("42".to_string(), format!("{}", ValueRef::Int64(42)));
+
+        assert_eq!("42".to_string(), format!("{}", ValueRef::Float32(42.0)));
+        assert_eq!("42".to_string(), format!("{}", ValueRef::Float64(42.0)));
+
+        assert_eq!(
+            "NULL".to_string(),
+            format!(
+                "{}",
+                ValueRef::Nullable(Either::Left(SqlType::UInt8.into()))
+            )
+        );
+
+        assert_eq!(
+            "42".to_string(),
+            format!(
+                "{}",
+                ValueRef::Nullable(Either::Right(Box::new(ValueRef::UInt8(42))))
+            )
+        );
+
+        assert_eq!(
+            "[1, 2, 3]".to_string(),
+            format!(
+                "{}",
+                ValueRef::Array(
+                    SqlType::Int32.into(),
+                    Arc::new(vec![
+                        ValueRef::Int32(1),
+                        ValueRef::Int32(2),
+                        ValueRef::Int32(3)
+                    ])
+                )
+            )
+        );
+
+        assert_eq!(
+            "1970-01-01".to_string(),
+            format!("{}", ValueRef::Date(0, Tz::Zulu))
+        );
+
+        assert_eq!(
+            "1970-01-01UTC".to_string(),
+            format!("{:#}", ValueRef::Date(0, Tz::Zulu))
+        );
+
+        assert_eq!(
+            "1970-01-01 00:00:00".to_string(),
+            format!("{}", ValueRef::DateTime(0, Tz::Zulu))
+        );
+
+        assert_eq!(
+            "Thu, 01 Jan 1970 00:00:00 +0000".to_string(),
+            format!("{:#}", ValueRef::DateTime(0, Tz::Zulu))
+        );
+
+        assert_eq!(
+            "2.00".to_string(),
+            format!("{}", ValueRef::Decimal(Decimal::of(2.0_f64, 2)))
+        )
     }
 
     #[test]
     fn test_size_of() {
         use std::mem;
         assert_eq!(32, mem::size_of::<[ValueRef<'_>; 1]>());
+    }
+
+    #[test]
+    fn test_value_from_ref() {
+        assert_eq!(Value::from(ValueRef::UInt8(42)), Value::UInt8(42));
+        assert_eq!(Value::from(ValueRef::UInt16(42)), Value::UInt16(42));
+        assert_eq!(Value::from(ValueRef::UInt32(42)), Value::UInt32(42));
+        assert_eq!(Value::from(ValueRef::UInt64(42)), Value::UInt64(42));
+
+        assert_eq!(Value::from(ValueRef::Int8(42)), Value::Int8(42));
+        assert_eq!(Value::from(ValueRef::Int16(42)), Value::Int16(42));
+        assert_eq!(Value::from(ValueRef::Int32(42)), Value::Int32(42));
+        assert_eq!(Value::from(ValueRef::Int64(42)), Value::Int64(42));
+
+        assert_eq!(Value::from(ValueRef::Float32(42.0)), Value::Float32(42.0));
+        assert_eq!(Value::from(ValueRef::Float64(42.0)), Value::Float64(42.0));
+
+        assert_eq!(
+            Value::from(ValueRef::Date(42, Tz::Zulu)),
+            Value::Date(42, Tz::Zulu)
+        );
+        assert_eq!(
+            Value::from(ValueRef::DateTime(42, Tz::Zulu)),
+            Value::DateTime(42, Tz::Zulu)
+        );
+
+        assert_eq!(
+            Value::from(ValueRef::Decimal(Decimal::of(2.0_f64, 4))),
+            Value::Decimal(Decimal::of(2.0_f64, 4))
+        );
+
+        assert_eq!(
+            Value::from(ValueRef::Array(
+                SqlType::Int32.into(),
+                Arc::new(vec![
+                    ValueRef::Int32(1),
+                    ValueRef::Int32(2),
+                    ValueRef::Int32(3)
+                ])
+            )),
+            Value::Array(
+                SqlType::Int32.into(),
+                Arc::new(vec![Value::Int32(1), Value::Int32(2), Value::Int32(3)])
+            )
+        )
+    }
+
+    #[test]
+    fn test_get_sql_type() {
+        assert_eq!(SqlType::from(ValueRef::UInt8(42)), SqlType::UInt8);
+        assert_eq!(SqlType::from(ValueRef::UInt16(42)), SqlType::UInt16);
+        assert_eq!(SqlType::from(ValueRef::UInt32(42)), SqlType::UInt32);
+        assert_eq!(SqlType::from(ValueRef::UInt64(42)), SqlType::UInt64);
+
+        assert_eq!(SqlType::from(ValueRef::Int8(42)), SqlType::Int8);
+        assert_eq!(SqlType::from(ValueRef::Int16(42)), SqlType::Int16);
+        assert_eq!(SqlType::from(ValueRef::Int32(42)), SqlType::Int32);
+        assert_eq!(SqlType::from(ValueRef::Int64(42)), SqlType::Int64);
+
+        assert_eq!(SqlType::from(ValueRef::Float32(42.0)), SqlType::Float32);
+        assert_eq!(SqlType::from(ValueRef::Float64(42.0)), SqlType::Float64);
+
+        assert_eq!(SqlType::from(ValueRef::String(&[])), SqlType::String);
+
+        assert_eq!(SqlType::from(ValueRef::Date(42, Tz::Zulu)), SqlType::Date);
+        assert_eq!(
+            SqlType::from(ValueRef::DateTime(42, Tz::Zulu)),
+            SqlType::DateTime(DateTimeType::DateTime32)
+        );
+
+        assert_eq!(
+            SqlType::from(ValueRef::Decimal(Decimal::of(2.0_f64, 4))),
+            SqlType::Decimal(18, 4)
+        );
+
+        assert_eq!(
+            SqlType::from(ValueRef::Array(
+                SqlType::Int32.into(),
+                Arc::new(vec![
+                    ValueRef::Int32(1),
+                    ValueRef::Int32(2),
+                    ValueRef::Int32(3)
+                ])
+            )),
+            SqlType::Array(SqlType::Int32.into())
+        );
+
+        assert_eq!(
+            SqlType::from(ValueRef::Nullable(Either::Left(SqlType::UInt8.into()))),
+            SqlType::Nullable(SqlType::UInt8.into())
+        );
+
+        assert_eq!(
+            SqlType::from(ValueRef::Nullable(Either::Right(Box::new(ValueRef::Int8(
+                42
+            ))))),
+            SqlType::Nullable(SqlType::Int8.into())
+        );
     }
 }

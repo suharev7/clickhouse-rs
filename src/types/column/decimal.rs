@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use chrono_tz::Tz;
 
 use crate::{
@@ -128,7 +129,7 @@ impl ColumnFrom for Vec<Option<Decimal>> {
 
         W::wrap(NullableColumnData {
             nulls,
-            inner: Box::new(inner),
+            inner: Arc::new(inner),
         })
     }
 }

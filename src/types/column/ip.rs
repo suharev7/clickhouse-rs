@@ -1,6 +1,7 @@
 use std::{
     marker::PhantomData,
     net::{Ipv4Addr, Ipv6Addr},
+    sync::Arc,
 };
 
 use crate::{
@@ -175,7 +176,7 @@ impl ColumnFrom for Vec<Option<Ipv4Addr>> {
             }
         }
 
-        let inner = Box::new(IpColumnData::<Ipv4> {
+        let inner = Arc::new(IpColumnData::<Ipv4> {
             inner,
             phantom: PhantomData,
         });
@@ -205,7 +206,7 @@ impl ColumnFrom for Vec<Option<Ipv6Addr>> {
             }
         }
 
-        let inner = Box::new(IpColumnData::<Ipv6> {
+        let inner = Arc::new(IpColumnData::<Ipv6> {
             inner,
             phantom: PhantomData,
         });
@@ -235,7 +236,7 @@ impl ColumnFrom for Vec<Option<uuid::Uuid>> {
             }
         }
 
-        let inner = Box::new(IpColumnData::<Uuid> {
+        let inner = Arc::new(IpColumnData::<Uuid> {
             inner,
             phantom: PhantomData,
         });

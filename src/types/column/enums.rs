@@ -1,15 +1,15 @@
+use std::sync::Arc;
 use chrono_tz::Tz;
 
-use crate::types::column::Either;
-use crate::types::enums::{Enum16, Enum8};
 use crate::{
     binary::{Encoder, ReadEx},
     errors::Result,
     types::{
+        enums::{Enum16, Enum8},
         column::{
             column_data::BoxColumnData, column_data::ColumnData, list::List,
             nullable::NullableColumnData, BoxColumnWrapper, ColumnFrom, ColumnWrapper,
-            VectorColumnData,
+            VectorColumnData, Either,
         },
         from_sql::FromSql,
         Column, ColumnType, SqlType, Value, ValueRef,
@@ -206,7 +206,7 @@ impl ColumnFrom for Vec<Option<Enum16>> {
 
         W::wrap(NullableColumnData {
             nulls,
-            inner: Box::new(inner),
+            inner: Arc::new(inner),
         })
     }
 }
@@ -402,7 +402,7 @@ impl ColumnFrom for Vec<Option<Enum8>> {
 
         W::wrap(NullableColumnData {
             nulls,
-            inner: Box::new(inner),
+            inner: Arc::new(inner),
         })
     }
 }

@@ -6,13 +6,13 @@ use crate::{
     binary::{Encoder, ReadEx},
     errors::Result,
     types::{
-        column::{column_data::BoxColumnData, list::List, BoxColumnWrapper, ColumnData},
+        column::{column_data::{BoxColumnData, ArcColumnData}, list::List, ArcColumnWrapper, ColumnData},
         SqlType, Value, ValueRef,
     },
 };
 
 pub(crate) struct ArrayColumnData {
-    pub(crate) inner: Box<dyn ColumnData + Send + Sync>,
+    pub(crate) inner: ArcColumnData,
     pub(crate) offsets: List<u64>,
 }
 
@@ -31,7 +31,7 @@ impl ArrayColumnData {
             0 => 0,
             _ => offsets.at(rows - 1) as usize,
         };
-        let inner = ColumnData::load_data::<BoxColumnWrapper, _>(reader, type_name, size, tz)?;
+        let inner = ColumnData::load_data::<ArcColumnWrapper, _>(reader, type_name, size, tz)?;
 
         Ok(ArrayColumnData { inner, offsets })
     }
@@ -67,9 +67,10 @@ impl ColumnData for ArrayColumnData {
                 self.offsets.at(offsets_len - 1) as usize
             };
 
+            let inner_column = Arc::get_mut(&mut self.inner).unwrap();
             self.offsets.push((prev + vs.len()) as u64);
             for v in vs.iter() {
-                self.inner.push(v.clone());
+                inner_column.push(v.clone());
             }
         } else {
             panic!("value should be an array")
@@ -95,7 +96,7 @@ impl ColumnData for ArrayColumnData {
 
     fn clone_instance(&self) -> BoxColumnData {
         Box::new(Self {
-            inner: self.inner.clone_instance(),
+            inner: self.inner.clone(),
             offsets: self.offsets.clone(),
         })
     }
@@ -108,6 +109,18 @@ impl ColumnData for ArrayColumnData {
         } else {
             self.inner.get_internal(pointers, level)
         }
+    }
+
+    fn cast_to(&self, _this: &ArcColumnData, target: &SqlType) -> Option<ArcColumnData> {
+        if let SqlType::Array(inner_target) = target {
+            if let Some(inner) = self.inner.cast_to(&self.inner, inner_target) {
+                return Some(Arc::new(ArrayColumnData {
+                    inner,
+                    offsets: self.offsets.clone()
+                }))
+            }
+        }
+        None
     }
 }
 

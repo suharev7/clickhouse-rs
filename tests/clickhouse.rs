@@ -106,6 +106,7 @@ async fn test_insert() -> Result<(), Error> {
                string  String,
                date    Date,
                datetime DateTime,
+               datetime64 DateTime64(3, 'UTC'),
                ipv4 IPv4,
                ipv6 IPv6,
                ipv4str IPv4,
@@ -139,6 +140,18 @@ async fn test_insert() -> Result<(), Error> {
         )
         .column(
             "datetime",
+            vec![
+                UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
+                UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
+                UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
+                UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
+                UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
+                UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
+                UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
+            ],
+        )
+        .column(
+            "datetime64",
             vec![
                 UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
                 UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
@@ -556,22 +569,23 @@ async fn test_big_block() -> Result<(), Error> {
 async fn test_nullable() -> Result<(), Error> {
     let ddl = "
         CREATE TABLE clickhouse_test_nullable (
-            int8     Nullable(Int8),
-            int16    Nullable(Int16),
-            int32    Nullable(Int32),
-            int64    Nullable(Int64),
-            uint8    Nullable(UInt8),
-            uint16   Nullable(UInt16),
-            uint32   Nullable(UInt32),
-            uint64   Nullable(UInt64),
-            float32  Nullable(Float32),
-            float64  Nullable(Float64),
-            string   Nullable(String),
-            date     Nullable(Date),
-            datetime Nullable(DateTime),
-            ipv4     Nullable(IPv4),
-            ipv6     Nullable(IPv6),
-            uuid     Nullable(UUID)
+            int8       Nullable(Int8),
+            int16      Nullable(Int16),
+            int32      Nullable(Int32),
+            int64      Nullable(Int64),
+            uint8      Nullable(UInt8),
+            uint16     Nullable(UInt16),
+            uint32     Nullable(UInt32),
+            uint64     Nullable(UInt64),
+            float32    Nullable(Float32),
+            float64    Nullable(Float64),
+            string     Nullable(String),
+            date       Nullable(Date),
+            datetime   Nullable(DateTime),
+            datetime64 Nullable(DateTime64(3, 'UTC')),
+            ipv4       Nullable(IPv4),
+            ipv6       Nullable(IPv6),
+            uuid       Nullable(UUID)
         ) Engine=Memory";
 
     let query = "
@@ -589,6 +603,7 @@ async fn test_nullable() -> Result<(), Error> {
             string,
             date,
             datetime,
+            datetime64,
             ipv4,
             ipv6,
             uuid
@@ -611,6 +626,7 @@ async fn test_nullable() -> Result<(), Error> {
         .column("string", vec![Some("text")])
         .column("date", vec![Some(date_value)])
         .column("datetime", vec![Some(date_time_value)])
+        .column("datetime64", vec![Some(date_time_value)])
         .column("ipv4", vec![Some(Ipv4Addr::new(127, 0, 0, 1))])
         .column(
             "ipv6",
@@ -639,6 +655,7 @@ async fn test_nullable() -> Result<(), Error> {
     let string: Option<&str> = block.get(0, "string")?;
     let date: Option<Date<Tz>> = block.get(0, "date")?;
     let datetime: Option<DateTime<Tz>> = block.get(0, "datetime")?;
+    let datetime64: Option<DateTime<Tz>> = block.get(0, "datetime64")?;
     let ipv4: Option<Ipv4Addr> = block.get(0, "ipv4")?;
     let ipv6: Option<Ipv6Addr> = block.get(0, "ipv6")?;
     let uuid: Option<Uuid> = block.get(0, "uuid")?;
@@ -656,6 +673,7 @@ async fn test_nullable() -> Result<(), Error> {
     assert_eq!(string, Some("text"));
     assert_eq!(date, Some(date_value));
     assert_eq!(datetime, Some(date_time_value));
+    assert_eq!(datetime64, Some(date_time_value));
 
     assert_eq!(ipv4, Some(Ipv4Addr::new(127, 0, 0, 1)));
     assert_eq!(
@@ -911,10 +929,11 @@ async fn test_array() -> Result<(), Error> {
             text1 Array(String),
             text2 Array(String),
             date  Array(Date),
-            time  Array(DateTime)
+            time  Array(DateTime),
+            time64  Array(DateTime64(3, 'UTC'))
         ) Engine=Memory";
 
-    let query = "SELECT u8, u32, f64, text1, text2, date, time  FROM clickhouse_array";
+    let query = "SELECT u8, u32, f64, text1, text2, date, time, time64  FROM clickhouse_array";
 
     let date_value: Date<Tz> = UTC.ymd(2016, 10, 22);
     let date_time_value: DateTime<Tz> = UTC.ymd(2014, 7, 8).and_hms(14, 0, 0);
@@ -926,7 +945,8 @@ async fn test_array() -> Result<(), Error> {
         .column("text1", vec![vec!["A"]])
         .column("text2", vec![vec!["B".to_string()]])
         .column("date", vec![vec![date_value]])
-        .column("time", vec![vec![date_time_value]]);
+        .column("time", vec![vec![date_time_value]])
+        .column("time64", vec![vec![date_time_value]]);
 
     let pool = Pool::new(database_url());
 
@@ -943,6 +963,7 @@ async fn test_array() -> Result<(), Error> {
     let text2_vec: Vec<String> = block.get(0, "text2")?;
     let date_vec: Vec<Date<Tz>> = block.get(0, "date")?;
     let time_vec: Vec<DateTime<Tz>> = block.get(0, "time")?;
+    let time64_vec: Vec<DateTime<Tz>> = block.get(0, "time64")?;
 
     assert_eq!(1, block.row_count());
     assert_eq!(vec![41_u8], u8_vec);
@@ -952,7 +973,7 @@ async fn test_array() -> Result<(), Error> {
     assert_eq!(vec!["B".to_string()], text2_vec);
     assert_eq!(vec![date_value], date_vec);
     assert_eq!(vec![date_time_value], time_vec);
-
+    assert_eq!(vec![date_time_value], time64_vec);
 
     let block = Block::new()
         .column("u8", vec![vec![41_u8]])
@@ -1035,6 +1056,7 @@ async fn test_column_iter() -> Result<(), Error> {
             opt_str   Nullable(String),
             date      Date,
             datetime  DateTime,
+            datetime64  DateTime64(3, 'UTC'),
             decimal   Decimal(8, 3),
             array     Array(UInt32),
             ipv4      IPv4,
@@ -1055,6 +1077,10 @@ async fn test_column_iter() -> Result<(), Error> {
         .column("date", vec![date_value, date_value, date_value])
         .column(
             "datetime",
+            vec![date_time_value, date_time_value, date_time_value],
+        )
+        .column(
+            "datetime64",
             vec![date_time_value, date_time_value, date_time_value],
         )
         .column(
@@ -1107,6 +1133,15 @@ async fn test_column_iter() -> Result<(), Error> {
             .collect();
         assert_eq!(
             datetime_iter,
+            vec![date_time_value, date_time_value, date_time_value]
+        );
+
+        let datetime64_iter: Vec<_> = block
+            .get_column("datetime64")?
+            .iter::<DateTime<Tz>>()?
+            .collect();
+        assert_eq!(
+            datetime64_iter,
             vec![date_time_value, date_time_value, date_time_value]
         );
 
@@ -1235,4 +1270,3 @@ async fn test_non_alphanumeric_columns() -> Result<(), Error> {
     assert_eq!(count, 1);
     Ok(())
 }
-

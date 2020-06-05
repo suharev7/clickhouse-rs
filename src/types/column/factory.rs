@@ -1,4 +1,5 @@
 use chrono_tz::Tz;
+
 use combine::{
     any,
     error::StringStreamError,
@@ -10,15 +11,25 @@ use combine::{
 use crate::{
     binary::ReadEx,
     errors::Result,
-    types::column::{
-        array::ArrayColumnData, column_data::ColumnData, date::DateColumnData,
-        decimal::DecimalColumnData, fixed_string::FixedStringColumnData, list::List,
-        nullable::NullableColumnData, numeric::VectorColumnData, string::StringColumnData,
-        ip::{IpColumnData, Ipv4, Ipv6, Uuid},
-        BoxColumnWrapper, ColumnWrapper,
-        enums::{Enum16ColumnData, Enum8ColumnData}
+    types::{
+        DateTimeType,
+        decimal::NoBits,
+        column::{
+            array::ArrayColumnData,
+            column_data::ColumnData,
+            date::DateColumnData,
+            datetime64::DateTime64ColumnData,
+            decimal::DecimalColumnData,
+            fixed_string::FixedStringColumnData,
+            ip::{IpColumnData, Ipv4, Ipv6, Uuid},
+            list::List,
+            nullable::NullableColumnData,
+            numeric::VectorColumnData,
+            string::StringColumnData,
+            BoxColumnWrapper, ArcColumnWrapper, ColumnWrapper,
+            enums::{Enum16ColumnData, Enum8ColumnData}
+        }
     },
-    types::decimal::NoBits,
     SqlType,
 };
 
@@ -78,6 +89,9 @@ impl dyn ColumnData {
                     W::wrap(Enum8ColumnData::load(reader, items, size, tz)?)
                 } else if let Some(items) = parse_enum16(type_name) {
                     W::wrap(Enum16ColumnData::load(reader, items, size, tz)?)
+                } else if let Some((precision, timezone)) = parse_date_time64(type_name) {
+                    let column_timezone = get_timezone(&timezone, tz)?;
+                    W::wrap(DateTime64ColumnData::load(reader, size, precision, column_timezone)?)
                 } else {
                     let message = format!("Unsupported column type \"{}\".", type_name);
                     return Err(message.into());
@@ -112,13 +126,16 @@ impl dyn ColumnData {
             SqlType::Uuid => W::wrap(IpColumnData::<Uuid>::with_capacity(capacity)),
 
             SqlType::Date => W::wrap(DateColumnData::<u16>::with_capacity(capacity, timezone)),
-            SqlType::DateTime => W::wrap(DateColumnData::<u32>::with_capacity(capacity, timezone)),
+            SqlType::DateTime(DateTimeType::DateTime64(precision, timezone)) => W::wrap(
+                DateTime64ColumnData::with_capacity(capacity, precision, timezone),
+            ),
+            SqlType::DateTime(_) => W::wrap(DateColumnData::<u32>::with_capacity(capacity, timezone)),
             SqlType::Nullable(inner_type) => W::wrap(NullableColumnData {
-                inner: ColumnData::from_type::<BoxColumnWrapper>(inner_type.clone(), timezone, capacity)?,
+                inner: ColumnData::from_type::<ArcColumnWrapper>(inner_type.clone(), timezone, capacity)?,
                 nulls: Vec::new(),
             }),
             SqlType::Array(inner_type) => W::wrap(ArrayColumnData {
-                inner: ColumnData::from_type::<BoxColumnWrapper>(inner_type.clone(), timezone, capacity)?,
+                inner: ColumnData::from_type::<ArcColumnWrapper>(inner_type.clone(), timezone, capacity)?,
                 offsets: List::with_capacity(capacity),
             }),
             SqlType::Decimal(precision, scale) => {
@@ -347,6 +364,48 @@ fn parse_enum(size: EnumSize, input: &str) -> Option<Vec<(String, i16)>> {
     }
 }
 
+fn parse_date_time64(source: &str) -> Option<(u32, Option<String>)> {
+    let integer = many1::<String, _, _>(digit()).and_then(|digits| {
+        digits
+            .parse::<u32>()
+            .map_err(|_| StringStreamError::UnexpectedParse)
+    });
+
+    let word_syms = token('\\').with(any()).or(none_of("'".chars()));
+    let word = token('\'')
+        .with(many::<String, _, _>(word_syms))
+        .skip(token('\''));
+
+    let timezone = optional(spaces().skip(token(',')).skip(spaces()).with(word));
+
+    let pair = spaces()
+        .with(integer)
+        .skip(spaces())
+        .and(timezone)
+        .skip(spaces());
+
+    let mut parser = spaces()
+        .with(string("DateTime64"))
+        .skip(spaces())
+        .skip(token('('))
+        .skip(spaces())
+        .with(pair)
+        .skip(spaces())
+        .skip(token(')'));
+
+    match parser.parse(source) {
+        Ok((pair, remain)) if remain.is_empty() => Some(pair),
+        _ => None,
+    }
+}
+
+fn get_timezone(timezone: &Option<String>, tz: Tz) -> Result<Tz> {
+    match timezone {
+        None => Ok(tz),
+        Some(t) => Ok(t.parse()?),
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -522,5 +581,19 @@ mod test {
         let enum16 = "Enum16 ( , 'a' = 1)";
 
         assert!(dbg!(parse_enum16(enum16)).is_none());
+    }
+
+    #[test]
+    fn test_parse_date_time64() {
+        let source = " DateTime64 ( 3 , 'Europe/Moscow' )";
+        let res = parse_date_time64(source).unwrap();
+        assert_eq!(res, (3, Some("Europe/Moscow".to_string())))
+    }
+
+    #[test]
+    fn test_parse_date_time64_without_timezone() {
+        let source = " DateTime64( 5 )";
+        let res = parse_date_time64(source).unwrap();
+        assert_eq!(res, (5, None))
     }
 }

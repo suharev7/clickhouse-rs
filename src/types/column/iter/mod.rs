@@ -13,7 +13,7 @@ use chrono_tz::Tz;
 use crate::{
     errors::{Error, FromSqlError, Result},
     types::{
-        column::{column_data::ArcColumnData, StringPool},
+        column::{column_data::ArcColumnData, StringPool, datetime64::to_datetime},
         decimal::NoBits,
         Column, ColumnType, Complex, Decimal, Simple, SqlType,
     },
@@ -167,9 +167,13 @@ pub struct DateIterator<'a> {
     _marker: marker::PhantomData<&'a ()>,
 }
 
+enum DateTimeInnerIterator {
+    DateTime32(*const u32, *const u32),
+    DateTime64(*const i64, *const i64, u32),
+}
+
 pub struct DateTimeIterator<'a> {
-    ptr: *const u32,
-    end: *const u32,
+    inner: DateTimeInnerIterator,
     tz: Tz,
     _marker: marker::PhantomData<&'a ()>,
 }
@@ -407,25 +411,85 @@ impl<'a> DateIterator<'a> {
 impl<'a> DateTimeIterator<'a> {
     #[inline(always)]
     unsafe fn next_unchecked(&mut self) -> DateTime<Tz> {
-        let current_value = *self.ptr;
-        self.ptr = self.ptr.offset(1);
+        match &mut self.inner {
+            DateTimeInnerIterator::DateTime32(ptr, _) => {
+                let current_value = **ptr;
+                *ptr = ptr.offset(1);
+                self.tz.timestamp(i64::from(current_value), 0)
+            },
+            DateTimeInnerIterator::DateTime64(ptr, _, precision) => {
+                let current_value = **ptr;
+                *ptr = ptr.offset(1);
+                to_datetime(current_value, *precision, self.tz)
+            },
+        }
 
-        self.tz.timestamp(i64::from(current_value), 0)
     }
 
     #[inline(always)]
     fn post_inc_start(&mut self, n: usize) {
-        unsafe { self.ptr = self.ptr.add(n) }
+        match &mut self.inner {
+            DateTimeInnerIterator::DateTime32(ptr, _) => unsafe { *ptr = ptr.add(n) },
+            DateTimeInnerIterator::DateTime64(ptr, _, _) => unsafe { *ptr = ptr.add(n) },
+        }
     }
 }
 
 exact_size_iterator! { DateIterator: u16 }
 
-exact_size_iterator! { DateTimeIterator: u32 }
+impl ExactSizeIterator for DateTimeIterator<'_> {
+    #[inline(always)]
+    fn len(&self) -> usize {
+        match self.inner {
+            DateTimeInnerIterator::DateTime32(ptr, end) => (end as usize - ptr as usize) / mem::size_of::<u32>(),
+            DateTimeInnerIterator::DateTime64(ptr, end, _) => (end as usize - ptr as usize) / mem::size_of::<i64>(),
+        }
+    }
+}
 
 iterator! { DateIterator: Date<Tz> }
 
-iterator! { DateTimeIterator: DateTime<Tz> }
+impl<'a> Iterator for DateTimeIterator<'a> {
+    type Item = DateTime<Tz>;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.len() == 0 {
+            None
+        } else {
+            Some(unsafe { self.next_unchecked() })
+        }
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let exact = self.len();
+        (exact, Some(exact))
+    }
+
+    #[inline]
+    fn count(self) -> usize {
+        self.len()
+    }
+
+    #[inline]
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
+        if n >= self.len() {
+            // This iterator is now empty.
+            match &mut self.inner {
+                DateTimeInnerIterator::DateTime32(ptr, end) => *ptr = *end,
+                DateTimeInnerIterator::DateTime64(ptr, end, _) => *ptr = *end,
+            }
+            return None;
+        }
+        // We are in bounds. `post_inc_start` does the right thing even for ZSTs.
+        self.post_inc_start(n);
+        self.next()
+    }
+}
+
+
+
 
 impl<'a, I> ExactSizeIterator for NullableIterator<'a, I>
 where
@@ -682,10 +746,34 @@ impl<'a> Iterable<'a, Simple> for DateTime<Tz> {
     type Iter = DateTimeIterator<'a>;
 
     fn iter(column: &'a Column<Simple>, column_type: SqlType) -> Result<Self::Iter> {
-        let (ptr, end, tz) = date_iter(column, column_type, SqlType::DateTime)?;
+
+        match column_type {
+            SqlType::DateTime(_) => (),
+            _ => {
+                return Err(Error::FromSql(FromSqlError::InvalidType {
+                    src: column.sql_type().to_string(),
+                    dst: "DateTime<?>".into(),
+                }));
+            }
+        }
+
+        let (byte_ptr, size, tz, precision) = date_iter(column)?;
+
+        let inner = match precision {
+            None => {
+                let ptr = byte_ptr as *const u32;
+                let end = unsafe { ptr.add(size) };
+                DateTimeInnerIterator::DateTime32(ptr, end)
+            }
+            Some(precision) => {
+                let ptr = byte_ptr as *const i64;
+                let end = unsafe { ptr.add(size) };
+                DateTimeInnerIterator::DateTime64(ptr, end, precision)
+            }
+        };
+
         Ok(DateTimeIterator {
-            ptr,
-            end,
+            inner,
             tz,
             _marker: marker::PhantomData,
         })
@@ -696,7 +784,18 @@ impl<'a> Iterable<'a, Simple> for Date<Tz> {
     type Iter = DateIterator<'a>;
 
     fn iter(column: &'a Column<Simple>, column_type: SqlType) -> Result<Self::Iter> {
-        let (ptr, end, tz) = date_iter(column, column_type, SqlType::Date)?;
+
+        if column_type != SqlType::Date {
+            return Err(Error::FromSql(FromSqlError::InvalidType {
+                src: column.sql_type().to_string(),
+                dst: SqlType::Date.to_string(),
+            }));
+        };
+
+        let (byte_ptr, size, tz, precision) = date_iter(column)?;
+        assert!(precision.is_none());
+        let ptr = byte_ptr as *const u16;
+        let end = unsafe { ptr.add(size) };
         Ok(DateIterator {
             ptr,
             end,
@@ -706,37 +805,30 @@ impl<'a> Iterable<'a, Simple> for Date<Tz> {
     }
 }
 
-fn date_iter<T>(
+fn date_iter(
     column: &Column<Simple>,
-    column_type: SqlType,
-    sql_type: SqlType,
-) -> Result<(*const T, *const T, Tz)> {
-    if column_type != sql_type {
-        return Err(Error::FromSql(FromSqlError::InvalidType {
-            src: column.sql_type().to_string(),
-            dst: sql_type.to_string(),
-        }));
-    };
+) -> Result<(*const u8, usize, Tz, Option<u32>)> {
 
-    let (ptr, end, tz) = unsafe {
-        let mut ptr: *const T = ptr::null();
+    let (ptr, size, tz, precision) = unsafe {
+        let mut ptr: *const u8 = ptr::null();
         let mut tz: *const Tz = ptr::null();
         let mut size: usize = 0;
+        let mut precision: Option<u32> = None;
         column.get_internal(
             &[
-                &mut ptr as *mut *const T as *mut *const u8,
+                &mut ptr as *mut *const u8,
                 &mut tz as *mut *const Tz as *mut *const u8,
                 &mut size as *mut usize as *mut *const u8,
+                &mut precision as *mut Option<u32> as *mut *const u8,
             ],
             0,
         )?;
         assert_ne!(ptr, ptr::null());
         assert_ne!(tz, ptr::null());
-        let end = ptr.add(size);
-        (ptr, end, &*tz)
+        (ptr, size, &*tz, precision)
     };
 
-    Ok((ptr, end, *tz))
+    Ok((ptr, size, *tz, precision))
 }
 
 impl<'a, T> Iterable<'a, Simple> for Option<T>

@@ -1,12 +1,17 @@
-use std::{convert, fmt, mem, str, sync::Arc, net::{Ipv4Addr, Ipv6Addr}};
+use std::{
+    convert, fmt, mem,
+    net::{Ipv4Addr, Ipv6Addr},
+    str,
+    sync::Arc,
+};
 
 use chrono::prelude::*;
 use chrono_tz::Tz;
 
 use crate::types::{
-    column::Either,
+    column::{datetime64::to_datetime, Either},
     decimal::{Decimal, NoBits},
-    DateConverter, Enum16, Enum8, SqlType,
+    DateConverter, Enum16, Enum8, SqlType, DateTimeType, HasSqlType
 };
 
 use uuid::Uuid;
@@ -30,6 +35,7 @@ pub enum Value {
     Float64(f64),
     Date(u16, Tz),
     DateTime(u32, Tz),
+    DateTime64(i64, (u32, Tz)),
     Ipv4([u8; 4]),
     Ipv6([u8; 16]),
     Uuid([u8; 16]),
@@ -91,7 +97,10 @@ impl Value {
             SqlType::Float32 => Value::Float32(0.0),
             SqlType::Float64 => Value::Float64(0.0),
             SqlType::Date => 0_u16.to_date(Tz::Zulu).into(),
-            SqlType::DateTime => 0_u32.to_date(Tz::Zulu).into(),
+            SqlType::DateTime(DateTimeType::DateTime64(_, _)) => {
+                Value::DateTime64(0, (1, Tz::Zulu))
+            }
+            SqlType::DateTime(_) => 0_u32.to_date(Tz::Zulu).into(),
             SqlType::Nullable(inner) => Value::Nullable(Either::Left(inner)),
             SqlType::Array(inner) => Value::Array(inner, Arc::new(Vec::default())),
             SqlType::Decimal(precision, scale) => Value::Decimal(Decimal {
@@ -128,11 +137,16 @@ impl fmt::Display for Value {
             Value::Float64(ref v) => fmt::Display::fmt(v, f),
             Value::DateTime(u, tz) if f.alternate() => {
                 let time = tz.timestamp(i64::from(*u), 0);
-                write!(f, "{}", time.to_rfc2822())
+                fmt::Display::fmt(&time, f)
             }
             Value::DateTime(u, tz) => {
                 let time = tz.timestamp(i64::from(*u), 0);
-                fmt::Display::fmt(&time, f)
+                write!(f, "{}", time.to_rfc2822())
+            }
+            Value::DateTime64(value, params) => {
+                let (precision, tz) = params;
+                let time = to_datetime(*value, *precision, *tz);
+                write!(f, "{}", time.to_rfc2822())
             }
             Value::Date(v, tz) if f.alternate() => {
                 let time = tz.timestamp(i64::from(*v) * 24 * 3600, 0);
@@ -186,7 +200,7 @@ impl convert::From<Value> for SqlType {
             Value::Float32(_) => SqlType::Float32,
             Value::Float64(_) => SqlType::Float64,
             Value::Date(_, _) => SqlType::Date,
-            Value::DateTime(_, _) => SqlType::DateTime,
+            Value::DateTime(_, _) => SqlType::DateTime(DateTimeType::DateTime32),
             Value::Nullable(d) => match d {
                 Either::Left(t) => SqlType::Nullable(t),
                 Either::Right(inner) => {
@@ -201,6 +215,10 @@ impl convert::From<Value> for SqlType {
             Value::Uuid(_) => SqlType::Uuid,
             Value::Enum8(values, _) => SqlType::Enum8(values),
             Value::Enum16(values, _) => SqlType::Enum16(values),
+            Value::DateTime64(_, params) => {
+                let (precision, tz) = params;
+                SqlType::DateTime(DateTimeType::DateTime64(precision, tz))
+            },
         }
     }
 }
@@ -208,13 +226,12 @@ impl convert::From<Value> for SqlType {
 impl<T> convert::From<Option<T>> for Value
 where
     Value: convert::From<T>,
-    T: Default,
+    T: HasSqlType,
 {
     fn from(value: Option<T>) -> Value {
         match value {
             None => {
-                let default_value: Value = T::default().into();
-                let default_type: SqlType = default_value.into();
+                let default_type: SqlType = T::get_sql_type();
                 Value::Nullable(Either::Left(default_type.into()))
             }
             Some(inner) => Value::Nullable(Either::Right(Box::new(inner.into()))),
@@ -245,6 +262,7 @@ impl convert::From<Enum8> for Value {
         Value::Enum8 { 0: vec![], 1: v }
     }
 }
+
 impl convert::From<Enum16> for Value {
     fn from(v: Enum16) -> Value {
         Value::Enum16 { 0: vec![], 1: v }
@@ -354,12 +372,17 @@ impl convert::From<Value> for AppDate {
 
 impl convert::From<Value> for AppDateTime {
     fn from(v: Value) -> AppDateTime {
-        if let Value::DateTime(u, tz) = v {
-            let time = tz.timestamp(i64::from(u), 0);
-            return time;
+        match v {
+            Value::DateTime(u, tz) => tz.timestamp(i64::from(u), 0),
+            Value::DateTime64(u, params) => {
+                let (precision, tz) = params;
+                to_datetime(u, precision, tz)
+            }
+            _ => {
+                let from = SqlType::from(v);
+                panic!("Can't convert Value::{} into {}", from, "DateTime<Tz>")
+            }
         }
-        let from = SqlType::from(v);
-        panic!("Can't convert Value::{} into {}", from, "AppDateTime")
     }
 }
 
@@ -563,5 +586,25 @@ mod test {
     fn test_size_of() {
         use std::mem;
         assert_eq!(32, mem::size_of::<[Value; 1]>());
+    }
+
+    #[test]
+    fn test_from_some() {
+        assert_eq!(
+            Value::from(Some(1_u32)),
+            Value::Nullable(Either::Right(Value::UInt32(1).into()))
+        );
+        assert_eq!(
+            Value::from(Some("text")),
+            Value::Nullable(Either::Right(Value::String(b"text".to_vec().into()).into()))
+        );
+        assert_eq!(
+            Value::from(Some(3.1)),
+            Value::Nullable(Either::Right(Value::Float64(3.1).into()))
+        );
+        assert_eq!(
+            Value::from(Some(UTC.ymd(2019, 1, 1).and_hms(0, 0, 0))),
+            Value::Nullable(Either::Right(Value::DateTime(1_546_300_800, Tz::UTC).into()))
+        );
     }
 }

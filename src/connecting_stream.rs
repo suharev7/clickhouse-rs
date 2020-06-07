@@ -107,9 +107,7 @@ pub(crate) struct ConnectingStream {
 
 #[cfg(feature = "tls")]
 impl ConnectingStream {
-    pub(crate) fn new(addr: &Url, options: &Options) -> Self
-    where
-    {
+    pub(crate) fn new(addr: &Url, options: &Options) -> Self {
         match addr.socket_addrs(|| None) {
             Ok(addresses) => {
                 let streams: Vec<_> = addresses

@@ -34,7 +34,7 @@ before_install:
         export PATH=$HOME/.cargo/bin:$PATH;
       fi
 script:
-  - cargo test --all --verbose
+  - cargo test --all --verbose -- --test-threads 2
   - |
       if [ "$TRAVIS_RUST_VERSION" != "nightly" ]; then
         cargo clippy --all-targets --all-features -- -D warnings;

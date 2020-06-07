@@ -267,22 +267,30 @@ impl Client {
         };
 
         Either::Right(
-            ConnectingStream::new(&options.addr, &options)
-                .and_then(move |mut stream| {
-                    stream.set_nodelay(options.nodelay)?;
-                    stream.set_keepalive(options.keepalive)?;
+            future::lazy(move || {
+                let addr = match &pool {
+                    None => &options.addr,
+                    Some(p) => p.get_addr(),
+                };
 
-                    let transport = ClickhouseTransport::new(stream, compress, pool);
-                    Ok(ClientHandle {
-                        inner: Some(transport),
-                        context,
-                        pool: PoolBinding::None,
+                info!("try to connect to {}", addr);
+                ConnectingStream::new(addr, &options)
+                    .and_then(move |mut stream| {
+                        stream.set_nodelay(options.nodelay)?;
+                        stream.set_keepalive(options.keepalive)?;
+
+                        let transport = ClickhouseTransport::new(stream, compress, pool);
+                        Ok(ClientHandle {
+                            inner: Some(transport),
+                            context,
+                            pool: PoolBinding::None,
+                        })
                     })
-                })
-                .map_err(Into::into)
-                .and_then(ClientHandle::hello)
-                .timeout(timeout)
-                .map_err(Error::from),
+                    .map_err(Into::into)
+                    .and_then(ClientHandle::hello)
+                    .timeout(timeout)
+                    .map_err(Error::from)
+            }),
         )
     }
 }

@@ -106,7 +106,7 @@ impl Certificate {
     pub fn from_der(der: &[u8]) -> Result<Certificate> {
         let inner = match native_tls::Certificate::from_der(der) {
             Ok(certificate) => certificate,
-            Err(err) => return Err(Error::Other(err.into())),
+            Err(err) => return Err(Error::Other(err.to_string().into())),
         };
         Ok(Certificate(Arc::new(inner)))
     }
@@ -115,7 +115,7 @@ impl Certificate {
     pub fn from_pem(der: &[u8]) -> Result<Certificate> {
         let inner = match native_tls::Certificate::from_pem(der) {
             Ok(certificate) => certificate,
-            Err(err) => return Err(Error::Other(err.into())),
+            Err(err) => return Err(Error::Other(err.to_string().into())),
         };
         Ok(Certificate(Arc::new(inner)))
     }

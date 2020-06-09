@@ -1,5 +1,4 @@
-use failure::_core::cmp::Ordering;
-use std::fmt;
+use std::{fmt, cmp::Ordering};
 
 static FACTORS10: &[i64] = &[
     1,

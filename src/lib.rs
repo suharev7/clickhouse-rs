@@ -116,7 +116,6 @@ extern crate chrono;
 extern crate chrono_tz;
 extern crate clickhouse_rs_cityhash_sys;
 extern crate core;
-extern crate failure;
 #[macro_use]
 extern crate futures;
 extern crate hostname;
@@ -131,7 +130,7 @@ extern crate tokio;
 extern crate tokio_timer;
 extern crate url;
 
-use std::fmt;
+use std::{fmt, time::Duration};
 
 use futures::{Future, Stream};
 use tokio::prelude::*;
@@ -148,7 +147,6 @@ use crate::{
         OptionsSource, Packet, Query, QueryResult,
     },
 };
-use failure::_core::time::Duration;
 
 mod binary;
 mod client_info;
@@ -579,8 +577,7 @@ fn column_name_to_string(name: &str) -> Result<String, Error> {
     }
 
     if name.chars().any(|ch| ch == '`') {
-        let err = "Column name shouldn't contains backticks.".to_string();
-        return Err(Error::Other(failure::Context::new(err).into()));
+        return Err(Error::Other("Column name shouldn't contains backticks.".into()));
     }
 
     Ok(format!("`{}`", name))

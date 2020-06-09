@@ -229,7 +229,10 @@ from_sql_vec_impl! {
 
     u16: UInt16,
     u32: UInt32,
-    u64: UInt64
+    u64: UInt64,
+
+    f32: Float32,
+    f64: Float64
 }
 
 impl<'a, T> FromSql<'a> for Option<T>

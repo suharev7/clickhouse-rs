@@ -907,13 +907,14 @@ async fn test_array() -> Result<(), Error> {
         CREATE TABLE clickhouse_array (
             u8    Array(UInt8),
             u32   Array(UInt32),
+            f64   Array(Float64),
             text1 Array(String),
             text2 Array(String),
             date  Array(Date),
             time  Array(DateTime)
         ) Engine=Memory";
 
-    let query = "SELECT u8, u32, text1, text2, date, time  FROM clickhouse_array";
+    let query = "SELECT u8, u32, f64, text1, text2, date, time  FROM clickhouse_array";
 
     let date_value: Date<Tz> = UTC.ymd(2016, 10, 22);
     let date_time_value: DateTime<Tz> = UTC.ymd(2014, 7, 8).and_hms(14, 0, 0);
@@ -921,6 +922,7 @@ async fn test_array() -> Result<(), Error> {
     let block = Block::new()
         .column("u8", vec![vec![41_u8]])
         .column("u32", vec![vec![42_u32]])
+        .column("f64", vec![vec![42_f64]])
         .column("text1", vec![vec!["A"]])
         .column("text2", vec![vec!["B".to_string()]])
         .column("date", vec![vec![date_value]])
@@ -936,6 +938,7 @@ async fn test_array() -> Result<(), Error> {
 
     let u8_vec: Vec<u8> = block.get(0, "u8")?;
     let u32_vec: Vec<u32> = block.get(0, "u32")?;
+    let f64_vec: Vec<f64> = block.get(0, "f64")?;
     let text1_vec: Vec<&str> = block.get(0, "text1")?;
     let text2_vec: Vec<String> = block.get(0, "text2")?;
     let date_vec: Vec<Date<Tz>> = block.get(0, "date")?;
@@ -944,6 +947,7 @@ async fn test_array() -> Result<(), Error> {
     assert_eq!(1, block.row_count());
     assert_eq!(vec![41_u8], u8_vec);
     assert_eq!(vec![42_u32], u32_vec);
+    assert_eq!(vec![42_f64], f64_vec);
     assert_eq!(vec!["A"], text1_vec);
     assert_eq!(vec!["B".to_string()], text2_vec);
     assert_eq!(vec![date_value], date_vec);

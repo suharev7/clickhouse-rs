@@ -324,7 +324,7 @@ impl<'a> Ipv4Iterator<'a> {
     #[inline(always)]
     fn post_inc_start(&mut self, n: usize) {
         unsafe {
-            self.ptr.add(n * 4);
+            self.ptr = self.ptr.add(n * 4);
         }
     }
 }
@@ -353,7 +353,7 @@ impl<'a> Ipv6Iterator<'a> {
     #[inline(always)]
     fn post_inc_start(&mut self, n: usize) {
         unsafe {
-            self.ptr.add(n * 16);
+            self.ptr = self.ptr.add(n * 16);
         }
     }
 }
@@ -382,7 +382,7 @@ impl<'a> UuidIterator<'a> {
     #[inline(always)]
     fn post_inc_start(&mut self, n: usize) {
         unsafe {
-            self.ptr.add(n * 16);
+            self.ptr = self.ptr.add(n * 16);
         }
     }
 }

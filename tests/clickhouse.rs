@@ -23,7 +23,7 @@ use futures_util::{
 
 use clickhouse_rs::{
     errors::Error,
-    types::{Decimal, FromSql},
+    types::{Decimal, Enum16, Enum8, FromSql},
     Block, Pool,
 };
 use uuid::Uuid;
@@ -353,6 +353,36 @@ async fn test_simple_select() -> Result<(), Error> {
     let pool = Pool::new(database_url());
     let mut c = pool.get_handle().await?;
     let actual = c.query("SELECT a FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a) ORDER BY a ASC").fetch_all().await?;
+
+    let expected = Block::new().column("a", vec![1_u8, 2, 3]);
+    assert_eq!(expected, actual);
+
+    let r = c
+        .query("SELECT min(a) FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a)")
+        .fetch_all()
+        .await?;
+    assert_eq!(1, r.get::<u8, _>(0, 0)?);
+
+    let r = c
+        .query("SELECT max(a) FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a)")
+        .fetch_all()
+        .await?;
+    assert_eq!(3, r.get::<u8, _>(0, 0)?);
+
+    let r = c
+        .query("SELECT sum(a) FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a)")
+        .fetch_all()
+        .await?;
+    assert_eq!(6, r.get::<u64, _>(0, 0)?);
+
+    let r = c
+        .query(
+            "SELECT median(a) FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a)",
+        )
+        .fetch_all()
+        .await?;
+    assert!((2_f64 - r.get::<f64, _>(0, 0)?).abs() < EPSILON);
+
 
     let expected = Block::new().column("a", vec![1_u8, 2, 3]);
     assert_eq!(expected, actual);
@@ -753,6 +783,125 @@ async fn test_binary_string() -> Result<(), Error> {
 
 #[cfg(feature = "tokio_io")]
 #[tokio::test]
+async fn test_enum_16_not_nullable() -> Result<(), Error> {
+    let ddl = "
+        CREATE TABLE IF NOT EXISTS clickhouse_enum16_non_nul (
+            enum_16_row        Enum16(
+                                'zero' = 5,
+                                'first' = 6
+                          )
+        ) Engine=Memory";
+
+    let query = "
+        SELECT
+            enum_16_row
+        FROM clickhouse_enum16_non_nul";
+
+    let block = Block::new().column("enum_16_row", vec![Enum16::of(5), Enum16::of(6)]);
+
+    let pool = Pool::new(database_url());
+    let mut c = pool.get_handle().await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_enum16_non_nul")
+        .await?;
+    c.execute(ddl).await?;
+    c.insert("clickhouse_enum16_non_nul", block).await?;
+    let block = c.query(query).fetch_all().await?;
+
+    let enum_16_a: Enum16 = block.get(0, "enum_16_row")?;
+    let enum_16_b: Enum16 = block.get(1, "enum_16_row")?;
+
+    assert_eq!(2, block.row_count());
+    assert_eq!(
+        vec!([Enum16::of(5), Enum16::of(6)]),
+        vec!([enum_16_a, enum_16_b])
+    );
+
+    Ok(())
+}
+
+#[cfg(feature = "tokio_io")]
+#[tokio::test]
+async fn test_enum_16_nullable() -> Result<(), Error> {
+    let ddl = "
+        CREATE TABLE IF NOT EXISTS clickhouse_enum (
+            enum_16_row        Nullable(Enum16(
+                                'zero' = 5,
+                                'first' = 6
+                          ))
+        ) Engine=Memory";
+
+    let query = "
+        SELECT
+            enum_16_row
+        FROM clickhouse_enum";
+
+    let block = Block::new().column(
+        "enum_16_row",
+        vec![
+            Some(Enum16::of(5)),
+            Some(Enum16::of(6)),
+            Option::<Enum16>::None,
+        ],
+    );
+
+    let pool = Pool::new(database_url());
+    let mut c = pool.get_handle().await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_enum").await?;
+    c.execute(ddl).await?;
+    c.insert("clickhouse_enum", block).await?;
+    let block = c.query(query).fetch_all().await?;
+
+    let enum_16_a: Option<Enum16> = block.get(0, "enum_16_row")?;
+    let enum_16_b: Option<Enum16> = block.get(1, "enum_16_row")?;
+
+    assert_eq!(3, block.row_count());
+    assert_eq!(
+        vec!([Some(Enum16::of(5)), Some(Enum16::of(6))]),
+        vec!([enum_16_a, enum_16_b])
+    );
+
+    Ok(())
+}
+
+#[cfg(feature = "tokio_io")]
+#[tokio::test]
+async fn test_enum_8() -> Result<(), Error> {
+    let ddl = "
+        CREATE TABLE IF NOT EXISTS clickhouse_Enum (
+            enum_8_row        Enum8(
+                                'zero' = 1,
+                                'first' = 2
+                          )
+        ) Engine=Memory";
+
+    let query = "
+        SELECT
+            enum_8_row
+        FROM clickhouse_Enum";
+
+    let block = Block::new().column("enum_8_row", vec![Enum8::of(1), Enum8::of(2)]);
+
+    let pool = Pool::new(database_url());
+    let mut c = pool.get_handle().await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_Enum").await?;
+    c.execute(ddl).await?;
+    c.insert("clickhouse_Enum", block).await?;
+    let block = c.query(query).fetch_all().await?;
+
+    let enum_8_a: Enum8 = block.get(0, "enum_8_row")?;
+    let enum_8_b: Enum8 = block.get(1, "enum_8_row")?;
+
+    assert_eq!(2, block.row_count());
+    assert_eq!(
+        vec!([Enum8::of(1), Enum8::of(2)]),
+        vec!([enum_8_a, enum_8_b])
+    );
+
+    Ok(())
+}
+
+#[cfg(feature = "tokio_io")]
+#[tokio::test]
 async fn test_array() -> Result<(), Error> {
     let ddl = "
         CREATE TABLE clickhouse_array (
@@ -768,6 +917,38 @@ async fn test_array() -> Result<(), Error> {
 
     let date_value: Date<Tz> = UTC.ymd(2016, 10, 22);
     let date_time_value: DateTime<Tz> = UTC.ymd(2014, 7, 8).and_hms(14, 0, 0);
+
+    let block = Block::new()
+        .column("u8", vec![vec![41_u8]])
+        .column("u32", vec![vec![42_u32]])
+        .column("text1", vec![vec!["A"]])
+        .column("text2", vec![vec!["B".to_string()]])
+        .column("date", vec![vec![date_value]])
+        .column("time", vec![vec![date_time_value]]);
+
+    let pool = Pool::new(database_url());
+
+    let mut c = pool.get_handle().await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_array").await?;
+    c.execute(ddl).await?;
+    c.insert("clickhouse_array", block).await?;
+    let block = c.query(query).fetch_all().await?;
+
+    let u8_vec: Vec<u8> = block.get(0, "u8")?;
+    let u32_vec: Vec<u32> = block.get(0, "u32")?;
+    let text1_vec: Vec<&str> = block.get(0, "text1")?;
+    let text2_vec: Vec<String> = block.get(0, "text2")?;
+    let date_vec: Vec<Date<Tz>> = block.get(0, "date")?;
+    let time_vec: Vec<DateTime<Tz>> = block.get(0, "time")?;
+
+    assert_eq!(1, block.row_count());
+    assert_eq!(vec![41_u8], u8_vec);
+    assert_eq!(vec![42_u32], u32_vec);
+    assert_eq!(vec!["A"], text1_vec);
+    assert_eq!(vec!["B".to_string()], text2_vec);
+    assert_eq!(vec![date_value], date_vec);
+    assert_eq!(vec![date_time_value], time_vec);
+
 
     let block = Block::new()
         .column("u8", vec![vec![41_u8]])

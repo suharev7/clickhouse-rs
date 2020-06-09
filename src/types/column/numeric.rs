@@ -110,7 +110,7 @@ where
         };
 
         for array in source {
-            data.push(to_array(sql_type, array));
+            data.push(to_array(sql_type.clone(), array));
         }
 
         W::wrap(data)

@@ -2,6 +2,7 @@ use chrono::prelude::*;
 use chrono_tz::Tz;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
+use crate::types::{Enum16, Enum8};
 use crate::{
     errors::{Error, FromSqlError, Result},
     types::{column::Either, Decimal, SqlType, ValueRef},
@@ -40,6 +41,38 @@ impl<'a> FromSql<'a> for Decimal {
                 Err(Error::FromSql(FromSqlError::InvalidType {
                     src: from,
                     dst: "Decimal".into(),
+                }))
+            }
+        }
+    }
+}
+
+impl<'a> FromSql<'a> for Enum8 {
+    fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
+        match value {
+            ValueRef::Enum8(_enum_values, v) => Ok(v),
+            _ => {
+                let from = SqlType::from(value.clone()).to_string();
+
+                Err(Error::FromSql(FromSqlError::InvalidType {
+                    src: from,
+                    dst: "Enum8".into(),
+                }))
+            }
+        }
+    }
+}
+
+impl<'a> FromSql<'a> for Enum16 {
+    fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
+        match value {
+            ValueRef::Enum16(_enum_values, v) => Ok(v),
+            _ => {
+                let from = SqlType::from(value.clone()).to_string();
+
+                Err(Error::FromSql(FromSqlError::InvalidType {
+                    src: from,
+                    dst: "Enum16".into(),
                 }))
             }
         }

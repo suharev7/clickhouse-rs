@@ -11,12 +11,14 @@ pub use self::{
     block::{Block, RCons, RNil, Row, RowBuilder, Rows},
     column::{Column, ColumnType, Simple, Complex},
     decimal::Decimal,
+    enums::{Enum16, Enum8},
     from_sql::FromSql,
     options::Options,
     query::Query,
     query_result::QueryResult,
     value::Value,
 };
+
 pub(crate) use self::{
     cmd::Cmd,
     date_converter::DateConverter,
@@ -44,6 +46,7 @@ mod query;
 pub(crate) mod query_result;
 
 mod decimal;
+mod enums;
 mod options;
 
 #[derive(Copy, Clone, Debug, Default, PartialEq)]
@@ -159,7 +162,7 @@ impl<S> Packet<S> {
     }
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum SqlType {
     UInt8,
     UInt16,
@@ -181,6 +184,8 @@ pub enum SqlType {
     Nullable(&'static SqlType),
     Array(&'static SqlType),
     Decimal(u8, u8),
+    Enum8(Vec<(String, i8)>),
+    Enum16(Vec<(String, i16)>),
 }
 
 lazy_static! {
@@ -206,10 +211,10 @@ impl From<SqlType> for &'static SqlType {
             _ => {
                 let mut guard = TYPES_CACHE.lock().unwrap();
                 loop {
-                    if let Some(value_ref) = guard.get(&value) {
+                    if let Some(value_ref) = guard.get(&value.clone()) {
                         return unsafe { mem::transmute(value_ref.as_ref()) };
                     }
-                    guard.insert(value, Box::pin(value));
+                    guard.insert(value.clone(), Box::pin(value.clone()));
                 }
             }
         }
@@ -218,7 +223,7 @@ impl From<SqlType> for &'static SqlType {
 
 impl SqlType {
     pub fn to_string(&self) -> Cow<'static, str> {
-        match self {
+        match self.clone() {
             SqlType::UInt8 => "UInt8".into(),
             SqlType::UInt16 => "UInt16".into(),
             SqlType::UInt32 => "UInt32".into(),
@@ -236,10 +241,24 @@ impl SqlType {
             SqlType::Ipv4 => "IPv4".into(),
             SqlType::Ipv6 => "IPv6".into(),
             SqlType::Uuid => "UUID".into(),
-            SqlType::Nullable(&nested) => format!("Nullable({})", nested).into(),
-            SqlType::Array(&nested) => format!("Array({})", nested).into(),
+            SqlType::Nullable(nested) => format!("Nullable({})", &nested).into(),
+            SqlType::Array(nested) => format!("Array({})", &nested).into(),
             SqlType::Decimal(precision, scale) => {
                 format!("Decimal({}, {})", precision, scale).into()
+            }
+            SqlType::Enum8(values) => {
+                let a: Vec<String> = values
+                    .iter()
+                    .map(|(name, value)| format!("'{}' = {}", name, value))
+                    .collect();
+                format!("Enum8({})", a.join(",")).into()
+            }
+            SqlType::Enum16(values) => {
+                let a: Vec<String> = values
+                    .iter()
+                    .map(|(name, value)| format!("'{}' = {}", name, value))
+                    .collect();
+                format!("Enum16({})", a.join(",")).into()
             }
         }
     }

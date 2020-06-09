@@ -888,23 +888,23 @@ fn test_array() {
         .and_then(move |c| c.insert("clickhouse_array", block))
         .and_then(move |c| c.query(query).fetch_all())
         .and_then(move |(_, block)| {
-            let a: Vec<u8> = block.get(0, "u8")?;
-            let b: Vec<u32> = block.get(0, "u32")?;
+            let u8_vec: Vec<u8> = block.get(0, "u8")?;
+            let u32_vec: Vec<u32> = block.get(0, "u32")?;
             let f64_vec: Vec<f64> = block.get(0, "f64")?;
-            let c: Vec<&str> = block.get(0, "text1")?;
-            let d: Vec<String> = block.get(0, "text2")?;
-            let e: Vec<Date<Tz>> = block.get(0, "date")?;
-            let f: Vec<DateTime<Tz>> = block.get(0, "time")?;
+            let text1_vec: Vec<&str> = block.get(0, "text1")?;
+            let text2_vec: Vec<String> = block.get(0, "text2")?;
+            let date_vec: Vec<Date<Tz>> = block.get(0, "date")?;
+            let time_vec: Vec<DateTime<Tz>> = block.get(0, "time")?;
             let time64_vec: Vec<DateTime<Tz>> = block.get(0, "time64")?;
 
             assert_eq!(1, block.row_count());
-            assert_eq!(vec![41_u8], a);
-            assert_eq!(vec![42_u32], b);
+            assert_eq!(vec![41_u8], u8_vec);
+            assert_eq!(vec![42_u32], u32_vec);
             assert_eq!(vec![42_f64], f64_vec);
-            assert_eq!(vec!["A"], c);
-            assert_eq!(vec!["B".to_string()], d);
-            assert_eq!(vec![date_value], e);
-            assert_eq!(vec![date_time_value], f);
+            assert_eq!(vec!["A"], text1_vec);
+            assert_eq!(vec!["B".to_string()], text2_vec);
+            assert_eq!(vec![date_value], date_vec);
+            assert_eq!(vec![date_time_value], time_vec);
             assert_eq!(vec![date_time_value], time64_vec);
 
             Ok(())

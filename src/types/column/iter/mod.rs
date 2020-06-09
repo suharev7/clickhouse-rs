@@ -423,7 +423,6 @@ impl<'a> DateTimeIterator<'a> {
                 to_datetime(current_value, *precision, self.tz)
             },
         }
-
     }
 
     #[inline(always)]

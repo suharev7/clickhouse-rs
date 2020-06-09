@@ -523,7 +523,7 @@ fn column_name_to_string(name: &str) -> Result<String> {
 
     if name.chars().any(|ch| ch == '`') {
         let err = "Column name shouldn't contains backticks.".to_string();
-        return Err(Error::Other(failure::Context::new(err).into()));
+        return Err(Error::Other(err.into()));
     }
 
     Ok(format!("`{}`", name))

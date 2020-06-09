@@ -10,7 +10,7 @@ use std::{
 use chrono_tz::Tz;
 use log::trace;
 
-use pin_project::{pin_project, project};
+use pin_project::pin_project;
 
 use crate::{
     binary::Parser,
@@ -23,7 +23,7 @@ use futures_core::Stream;
 use futures_util::StreamExt;
 
 /// Line transport
-#[pin_project]
+#[pin_project(project = ClickhouseTransportProj)]
 pub(crate) struct ClickhouseTransport {
     // Inner socket
     #[pin]
@@ -138,8 +138,7 @@ impl TransportStatus {
     }
 }
 
-#[project]
-impl ClickhouseTransport {
+impl<'p> ClickhouseTransportProj<'p> {
     fn try_parse_msg(&mut self) -> Poll<Option<io::Result<Packet<()>>>> {
         let pos;
         let ret = {

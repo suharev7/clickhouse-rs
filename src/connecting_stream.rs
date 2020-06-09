@@ -17,7 +17,7 @@ use tokio::net::TcpStream;
 #[cfg(feature = "async_std")]
 use async_std::net::TcpStream;
 
-use pin_project::{pin_project, project};
+use pin_project::pin_project;
 use url::Url;
 
 use crate::{errors::ConnectionError, io::Stream as InnerStream, Options};
@@ -28,20 +28,20 @@ type Result<T> = std::result::Result<T, ConnectionError>;
 
 type ConnectingFuture<T> = BoxFuture<'static, Result<T>>;
 
-#[pin_project]
+#[pin_project(project = TcpStateProj)]
 enum TcpState {
     Wait(#[pin] SelectOk<ConnectingFuture<TcpStream>>),
     Fail(Option<ConnectionError>),
 }
 
 #[cfg(feature = "tls")]
-#[pin_project]
+#[pin_project(project = TlsStateProj)]
 enum TlsState {
     Wait(#[pin] ConnectingFuture<TlsStream<TcpStream>>),
     Fail(Option<ConnectionError>),
 }
 
-#[pin_project]
+#[pin_project(project = StateProj)]
 enum State {
     Tcp(#[pin] TcpState),
     #[cfg(feature = "tls")]
@@ -49,16 +49,14 @@ enum State {
 }
 
 impl TcpState {
-    #[project]
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<InnerStream>> {
-        #[project]
         match self.project() {
-            TcpState::Wait(inner) => match inner.poll(cx) {
+            TcpStateProj::Wait(inner) => match inner.poll(cx) {
                 Poll::Ready(Ok((tcp, _))) => Poll::Ready(Ok(InnerStream::Plain(tcp))),
                 Poll::Ready(Err(err)) => Poll::Ready(Err(err)),
                 Poll::Pending => Poll::Pending,
             },
-            TcpState::Fail(ref mut err) => {
+            TcpStateProj::Fail(ref mut err) => {
                 Poll::Ready(Err(err.take().unwrap()))
             },
         }
@@ -67,16 +65,14 @@ impl TcpState {
 
 #[cfg(feature = "tls")]
 impl TlsState {
-    #[project]
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<InnerStream>> {
-        #[project]
         match self.project() {
-            TlsState::Wait(ref mut inner) => match inner.poll_unpin(cx) {
+            TlsStateProj::Wait(ref mut inner) => match inner.poll_unpin(cx) {
                 Poll::Ready(Ok(tls)) => Poll::Ready(Ok(InnerStream::Secure(tls))),
                 Poll::Ready(Err(err)) => Poll::Ready(Err(err)),
                 Poll::Pending => Poll::Pending,
             },
-            TlsState::Fail(ref mut err) => {
+            TlsStateProj::Fail(ref mut err) => {
                 let e = err.take().unwrap();
                 Poll::Ready(Err(e))
             },
@@ -85,13 +81,11 @@ impl TlsState {
 }
 
 impl State {
-    #[project]
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<InnerStream>> {
-        #[project]
         match self.project() {
-            State::Tcp(inner) => inner.poll(cx),
+            StateProj::Tcp(inner) => inner.poll(cx),
             #[cfg(feature = "tls")]
-            State::Tls(inner) => inner.poll(cx),
+            StateProj::Tls(inner) => inner.poll(cx),
         }
     }
 

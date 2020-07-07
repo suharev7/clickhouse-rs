@@ -94,11 +94,11 @@ impl<'a> QueryResult<'a> {
     }
 
     /// Method that produces a stream of rows
-    pub fn stream(self) -> BoxStream<'a, Result<Row<'a, Simple>>> {
+    pub fn stream(self) -> BoxStream<'a, Result<Row<'static, Simple>>> {
         Box::pin(
             self.stream_blocks()
                 .map(|block_ret| {
-                    let result: BoxStream<'a, Result<Row<'a, Simple>>> = match block_ret {
+                    let result: BoxStream<'a, Result<Row<'static, Simple>>> = match block_ret {
                         Ok(block) => {
                             let block = Arc::new(block);
                             let block_ref = BlockRef::Owned(block);

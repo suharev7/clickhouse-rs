@@ -313,7 +313,9 @@ from_sql_impl! {
 
 #[cfg(test)]
 mod test {
-    use crate::types::{from_sql::FromSql, ValueRef};
+    use chrono::prelude::*;
+    use chrono_tz::Tz;
+    use crate::types::{from_sql::FromSql, ValueRef, SqlType, DateTimeType, column::Either};
 
     #[test]
     fn test_u8() {
@@ -332,5 +334,12 @@ mod test {
                 format!("{}", e)
             ),
         }
+    }
+
+    #[test]
+    fn null_to_datetime() {
+        let null_value = ValueRef::Nullable(Either::Left(SqlType::DateTime(DateTimeType::DateTime32).into()));
+        let date = Option::<DateTime<Tz>>::from_sql(null_value);
+        assert_eq!(date.unwrap(), None);
     }
 }

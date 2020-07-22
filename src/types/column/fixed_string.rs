@@ -96,7 +96,7 @@ impl<K: ColumnType> ColumnData for FixedStringAdapter<K> {
     fn save(&self, encoder: &mut Encoder, start: usize, end: usize) {
         let mut buffer = Vec::with_capacity(self.str_len);
         for index in start..end {
-            buffer.resize(0, 0);
+            buffer.clear();
             match self.column.at(index) {
                 ValueRef::String(_) => {
                     let string_ref = self.column.at(index).as_bytes().unwrap();
@@ -156,7 +156,7 @@ impl<K: ColumnType> ColumnData for NullableFixedStringAdapter<K> {
 
         let mut buffer = Vec::with_capacity(self.str_len);
         for value in values {
-            buffer.resize(0, 0);
+            buffer.clear();
             if let Some(string_ref) = value {
                 buffer.extend(string_ref);
             }

@@ -49,8 +49,8 @@ parameters:
 - `keepalive` - TCP keep alive timeout in milliseconds.
 - `nodelay` - Whether to enable `TCP_NODELAY` (defaults to `true`).
  
-- `pool_max` - Lower bound of opened connections for `Pool` (defaults to `10`).
-- `pool_min` - Upper bound of opened connections for `Pool` (defaults to `20`).
+- `pool_min` - Lower bound of opened connections for `Pool` (defaults to `10`).
+- `pool_max` - Upper bound of opened connections for `Pool` (defaults to `20`).
 
 - `ping_before_query` - Ping server every time before execute any query. (defaults to `true`).
 - `send_retries` - Count of retry to send request to server. (defaults to `3`).

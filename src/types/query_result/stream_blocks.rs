@@ -77,6 +77,7 @@ impl<'a> Stream for BlockStream<'a> {
                 }
                 Packet::ProfileInfo(_) | Packet::Progress(_) => {}
                 Packet::Exception(exception) => {
+                    self.eof = true;
                     return Poll::Ready(Some(Err(Error::Server(exception))))
                 }
                 Packet::Block(block) => {

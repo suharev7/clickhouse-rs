@@ -164,6 +164,20 @@ impl From<Decimal> for f64 {
 
 impl Decimal {
     /// Method of creating a Decimal.
+    pub fn new(underlying: i64, scale: u8) -> Decimal {
+        let precision = 18;
+        if scale > precision {
+            panic!("scale can't be greater than 18");
+        }
+
+        Decimal {
+            underlying: underlying,
+            precision,
+            scale,
+            nobits: NoBits::N64,
+        }
+    }
+
     pub fn of<B: Base>(source: B, scale: u8) -> Decimal {
         let precision = 18;
         if scale > precision {
@@ -239,6 +253,12 @@ impl Decimal {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn test_new() {
+        assert_eq!(Decimal::new(2, 1), Decimal::of(0.2_f64, 1));
+        assert_eq!(Decimal::new(2, 5), Decimal::of(0.00002_f64, 5));
+    }
 
     #[test]
     fn test_display() {

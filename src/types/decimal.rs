@@ -171,7 +171,7 @@ impl Decimal {
         }
 
         Decimal {
-            underlying: underlying,
+            underlying,
             precision,
             scale,
             nobits: NoBits::N64,

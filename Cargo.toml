@@ -33,7 +33,7 @@ lz4 = "1.23.1"
 pin-project = "0.4.20"
 url="^2"
 uuid = "0.8.1"
-combine = "4.0.1"
+combine = "4.2.3"
 
 [dependencies.futures-util]
 version = "0.3.5"

@@ -168,13 +168,16 @@ impl fmt::Display for Value {
             }
             Value::Decimal(v) => fmt::Display::fmt(v, f),
             Value::Ipv4(v) => {
-                write!(f, "{}", Ipv4Addr::from(*v))
+                write!(f, "{}", decode_ipv4(v))
             },
             Value::Ipv6(v) => {
-                write!(f, "{}", Ipv6Addr::from(*v))
+                write!(f, "{}", decode_ipv6(v))
             }
             Value::Uuid(v) => {
-                match Uuid::from_slice(v) {
+                let mut buffer = *v;
+                buffer[..8].reverse();
+                buffer[8..].reverse();
+                match Uuid::from_slice(&buffer) {
                     Ok(uuid) => write!(f, "{}", uuid),
                     Err(e) => write!(f, "{}", e),
                 }
@@ -399,6 +402,18 @@ from_value! {
     f64: Float64
 }
 
+pub(crate) fn decode_ipv4(octets: &[u8; 4]) -> Ipv4Addr {
+    let mut buffer = *octets;
+    buffer.reverse();
+    Ipv4Addr::from(buffer)
+}
+
+pub(crate) fn decode_ipv6(octets: &[u8; 16]) -> Ipv6Addr {
+    let mut buffer = *octets;
+    buffer.reverse();
+    Ipv6Addr::from(buffer)
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -480,6 +495,16 @@ mod test {
         let v = Value::UInt32(32);
         let u: u32 = u32::from(v);
         assert_eq!(u, 32);
+    }
+
+    #[test]
+    fn test_uuid() {
+        let uuid = Uuid::parse_str("936da01f-9abd-4d9d-80c7-02af85c822a8").unwrap();
+        let mut buffer = *uuid.as_bytes();
+        buffer[..8].reverse();
+        buffer[8..].reverse();
+        let v = Value::Uuid(buffer);
+        assert_eq!(v.to_string(), "936da01f-9abd-4d9d-80c7-02af85c822a8");
     }
 
     #[test]

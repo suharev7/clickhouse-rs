@@ -5,7 +5,10 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 use crate::types::{Enum16, Enum8};
 use crate::{
     errors::{Error, FromSqlError, Result},
-    types::{column::{Either, datetime64::to_datetime}, Decimal, SqlType, ValueRef},
+    types::{
+        column::{Either, datetime64::to_datetime}, Decimal, SqlType, ValueRef,
+        value::{decode_ipv4, decode_ipv6}
+    },
 };
 
 pub type FromSqlResult<T> = Result<T>;
@@ -100,7 +103,7 @@ impl<'a> FromSql<'a> for String {
 impl<'a> FromSql<'a> for Ipv4Addr {
     fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
         match value {
-            ValueRef::Ipv4(ip) => Ok(Ipv4Addr::from(ip)),
+            ValueRef::Ipv4(ip) => Ok(decode_ipv4(&ip)),
             _ => {
                 let from = SqlType::from(value.clone()).to_string();
                 Err(Error::FromSql(FromSqlError::InvalidType {
@@ -115,7 +118,7 @@ impl<'a> FromSql<'a> for Ipv4Addr {
 impl<'a> FromSql<'a> for Ipv6Addr {
     fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
         match value {
-            ValueRef::Ipv6(ip) => Ok(Ipv6Addr::from(ip)),
+            ValueRef::Ipv6(ip) => Ok(decode_ipv6(&ip)),
             _ => {
                 let from = SqlType::from(value.clone()).to_string();
                 Err(Error::FromSql(FromSqlError::InvalidType {
@@ -130,7 +133,12 @@ impl<'a> FromSql<'a> for Ipv6Addr {
 impl<'a> FromSql<'a> for uuid::Uuid {
     fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
         match value {
-            ValueRef::Uuid(row) => Ok(uuid::Uuid::from_bytes(row)),
+            ValueRef::Uuid(row) => {
+                let mut buffer = row;
+                buffer[..8].reverse();
+                buffer[8..].reverse();
+                Ok(uuid::Uuid::from_bytes(buffer))
+            },
             _ => {
                 let from = SqlType::from(value.clone()).to_string();
                 Err(Error::FromSql(FromSqlError::InvalidType {

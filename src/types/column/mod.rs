@@ -382,7 +382,10 @@ impl<K: ColumnType> Column<K> {
                 for i in 0..n {
                     let source = self.at(i).as_str().unwrap();
                     let ip: Ipv4Addr = source.parse().unwrap();
-                    inner.extend(&ip.octets());
+                    let mut buffer = [0_u8; 4];
+                    buffer.copy_from_slice(&ip.octets());
+                    buffer.reverse();
+                    inner.extend(&buffer);
                 }
 
                 let data = Arc::new(IpColumnData::<Ipv4> {
@@ -404,7 +407,10 @@ impl<K: ColumnType> Column<K> {
                 for i in 0..n {
                     let source = self.at(i).as_str().unwrap();
                     let ip: Ipv6Addr = source.parse().unwrap();
-                    inner.extend(&ip.octets());
+                    let mut buffer = [0_u8; 16];
+                    buffer.copy_from_slice(&ip.octets());
+                    buffer.reverse();
+                    inner.extend(&buffer);
                 }
 
                 let data = Arc::new(IpColumnData::<Ipv6> {

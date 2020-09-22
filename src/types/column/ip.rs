@@ -119,7 +119,9 @@ impl ColumnFrom for Vec<Ipv4Addr> {
     fn column_from<W: ColumnWrapper>(data: Self) -> W::Wrapper {
         let mut inner = Vec::with_capacity(data.len());
         for ip in data {
-            inner.extend(&ip.octets());
+            let mut buffer = ip.octets();
+            buffer.reverse();
+            inner.extend(&buffer);
         }
 
         W::wrap(IpColumnData::<Ipv4> {
@@ -133,7 +135,9 @@ impl ColumnFrom for Vec<Ipv6Addr> {
     fn column_from<W: ColumnWrapper>(data: Self) -> W::Wrapper {
         let mut inner = Vec::with_capacity(data.len());
         for ip in data {
-            inner.extend(&ip.octets());
+            let mut buffer = ip.octets();
+            buffer.reverse();
+            inner.extend(&buffer);
         }
 
         W::wrap(IpColumnData::<Ipv6> {
@@ -147,7 +151,10 @@ impl ColumnFrom for Vec<uuid::Uuid> {
     fn column_from<W: ColumnWrapper>(data: Self) -> W::Wrapper {
         let mut inner = Vec::with_capacity(data.len());
         for uuid in data {
-            inner.extend(uuid.as_bytes());
+            let mut buffer = *uuid.as_bytes();
+            buffer[..8].reverse();
+            buffer[8..].reverse();
+            inner.extend(&buffer);
         }
 
         W::wrap(IpColumnData::<Uuid> {
@@ -170,7 +177,9 @@ impl ColumnFrom for Vec<Option<Ipv4Addr>> {
                     nulls.push(1);
                 }
                 Some(ip) => {
-                    inner.extend(&ip.octets());
+                    let mut buffer = ip.octets();
+                    buffer.reverse();
+                    inner.extend(&buffer);
                     nulls.push(0);
                 }
             }
@@ -200,7 +209,9 @@ impl ColumnFrom for Vec<Option<Ipv6Addr>> {
                     nulls.push(1);
                 }
                 Some(ip) => {
-                    inner.extend(&ip.octets());
+                    let mut buffer = ip.octets();
+                    buffer.reverse();
+                    inner.extend(&buffer);
                     nulls.push(0);
                 }
             }
@@ -230,7 +241,10 @@ impl ColumnFrom for Vec<Option<uuid::Uuid>> {
                     nulls.push(1);
                 }
                 Some(uuid) => {
-                    inner.extend(uuid.as_bytes());
+                    let mut buffer = *uuid.as_bytes();
+                    buffer[..8].reverse();
+                    buffer[8..].reverse();
+                    inner.extend(&buffer);
                     nulls.push(0);
                 }
             }

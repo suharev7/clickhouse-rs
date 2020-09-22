@@ -1,4 +1,4 @@
-use std::{convert, fmt, str, sync::Arc, net::{Ipv4Addr, Ipv6Addr}};
+use std::{convert, fmt, str, sync::Arc};
 
 use chrono::prelude::*;
 use chrono_tz::Tz;
@@ -9,7 +9,7 @@ use crate::{
         Enum16, Enum8,
         column::{Either, datetime64::to_datetime},
         decimal::Decimal,
-        value::{AppDate, AppDateTime},
+        value::{AppDate, AppDateTime, decode_ipv4, decode_ipv6},
         SqlType, DateTimeType, Value,
     },
 };
@@ -135,13 +135,16 @@ impl<'a> fmt::Display for ValueRef<'a> {
             }
             ValueRef::Decimal(v) => fmt::Display::fmt(v, f),
             ValueRef::Ipv4(v) => {
-                write!(f, "{}", Ipv4Addr::from(*v))
+                write!(f, "{}", decode_ipv4(v))
             }
             ValueRef::Ipv6(v) => {
-                write!(f, "{}", Ipv6Addr::from(*v))
+                write!(f, "{}", decode_ipv6(v))
             }
             ValueRef::Uuid(v) => {
-                match Uuid::from_slice(v) {
+                let mut buffer = *v;
+                buffer[..8].reverse();
+                buffer[8..].reverse();
+                match Uuid::from_slice(&buffer) {
                     Ok(uuid) => write!(f, "{}", uuid),
                     Err(e) => write!(f, "{}", e),
                 }
@@ -530,6 +533,16 @@ mod test {
                 Arc::new(vec![Value::Int32(1), Value::Int32(2), Value::Int32(3)])
             )
         )
+    }
+
+    #[test]
+    fn test_uuid() {
+        let uuid = Uuid::parse_str("936da01f-9abd-4d9d-80c7-02af85c822a8").unwrap();
+        let mut buffer = *uuid.as_bytes();
+        buffer[..8].reverse();
+        buffer[8..].reverse();
+        let v = ValueRef::Uuid(buffer);
+        assert_eq!(v.to_string(), "936da01f-9abd-4d9d-80c7-02af85c822a8");
     }
 
     #[test]

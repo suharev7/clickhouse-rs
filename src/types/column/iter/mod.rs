@@ -316,6 +316,7 @@ impl<'a> Ipv4Iterator<'a> {
         let v = slice::from_raw_parts(self.ptr, 4);
         let mut m = [0_u8; 4];
         m.copy_from_slice(v);
+        m.reverse();
         self.ptr = self.ptr.offset(4) as *const u8;
 
         Ipv4Addr::from(m)
@@ -345,6 +346,7 @@ impl<'a> Ipv6Iterator<'a> {
         let v = slice::from_raw_parts(self.ptr, 16);
         let mut m = [0_u8; 16];
         m.copy_from_slice(v);
+        m.reverse();
         self.ptr = self.ptr.offset(16) as *const u8;
 
         Ipv6Addr::from(m)
@@ -374,6 +376,8 @@ impl<'a> UuidIterator<'a> {
         let v = slice::from_raw_parts(self.ptr, 16);
         let mut m = [0_u8; 16];
         m.copy_from_slice(v);
+        m[..8].reverse();
+        m[8..].reverse();
         self.ptr = self.ptr.offset(16) as *const u8;
 
         uuid::Uuid::from_bytes(m)

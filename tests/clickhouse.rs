@@ -214,7 +214,7 @@ fn test_insert() {
         .column(
             "uuid",
             vec![
-                Uuid::parse_str("936DA01F9ABD4d9d80C702AF85C822A8").unwrap(),
+                Uuid::parse_str("936DA01F-9ABD-4d9d-80C7-02AF85C822A8").unwrap(),
                 Uuid::nil(),
                 Uuid::nil(),
                 Uuid::nil(),
@@ -551,7 +551,7 @@ fn test_nullable() {
             "ipv6",
             vec![Some(Ipv6Addr::new(0, 0, 0, 0, 0, 0xffff, 0xc00a, 0x2ff))],
         )
-        .column("uuid", vec![Some(Uuid::nil())]);
+        .column("uuid", vec![Some(Uuid::parse_str("936da01f-9abd-4d9d-80c7-02af85c822a8").unwrap())]);
 
     let pool = Pool::new(database_url());
     let done = pool
@@ -600,7 +600,7 @@ fn test_nullable() {
                 Some(Ipv6Addr::new(0, 0, 0, 0, 0, 0xffff, 0xc00a, 0x2ff))
             );
 
-            assert_eq!(uuid, Some(Uuid::nil()));
+            assert_eq!(uuid, Some(Uuid::parse_str("936da01f-9abd-4d9d-80c7-02af85c822a8").unwrap()));
 
             Ok(())
         });
@@ -728,10 +728,10 @@ fn test_binary_string() {
 fn test_enum_16_not_nullable() {
     let ddl = "
         CREATE TABLE IF NOT EXISTS clickhouse_enum16_non_nul (
-            enum_16_row        Enum16(
-                                'zero' = 5,
-                                'first' = 6
-                          )
+            enum_16_row Enum16(
+                          'zero' = 5,
+                          'first' = 6
+                        )
         ) Engine=Memory";
 
     let query = "
@@ -980,18 +980,18 @@ fn test_reconnect() {
 fn test_column_iter() {
     let ddl = r"
         CREATE TABLE clickhouse_test_column_iter (
-            uint64    UInt64,
-            str       String,
-            fixed_str FixedString(1),
-            opt_str   Nullable(String),
-            date      Date,
-            datetime  DateTime,
-            datetime64  DateTime64(3, 'UTC'),
-            decimal   Decimal(8, 3),
-            array     Array(UInt32),
-            ipv4      IPv4,
-            ipv6      IPv6,
-            uuid      UUID
+            uint64     UInt64,
+            str        String,
+            fixed_str  FixedString(1),
+            opt_str    Nullable(String),
+            date       Date,
+            datetime   DateTime,
+            datetime64 DateTime64(3, 'UTC'),
+            decimal    Decimal(8, 3),
+            array      Array(UInt32),
+            ipv4       IPv4,
+            ipv6       IPv6,
+            uuid       UUID
         ) Engine=Memory";
 
     let query = r"SELECT * FROM clickhouse_test_column_iter";
@@ -1020,7 +1020,7 @@ fn test_column_iter() {
         .add_column("array", vec![vec![42_u32], Vec::new(), Vec::new()])
         .column("ipv4", vec!["127.0.0.1", "127.0.0.1", "127.0.0.1"])
         .column("ipv6", vec!["::1", "::1", "::1"])
-        .column("uuid", vec![Uuid::nil(); 3]);
+        .column("uuid", vec![Uuid::parse_str("936da01f-9abd-4d9d-80c7-02af85c822a8").unwrap(); 3]);
 
     let pool = Pool::new(database_url());
 
@@ -1090,7 +1090,7 @@ fn test_column_iter() {
                 assert_eq!(ipv6_iter, vec![Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1); 3]);
 
                 let uuid_iter: Vec<_> = block.get_column("uuid")?.iter::<Uuid>()?.collect();
-                assert_eq!(uuid_iter, vec![uuid::Uuid::nil(); 3]);
+                assert_eq!(uuid_iter, vec![Uuid::parse_str("936da01f-9abd-4d9d-80c7-02af85c822a8").unwrap(); 3]);
 
                 Ok(())
             })
@@ -1149,4 +1149,33 @@ fn test_syntax_error() {
         });
 
     run(done).unwrap_err()
+}
+
+#[test]
+fn test_ip_from_string() {
+    let ddl = "
+        CREATE TABLE IF NOT EXISTS clickhouse_test_ipv4 (
+            ip_v4 IPv4
+        ) ENGINE = Memory
+    ";
+
+    let source_block = Block::new()
+        .column("ip_v4", vec!["192.168.2.1", "1.2.3.4"]);
+
+    let pool = Pool::new(database_url());
+    let done = pool
+        .get_handle()
+        .and_then(move |c| c.execute("DROP TABLE IF EXISTS clickhouse_test_ipv4"))
+        .and_then(move |c| c.execute(ddl))
+        .and_then(move |c| c.insert("clickhouse_test_ipv4", source_block))
+        .and_then(move |c| c.query("SELECT ip_v4 FROM clickhouse_test_ipv4").fetch_all())
+        .and_then(move |(_, block)| Ok(block));
+
+    let block = run(done).unwrap();
+
+    let ip1: Ipv4Addr = block.get(0, "ip_v4").unwrap();
+    let ip2: Ipv4Addr = block.get(1, "ip_v4").unwrap();
+
+    assert_eq!(ip1, Ipv4Addr::new(192, 168, 2, 1));
+    assert_eq!(ip2, Ipv4Addr::new(1, 2, 3, 4));
 }

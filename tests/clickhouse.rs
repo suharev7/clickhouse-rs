@@ -1240,6 +1240,7 @@ async fn test_non_alphanumeric_columns() -> Result<(), Error> {
     Ok(())
 }
 
+#[cfg(feature = "tokio_io")]
 #[tokio::test]
 async fn test_ip_from_string() -> Result<(), Error> {
     let ddl = r"

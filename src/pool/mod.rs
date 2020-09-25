@@ -73,17 +73,11 @@ impl PoolBinding {
     }
 
     pub(crate) fn is_attached(&self) -> bool {
-        match self {
-            PoolBinding::Attached(_) => true,
-            _ => false,
-        }
+        matches!(self, PoolBinding::Attached(_))
     }
 
     pub(crate) fn is_some(&self) -> bool {
-        match self {
-            PoolBinding::None => false,
-            _ => true,
-        }
+        !matches!(self, PoolBinding::None)
     }
 
     pub(crate) fn attach(&mut self) {

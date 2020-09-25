@@ -101,18 +101,18 @@ mod test {
     #[test]
     fn test_push_and_get() {
         let mut list = List::<f64>::new();
-        let mut vs = Vec::<f64>::new();
+        let mut vs = vec![0.0_f64; 100];
 
-        for _ in 0..100 {
-            assert_eq!(list.len(), vs.len());
+        for (count, _) in (0..100).enumerate() {
+            assert_eq!(list.len(), count);
 
-            for (i, v) in vs.iter().enumerate() {
+            for (i, v) in vs.iter().take(count).enumerate() {
                 assert!((list.at(i) - *v).abs() < EPSILON);
             }
 
             let k = random();
             list.push(k);
-            vs.push(k);
+            vs[count] = k;
         }
     }
 }

@@ -263,10 +263,7 @@ impl From<SqlType> for &'static SqlType {
 
 impl SqlType {
     pub(crate) fn is_datetime(&self) -> bool {
-        match self {
-            SqlType::DateTime(_) => true,
-            _ => false,
-        }
+        matches!(self, SqlType::DateTime(_))
     }
 
     pub fn to_string(&self) -> Cow<'static, str> {

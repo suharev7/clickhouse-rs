@@ -364,7 +364,7 @@ impl ClientHandle {
     where
         Query: From<Q>,
     {
-        let timeout = try_opt!(self.context.options.get()).execute_timeout.unwrap_or(Duration::from_secs(0));
+        let timeout = try_opt!(self.context.options.get()).execute_timeout.unwrap_or_else(||Duration::from_secs(0));
         let context = self.context.clone();
         let query = Query::from(sql);
         with_timeout(
@@ -416,7 +416,7 @@ impl ClientHandle {
     where
         Query: From<Q>,
     {
-        let timeout = try_opt!(self.context.options.get()).insert_timeout.unwrap_or(Duration::from_secs(0));
+        let timeout = try_opt!(self.context.options.get()).insert_timeout.unwrap_or_else(||Duration::from_secs(0));
         let mut names: Vec<_> = Vec::with_capacity(block.column_count());
         for column in block.columns() {
             names.push(try_opt!(column_name_to_string(column.name())));

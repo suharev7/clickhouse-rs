@@ -46,6 +46,9 @@ parameters:
     * `2` - Read data and change settings queries are allowed.
 
 - `connection_timeout` - Timeout for connection (defaults to `500 ms`)
+- `query_timeout` - Timeout for queries (defaults to `180 sec`).
+- `insert_timeout` - Timeout for inserts (defaults to `180 sec`).
+- `execute_timeout` - Timeout for execute (defaults to `180 sec`).
 - `keepalive` - TCP keep alive timeout in milliseconds.
 - `nodelay` - Whether to enable `TCP_NODELAY` (defaults to `true`).
  
@@ -56,6 +59,7 @@ parameters:
 - `send_retries` - Count of retry to send request to server. (defaults to `3`).
 - `retry_timeout` - Amount of time to wait before next retry. (defaults to `5 sec`).
 - `ping_timeout` - Timeout for ping (defaults to `500 ms`).
+
 
 - `alt_hosts` - Comma separated list of single address host for load-balancing.
 

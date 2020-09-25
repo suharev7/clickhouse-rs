@@ -183,6 +183,15 @@ pub struct Options {
     /// Timeout for connection (defaults to `500 ms`)
     pub(crate) connection_timeout: Duration,
 
+    /// Timeout for queries (defaults to `180 sec`)
+    pub(crate) query_timeout: Duration,
+
+    /// Timeout for inserts (defaults to `180 sec`)
+    pub(crate) insert_timeout: Option<Duration>,
+
+    /// Timeout for execute (defaults to `180 sec`)
+    pub(crate) execute_timeout: Option<Duration>,
+
     /// Enable TLS encryption (defaults to `false`)
     #[cfg(feature = "tls")]
     pub(crate) secure: bool,
@@ -240,6 +249,9 @@ impl Default for Options {
             retry_timeout: Duration::from_secs(5),
             ping_timeout: Duration::from_millis(500),
             connection_timeout: Duration::from_millis(500),
+            query_timeout: Duration::from_secs(180),
+            insert_timeout: Some(Duration::from_secs(180)),
+            execute_timeout: Some(Duration::from_secs(180)),
             #[cfg(feature = "tls")]
             secure: false,
             #[cfg(feature = "tls")]
@@ -352,6 +364,21 @@ impl Options {
         => connection_timeout: Duration
     }
 
+    property! {
+        /// Timeout for query (defaults to `180,000 ms`).
+        => query_timeout: Duration
+    }
+
+    property! {
+        /// Timeout for insert (defaults to `180,000 ms`).
+        => insert_timeout: Option<Duration>
+    }
+
+    property! {
+        /// Timeout for execute (defaults to `180 sec`).
+        => execute_timeout: Option<Duration>
+    }
+
     #[cfg(feature = "tls")]
     property! {
         /// Establish secure connection (default is `false`).
@@ -449,6 +476,15 @@ where
             "connection_timeout" => {
                 options.connection_timeout = parse_param(key, value, parse_duration)?
             }
+            "query_timeout" => {
+                options.query_timeout = parse_param(key, value, parse_duration)?
+            },
+            "insert_timeout" => {
+                options.insert_timeout = parse_param(key, value, parse_opt_duration)?
+            }
+            "execute_timeout" => {
+                options.execute_timeout = parse_param(key, value, parse_opt_duration)?
+            },
             "compression" => options.compression = parse_param(key, value, parse_compression)?,
             #[cfg(feature = "tls")]
             "secure" => options.secure = parse_param(key, value, bool::from_str)?,

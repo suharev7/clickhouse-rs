@@ -70,17 +70,11 @@ impl PoolBinding {
     }
 
     pub(crate) fn is_attached(&self) -> bool {
-        match self {
-            PoolBinding::Attached(_) => true,
-            _ => false,
-        }
+        matches!(self, PoolBinding::Attached(_))
     }
 
     pub(crate) fn is_some(&self) -> bool {
-        match self {
-            PoolBinding::None => false,
-            _ => true,
-        }
+        !matches!(self, PoolBinding::None)
     }
 
     pub(crate) fn attach(&mut self) {
@@ -423,6 +417,7 @@ mod test {
         assert_eq!(info.idle_len, 0);
     }
 
+    #[allow(clippy::all)]
     #[test]
     fn test_race_condition() {
         use futures::future::lazy;
@@ -442,7 +437,7 @@ mod test {
                 let local_barer = barer.clone();
                 let mut local_pool = pool.clone();
 
-                let thread = spawn(|| {
+                threads.push(spawn(|| {
                     current_thread::block_on_all(lazy(|| {
                         current_thread::spawn(lazy(move || {
                             while local_barer.load(Ordering::SeqCst) {}
@@ -455,8 +450,7 @@ mod test {
 
                         Ok::<_, Error>(())
                     }))
-                });
-                threads.push(thread);
+                }));
             }
 
             barer.store(false, Ordering::SeqCst);

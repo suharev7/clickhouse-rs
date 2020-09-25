@@ -247,7 +247,7 @@ impl Stream for ClickhouseTransport {
         // Try to parse the new data!
         let ret = self.try_parse_msg();
 
-        self.buf_is_incomplete = if let Ok(Async::NotReady) = ret { true } else { false };
+        self.buf_is_incomplete = matches!(ret, Ok(Async::NotReady));
 
         ret
     }
@@ -345,8 +345,5 @@ impl ClickhouseTransport {
 }
 
 fn is_block<T>(packet: &Option<Packet<T>>) -> bool {
-    match packet {
-        Some(Packet::Block(_)) => true,
-        _ => false,
-    }
+    matches!(packet, Some(Packet::Block(_)))
 }

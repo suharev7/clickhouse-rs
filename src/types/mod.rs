@@ -13,7 +13,8 @@ pub use self::{
     column::{Column, ColumnType, Simple, Complex},
     decimal::Decimal,
     enums::{Enum16, Enum8},
-    from_sql::FromSql,
+    from_sql::{FromSql, FromSqlResult},
+    value_ref::ValueRef,
     options::Options,
     query::Query,
     query_result::QueryResult,
@@ -27,7 +28,6 @@ pub(crate) use self::{
     options::{IntoOptions, OptionsSource},
     stat_buffer::StatBuffer,
     unmarshal::Unmarshal,
-    value_ref::ValueRef,
 };
 
 pub(crate) mod column;

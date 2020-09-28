@@ -1,5 +1,4 @@
 use std::{marker::PhantomData, sync::Arc};
-
 use futures_util::stream::BoxStream;
 use futures_util::{
     future,
@@ -9,12 +8,13 @@ use futures_util::{
 use log::info;
 
 use crate::{
+    try_opt,
     errors::Result,
     types::{
-        block::BlockRef, query_result::stream_blocks::BlockStream, Block, Cmd, Query, Row,
-        Rows, Complex, Simple
+        block::BlockRef, query_result::stream_blocks::BlockStream, Block, Cmd, Complex, Query, Row,
+        Rows, Simple,
     },
-    ClientHandle,
+    with_timeout, ClientHandle,
 };
 
 pub(crate) mod stream_blocks;
@@ -28,16 +28,24 @@ pub struct QueryResult<'a> {
 impl<'a> QueryResult<'a> {
     /// Fetch data from table. It returns a block that contains all rows.
     pub async fn fetch_all(self) -> Result<Block<Complex>> {
-        let blocks = self
-            .stream_blocks_(false)
-            .try_fold(Vec::new(), |mut blocks, block| {
-                if !block.is_empty() {
-                    blocks.push(block);
-                }
-                future::ready(Ok(blocks))
-            })
-            .await?;
-        Ok(Block::concat(blocks.as_slice()))
+        let timeout = try_opt!(self.client.context.options.get()).query_timeout;
+
+        with_timeout(
+            async {
+                let blocks = self
+                    .stream_blocks_(false)
+                    .try_fold(Vec::new(), |mut blocks, block| {
+                        if !block.is_empty() {
+                            blocks.push(block);
+                        }
+                        future::ready(Ok(blocks))
+                    })
+                    .await?;
+                Ok(Block::concat(blocks.as_slice()))
+            },
+            timeout,
+        )
+        .await
     }
 
     /// Method that produces a stream of blocks containing rows
@@ -83,11 +91,7 @@ impl<'a> QueryResult<'a> {
 
                 let context = c.context.clone();
 
-                let inner = c
-                    .inner
-                    .take()
-                    .unwrap()
-                    .call(Cmd::SendQuery(query, context));
+                let inner = c.inner.take().unwrap().call(Cmd::SendQuery(query, context));
 
                 BlockStream::<'a>::new(c, inner, skip_first_block)
             })

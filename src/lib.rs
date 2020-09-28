@@ -201,6 +201,7 @@ macro_rules! row {
     };
 }
 
+#[macro_export]
 macro_rules! try_opt {
     ($expr:expr) => {
         match $expr {
@@ -363,35 +364,41 @@ impl ClientHandle {
     where
         Query: From<Q>,
     {
+        let timeout = try_opt!(self.context.options.get()).execute_timeout.unwrap_or_else(||Duration::from_secs(0));
         let context = self.context.clone();
         let query = Query::from(sql);
+        with_timeout(
+            async {
+                self.wrap_future(move |c| {
+                    info!("[execute query] {}", query.get_sql());
 
-        self.wrap_future(move |c| {
-            info!("[execute query] {}", query.get_sql());
+                    let transport = c.inner.take().unwrap();
 
-            let transport = c.inner.take().unwrap();
+                    async move {
+                        let mut h = None;
 
-            async move {
-                let mut h = None;
+                        let transport = transport.clear().await?;
+                        let mut stream = transport.call(Cmd::SendQuery(query, context.clone()));
 
-                let transport = transport.clear().await?;
-                let mut stream = transport.call(Cmd::SendQuery(query, context.clone()));
+                        while let Some(packet) = stream.next().await {
+                            match packet {
+                                Ok(Packet::Eof(inner)) => h = Some(inner),
+                                Ok(Packet::Block(_))
+                                | Ok(Packet::ProfileInfo(_))
+                                | Ok(Packet::Progress(_)) => (),
+                                Ok(Packet::Exception(e)) => return Err(Error::Server(e)),
+                                Err(e) => return Err(Error::Io(e)),
+                                _ => return Err(Error::Driver(DriverError::UnexpectedPacket)),
+                            }
+                        }
 
-                while let Some(packet) = stream.next().await {
-                    match packet {
-                        Ok(Packet::Eof(inner)) => h = Some(inner),
-                        Ok(Packet::Block(_))
-                        | Ok(Packet::ProfileInfo(_))
-                        | Ok(Packet::Progress(_)) => (),
-                        Ok(Packet::Exception(e)) => return Err(Error::Server(e)),
-                        Err(e) => return Err(Error::Io(e)),
-                        _ => return Err(Error::Driver(DriverError::UnexpectedPacket)),
+                        Ok(h.unwrap())
                     }
-                }
-
-                Ok(h.unwrap())
-            }
-        })
+                })
+                .await
+            },
+            timeout,
+        )
         .await
     }
 
@@ -409,6 +416,7 @@ impl ClientHandle {
     where
         Query: From<Q>,
     {
+        let timeout = try_opt!(self.context.options.get()).insert_timeout.unwrap_or_else(||Duration::from_secs(0));
         let mut names: Vec<_> = Vec::with_capacity(block.column_count());
         for column in block.columns() {
             names.push(try_opt!(column_name_to_string(column.name())));
@@ -420,31 +428,37 @@ impl ClientHandle {
 
         let context = self.context.clone();
 
-        self.wrap_future(move |c| {
-            info!("[insert]     {}", query.get_sql());
-            let transport = c.inner.take().unwrap();
+        with_timeout(
+            async {
+                self.wrap_future(move |c| {
+                    info!("[insert]     {}", query.get_sql());
+                    let transport = c.inner.take().unwrap();
 
-            async move {
-                let transport = transport.clear().await?;
-                let stream = transport.call(Cmd::SendQuery(query, context.clone()));
+                    async move {
+                        let transport = transport.clear().await?;
+                        let stream = transport.call(Cmd::SendQuery(query, context.clone()));
 
-                let (transport, b) = stream.read_block().await?;
-                let dst_block = b.unwrap();
+                        let (transport, b) = stream.read_block().await?;
+                        let dst_block = b.unwrap();
 
-                let casted_block = match block.cast_to(&dst_block) {
-                    Ok(value) => value,
-                    Err(err) => return Err(err),
-                };
+                        let casted_block = match block.cast_to(&dst_block) {
+                            Ok(value) => value,
+                            Err(err) => return Err(err),
+                        };
 
-                let send_cmd = Cmd::Union(
-                    Box::new(Cmd::SendData(casted_block, context.clone())),
-                    Box::new(Cmd::SendData(Block::default(), context.clone())),
-                );
+                        let send_cmd = Cmd::Union(
+                            Box::new(Cmd::SendData(casted_block, context.clone())),
+                            Box::new(Cmd::SendData(Block::default(), context.clone())),
+                        );
 
-                let (transport, _) = transport.call(send_cmd).read_block().await?;
-                Ok(transport)
-            }
-        })
+                        let (transport, _) = transport.call(send_cmd).read_block().await?;
+                        Ok(transport)
+                    }
+                })
+                .await
+            },
+            timeout,
+        )
         .await
     }
 

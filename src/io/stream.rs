@@ -6,7 +6,7 @@ use std::{
 };
 
 #[cfg(feature = "tokio_io")]
-use tokio::net::TcpStream;
+use tokio::{net::TcpStream, io::ReadBuf};
 #[cfg(feature = "tls")]
 use tokio_tls::TlsStream;
 
@@ -52,11 +52,16 @@ impl Stream {
 
     #[cfg(not(feature = "async_std"))]
     pub(crate) fn set_keepalive(&mut self, keepalive: Option<Duration>) -> io::Result<()> {
-        match *self {
-            Self::Plain(ref mut stream) => stream.set_keepalive(keepalive),
-            #[cfg(feature = "tls")]
-            Self::Secure(ref mut stream) => stream.get_mut().set_keepalive(keepalive),
-        }.map_err(|err| io::Error::new(err.kind(), format!("set_keepalive error: {}", err)))
+        // match *self {
+        //     Self::Plain(ref mut stream) => stream.set_keepalive(keepalive),
+        //     #[cfg(feature = "tls")]
+        //     Self::Secure(ref mut stream) => stream.get_mut().set_keepalive(keepalive),
+        // }.map_err(|err| io::Error::new(err.kind(), format!("set_keepalive error: {}", err)))
+        if keepalive.is_some() {
+            // https://github.com/tokio-rs/tokio/issues/3082
+            log::warn!("`tokio` dropped `set_keepalive` in v0.3 and is currently working on getting it back")
+        }
+        Ok(())
     }
 
     pub(crate) fn set_nodelay(&mut self, nodelay: bool) -> io::Result<()> {
@@ -67,11 +72,29 @@ impl Stream {
         }.map_err(|err| io::Error::new(err.kind(), format!("set_nodelay error: {}", err)))
     }
 
+    #[cfg(feature = "async_std")]
     pub(crate) fn poll_read(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<io::Result<usize>> {
         match self.project() {
             StreamProj::Plain(stream) => stream.poll_read(cx, buf),
             #[cfg(feature = "tls")]
             StreamProj::Secure(stream) => stream.poll_read(cx, buf),
+        }
+    }
+
+    #[cfg(not(feature = "async_std"))]
+    pub(crate) fn poll_read(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<io::Result<usize>> {
+        let mut read_buf = ReadBuf::new(buf);
+
+        let result = match self.project() {
+            StreamProj::Plain(stream) => stream.poll_read(cx, &mut read_buf),
+            #[cfg(feature = "tls")]
+            StreamProj::Secure(stream) => stream.poll_read(cx, &mut read_buf),
+        };
+
+        match result {
+            Poll::Ready(Ok(())) => Poll::Ready(Ok(read_buf.filled().len())),
+            Poll::Ready(Err(x)) => Poll::Ready(Err(x)),
+            Poll::Pending => Poll::Pending,
         }
     }
 

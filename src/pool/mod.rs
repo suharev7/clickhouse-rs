@@ -388,11 +388,11 @@ mod test {
         let barrier = Arc::new(AtomicBool::new(true));
         let pool = Pool::new(options);
 
-        let mut runtime = Builder::new()
-            .threaded_scheduler()
+        let runtime = Builder::new_multi_thread()
             .enable_all()
             .build()
             .unwrap();
+
         let tasks: Vec<_> = (0..100)
             .map(|_| {
                 let local_pool = pool.clone();

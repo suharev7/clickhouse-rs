@@ -424,7 +424,6 @@ impl ClientHandle {
         let mut names: Vec<_> = Vec::with_capacity(block.column_count());
         for column in block.columns() {
             names.push(try_opt!(column_name_to_string(column.name())));
-            // names.push(column.name());
         }
         let fields = names.join(", ");
 
@@ -536,12 +535,12 @@ impl ClientHandle {
 }
 
 fn column_name_to_string(name: &str) -> Result<String> {
-    // if name.chars().all(|ch| ch.is_alphanumeric()) {
-    //     return Ok(name.to_string());
-    // }
+    if name.chars().all(|ch| ch.is_numeric()) {
+        return Ok(name.to_string());
+    }
 
     if name.chars().any(|ch| ch == '`') {
-        let err = "Column name shouldn't contains backticks.".to_string();
+        let err = format!("Column name {:?} shouldn't contains backticks.", name);
         return Err(Error::Other(err.into()));
     }
 
@@ -584,7 +583,8 @@ pub(crate) mod test_misc {
 
     #[test]
     fn test_column_name_to_string() {
-        assert_eq!(column_name_to_string("id").unwrap(), "id");
+        assert_eq!(column_name_to_string("id").unwrap(), "`id`");
+        assert_eq!(column_name_to_string("234").unwrap(), "234");
         assert_eq!(column_name_to_string("ns:attr").unwrap(), "`ns:attr`");
         assert!(column_name_to_string("`").is_err());
     }

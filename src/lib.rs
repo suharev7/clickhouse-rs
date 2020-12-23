@@ -423,7 +423,8 @@ impl ClientHandle {
             .unwrap_or_else(|| Duration::from_secs(0));
         let mut names: Vec<_> = Vec::with_capacity(block.column_count());
         for column in block.columns() {
-            names.push(column.name());
+            names.push(try_opt!(column_name_to_string(column.name())));
+            // names.push(column.name());
         }
         let fields = names.join(", ");
 
@@ -535,9 +536,9 @@ impl ClientHandle {
 }
 
 fn column_name_to_string(name: &str) -> Result<String> {
-    if name.chars().all(|ch| ch.is_alphanumeric()) {
-        return Ok(name.to_string());
-    }
+    // if name.chars().all(|ch| ch.is_alphanumeric()) {
+    //     return Ok(name.to_string());
+    // }
 
     if name.chars().any(|ch| ch == '`') {
         let err = "Column name shouldn't contains backticks.".to_string();

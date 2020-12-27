@@ -409,9 +409,7 @@ pub(crate) fn decode_ipv4(octets: &[u8; 4]) -> Ipv4Addr {
 }
 
 pub(crate) fn decode_ipv6(octets: &[u8; 16]) -> Ipv6Addr {
-    let mut buffer = *octets;
-    buffer.reverse();
-    Ipv6Addr::from(buffer)
+    Ipv6Addr::from(*octets)
 }
 
 #[cfg(test)]

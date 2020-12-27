@@ -135,9 +135,7 @@ impl ColumnFrom for Vec<Ipv6Addr> {
     fn column_from<W: ColumnWrapper>(data: Self) -> W::Wrapper {
         let mut inner = Vec::with_capacity(data.len());
         for ip in data {
-            let mut buffer = ip.octets();
-            buffer.reverse();
-            inner.extend(&buffer);
+            inner.extend(&ip.octets());
         }
 
         W::wrap(IpColumnData::<Ipv6> {
@@ -209,9 +207,7 @@ impl ColumnFrom for Vec<Option<Ipv6Addr>> {
                     nulls.push(1);
                 }
                 Some(ip) => {
-                    let mut buffer = ip.octets();
-                    buffer.reverse();
-                    inner.extend(&buffer);
+                    inner.extend(&ip.octets());
                     nulls.push(0);
                 }
             }

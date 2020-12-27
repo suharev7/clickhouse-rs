@@ -343,7 +343,6 @@ impl<'a> Ipv6Iterator<'a> {
         let v = slice::from_raw_parts(self.ptr, 16);
         let mut m = [0_u8; 16];
         m.copy_from_slice(v);
-        m.reverse();
         self.ptr = self.ptr.offset(16) as *const u8;
 
         Ipv6Addr::from(m)

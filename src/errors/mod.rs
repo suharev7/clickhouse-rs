@@ -2,7 +2,7 @@ use std::{borrow::Cow, io, result, str::Utf8Error, string::FromUtf8Error};
 
 use thiserror::Error;
 #[cfg(feature = "tokio_io")]
-use tokio::time::Elapsed;
+use tokio::time::error::Elapsed;
 use url::ParseError;
 
 /// Clickhouse error codes

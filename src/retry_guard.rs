@@ -44,7 +44,7 @@ pub(crate) async fn retry_guard(
 
                 #[cfg(not(feature = "async_std"))]
                 {
-                    tokio::time::delay_for(duration).await;
+                    tokio::time::sleep(duration).await;
                 }
             }
         }

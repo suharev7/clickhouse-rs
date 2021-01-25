@@ -11,7 +11,7 @@ use tokio::{net::TcpStream, io::ReadBuf};
 use tokio_tls::TlsStream;
 
 #[cfg(feature = "tokio_io")]
-use tokio::prelude::*;
+use tokio::io::{AsyncRead, AsyncWrite};
 use pin_project::pin_project;
 #[cfg(feature = "async_std")]
 use async_std::net::TcpStream;

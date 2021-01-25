@@ -355,7 +355,7 @@ fn parse_enum(size: EnumSize, input: &str) -> Option<Vec<(String, i16)>> {
         .skip(token(')'));
     let result = parser.parse(input);
     if let Ok((res, remain)) = result {
-        if remain != "" {
+        if !remain.is_empty() {
             return None;
         }
         Some(res)

@@ -1170,7 +1170,7 @@ fn test_reconnect() {
     for _ in 0..2 {
         let pool = pool.clone();
         let counter = counter.clone();
-        let mut rt = tokio::runtime::Runtime::new().unwrap();
+        let rt = tokio::runtime::Runtime::new().unwrap();
         let ret: Result<(), Error> = rt.block_on(async move {
             let mut client = pool.get_handle().await?;
 

@@ -35,11 +35,11 @@ enum SettingsBinaryFormat {
 fn encode_command(cmd: &Cmd) -> Result<Vec<u8>> {
     match cmd {
         Cmd::Hello(context) => encode_hello(context),
-        Cmd::Ping => encode_ping(),
+        Cmd::Ping => Ok(encode_ping()),
         Cmd::SendQuery(query, context) => encode_query(query, context),
         Cmd::SendData(block, context) => encode_data(&block, context),
         Cmd::Union(first, second) => encode_union(first.as_ref(), second.as_ref()),
-        Cmd::Cancel => encode_cancel(),
+        Cmd::Cancel => Ok(encode_cancel()),
     }
 }
 
@@ -59,20 +59,20 @@ fn encode_hello(context: &Context) -> Result<Vec<u8>> {
     Ok(encoder.get_buffer())
 }
 
-fn encode_ping() -> Result<Vec<u8>> {
+fn encode_ping() -> Vec<u8> {
     trace!("[ping]         -> ping");
 
     let mut encoder = Encoder::new();
     encoder.uvarint(protocol::CLIENT_PING);
-    Ok(encoder.get_buffer())
+    encoder.get_buffer()
 }
 
-fn encode_cancel() -> Result<Vec<u8>> {
+fn encode_cancel() -> Vec<u8> {
     trace!("[cancel]");
 
     let mut encoder = Encoder::new();
     encoder.uvarint(protocol::CLIENT_CANCEL);
-    Ok(encoder.get_buffer())
+    encoder.get_buffer()
 }
 
 fn encode_query(query: &Query, context: &Context) -> Result<Vec<u8>> {
@@ -106,7 +106,7 @@ fn encode_query(query: &Query, context: &Context) -> Result<Vec<u8>> {
         SettingsBinaryFormat::Old
     };
 
-    serialize_settings(&mut encoder, &options, settings_format)?;
+    serialize_settings(&mut encoder, &options, settings_format);
 
     encoder.uvarint(protocol::STATE_COMPLETE);
 
@@ -124,7 +124,7 @@ fn encode_query(query: &Query, context: &Context) -> Result<Vec<u8>> {
     Ok(encoder.get_buffer())
 }
 
-fn serialize_settings(encoder: &mut Encoder, options: &Options, format: SettingsBinaryFormat) -> Result<()> {
+fn serialize_settings(encoder: &mut Encoder, options: &Options, format: SettingsBinaryFormat) {
 
     if let Some(level) = options.readonly {
         encoder.string("readonly");
@@ -135,7 +135,6 @@ fn serialize_settings(encoder: &mut Encoder, options: &Options, format: Settings
     }
 
     encoder.string(""); // settings
-    Ok(())
 }
 
 fn serialize_uint(encoder: &mut Encoder, value: u64, format: SettingsBinaryFormat) {

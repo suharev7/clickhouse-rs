@@ -32,7 +32,7 @@ pub(crate) struct Inner {
 impl Inner {
     pub(crate) fn release_conn(&self) {
         self.ongoing.fetch_sub(1, Ordering::AcqRel);
-        while let Ok(task) = self.tasks.pop() {
+        while let Some(task) = self.tasks.pop() {
             task.wake()
         }
     }
@@ -211,7 +211,7 @@ impl Pool {
     }
 
     fn handle_futures(&mut self, cx: &mut Context<'_>) -> Result<()> {
-        if let Ok(mut new) = self.inner.new.pop() {
+        if let Some(mut new) = self.inner.new.pop() {
             match new.poll_unpin(cx) {
                 Poll::Ready(Ok(client)) => {
                     self.inner.idle.push(client).unwrap();
@@ -232,7 +232,7 @@ impl Pool {
     }
 
     fn take_conn(&mut self) -> Option<ClientHandle> {
-        if let Ok(mut client) = self.inner.idle.pop() {
+        if let Some(mut client) = self.inner.idle.pop() {
             client.pool = PoolBinding::Attached(self.clone());
             client.set_inside(false);
             self.inner.ongoing.fetch_add(1, Ordering::AcqRel);
@@ -254,7 +254,7 @@ impl Pool {
         }
         self.inner.ongoing.fetch_sub(1, Ordering::AcqRel);
 
-        while let Ok(task) = self.inner.tasks.pop() {
+        while let Some(task) = self.inner.tasks.pop() {
             task.wake()
         }
     }

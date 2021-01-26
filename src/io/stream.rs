@@ -51,6 +51,7 @@ impl Stream {
     }
 
     #[cfg(not(feature = "async_std"))]
+    #[allow(clippy::all)]
     pub(crate) fn set_keepalive(&mut self, keepalive: Option<Duration>) -> io::Result<()> {
         // match *self {
         //     Self::Plain(ref mut stream) => stream.set_keepalive(keepalive),

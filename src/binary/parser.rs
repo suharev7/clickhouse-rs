@@ -40,7 +40,7 @@ impl<'a, T: Read> Parser<T> {
         let packet = self.reader.read_uvarint()?;
         match packet {
             protocol::SERVER_HELLO => Ok(self.parse_server_info()?),
-            protocol::SERVER_PONG => Ok(self.parse_pong()?),
+            protocol::SERVER_PONG => Ok(self.parse_pong()),
             protocol::SERVER_PROGRESS => Ok(self.parse_progress()?),
             protocol::SERVER_PROFILE_INFO => Ok(self.parse_profile_info()?),
             protocol::SERVER_EXCEPTION => Ok(self.parse_exception()?),
@@ -122,8 +122,8 @@ impl<'a, T: Read> Parser<T> {
         Ok(Packet::Exception(exception))
     }
 
-    fn parse_pong(&self) -> Result<Packet<()>> {
+    fn parse_pong(&self) -> Packet<()> {
         trace!("[process]      <- pong");
-        Ok(Packet::Pong(()))
+        Packet::Pong(())
     }
 }

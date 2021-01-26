@@ -64,23 +64,23 @@ impl<'a> ColumnFrom for Vec<&'a [u8]> {
 }
 
 trait StringSource {
-    fn to_value(self) -> Value;
+    fn into_value(self) -> Value;
 }
 
 impl StringSource for String {
-    fn to_value(self) -> Value {
+    fn into_value(self) -> Value {
         self.into()
     }
 }
 
 impl StringSource for &str {
-    fn to_value(self) -> Value {
+    fn into_value(self) -> Value {
         self.into()
     }
 }
 
 impl StringSource for Vec<u8> {
-    fn to_value(self) -> Value {
+    fn into_value(self) -> Value {
         Value::String(Arc::new(self))
     }
 }
@@ -112,7 +112,7 @@ fn make_array_of_array<W: ColumnWrapper, S: StringSource>(
     for vs in source {
         let mut inner = Vec::with_capacity(vs.len());
         for v in vs {
-            let value: Value = v.to_value();
+            let value: Value = v.into_value();
             inner.push(value)
         }
         data.push(Value::Array(sql_type.clone().into(), Arc::new(inner)));
@@ -149,7 +149,7 @@ fn make_opt_column<W: ColumnWrapper, S: StringSource>(source: Vec<Option<S>>) ->
 
     for value in source {
         let item = if let Some(v) = value {
-            let inner = v.to_value();
+            let inner = v.into_value();
             Value::Nullable(Either::Right(Box::new(inner)))
         } else {
             Value::Nullable(Either::Left(SqlType::String.into()))

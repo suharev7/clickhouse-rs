@@ -251,15 +251,13 @@ fn parse_decimal(source: &str) -> Option<(u8, u8, NoBits)> {
 
     match nobits {
         Some(_) => {
-            scale = std::str::from_utf8(&source.as_bytes()[params_indexes.0 + 1..params_indexes.1])
-                .unwrap()
+            scale = (&source[params_indexes.0 + 1..params_indexes.1])
                 .parse()
                 .ok()
         }
         None => {
             for (idx, cell) in
-                std::str::from_utf8(&source.as_bytes()[params_indexes.0 + 1..params_indexes.1])
-                    .unwrap()
+                (&source[params_indexes.0 + 1..params_indexes.1])
                     .split(',')
                     .map(|s| s.trim())
                     .enumerate()

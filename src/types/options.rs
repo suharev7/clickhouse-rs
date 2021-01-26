@@ -432,11 +432,11 @@ fn from_url(url_str: &str) -> Result<Options> {
 
     let mut options = Options::default();
 
-    if let Some(username) = get_username_from_url(&url)? {
+    if let Some(username) = get_username_from_url(&url) {
         options.username = username.into();
     }
 
-    if let Some(password) = get_password_from_url(&url)? {
+    if let Some(password) = get_password_from_url(&url) {
         options.password = password.into()
     }
 
@@ -516,18 +516,18 @@ where
     }
 }
 
-fn get_username_from_url(url: &Url) -> Result<Option<&str>> {
+fn get_username_from_url(url: &Url) -> Option<&str> {
     let user = url.username();
     if user.is_empty() {
-        return Ok(None);
+        return None;
     }
-    Ok(Some(user))
+    Some(user)
 }
 
-fn get_password_from_url(url: &Url) -> Result<Option<&str>> {
+fn get_password_from_url(url: &Url) -> Option<&str> {
     match url.password() {
-        None => Ok(None),
-        Some(password) => Ok(Some(password)),
+        None => None,
+        Some(password) => Some(password),
     }
 }
 

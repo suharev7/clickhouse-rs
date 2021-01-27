@@ -6,8 +6,9 @@ use crate::types::{Enum16, Enum8};
 use crate::{
     errors::{Error, FromSqlError, Result},
     types::{
-        column::{Either, datetime64::to_datetime}, Decimal, SqlType, ValueRef,
-        value::{decode_ipv4, decode_ipv6}
+        column::{datetime64::to_datetime, Either},
+        value::{decode_ipv4, decode_ipv6},
+        Decimal, SqlType, ValueRef,
     },
 };
 
@@ -138,7 +139,7 @@ impl<'a> FromSql<'a> for uuid::Uuid {
                 buffer[..8].reverse();
                 buffer[8..].reverse();
                 Ok(uuid::Uuid::from_bytes(buffer))
-            },
+            }
             _ => {
                 let from = SqlType::from(value.clone()).to_string();
                 Err(Error::FromSql(FromSqlError::InvalidType {
@@ -182,6 +183,8 @@ macro_rules! from_sql_vec_impl {
 from_sql_vec_impl! {
     &'a str: SqlType::String => |v| v.as_str(),
     String: SqlType::String => |v| v.as_string(),
+    &'a [u8]: SqlType::String => |v| v.as_bytes(),
+    Vec<u8>: SqlType::String => |v| v.as_bytes().map(<[u8]>::to_vec),
     Date<Tz>: SqlType::Date => |z| Ok(z.into()),
     DateTime<Tz>: SqlType::DateTime(_) => |z| Ok(z.into())
 }
@@ -241,8 +244,8 @@ from_sql_vec_impl! {
 }
 
 impl<'a, T> FromSql<'a> for Option<T>
-    where
-        T: FromSql<'a>,
+where
+    T: FromSql<'a>,
 {
     fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
         match value {
@@ -321,9 +324,9 @@ from_sql_impl! {
 
 #[cfg(test)]
 mod test {
+    use crate::types::{column::Either, from_sql::FromSql, DateTimeType, SqlType, ValueRef};
     use chrono::prelude::*;
     use chrono_tz::Tz;
-    use crate::types::{from_sql::FromSql, ValueRef, SqlType, DateTimeType, column::Either};
 
     #[test]
     fn test_u8() {
@@ -346,7 +349,9 @@ mod test {
 
     #[test]
     fn null_to_datetime() {
-        let null_value = ValueRef::Nullable(Either::Left(SqlType::DateTime(DateTimeType::DateTime32).into()));
+        let null_value = ValueRef::Nullable(Either::Left(
+            SqlType::DateTime(DateTimeType::DateTime32).into(),
+        ));
         let date = Option::<DateTime<Tz>>::from_sql(null_value);
         assert_eq!(date.unwrap(), None);
     }

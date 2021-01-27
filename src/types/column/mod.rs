@@ -407,10 +407,7 @@ impl<K: ColumnType> Column<K> {
                 for i in 0..n {
                     let source = self.at(i).as_str().unwrap();
                     let ip: Ipv6Addr = source.parse().unwrap();
-                    let mut buffer = [0_u8; 16];
-                    buffer.copy_from_slice(&ip.octets());
-                    buffer.reverse();
-                    inner.extend(&buffer);
+                    inner.extend(&ip.octets());
                 }
 
                 let data = Arc::new(IpColumnData::<Ipv6> {

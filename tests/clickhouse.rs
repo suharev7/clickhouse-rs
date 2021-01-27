@@ -1274,3 +1274,77 @@ async fn test_ip_from_string() -> Result<(), Error> {
     assert_eq!(ip2, Ipv4Addr::new(1, 2, 3, 4));
     Ok(())
 }
+
+#[cfg(feature = "tokio_io")]
+#[tokio::test]
+async fn test_ipv6_from_string() -> Result<(), Error> {
+    let ddl = r"
+        CREATE TABLE IF NOT EXISTS clickhouse_test_ipv6 (
+            ip_v6 IPv6
+        ) ENGINE = Memory
+    ";
+
+    let source_block = Block::new()
+        .column("ip_v6", vec!["0001:0203:0405:0607:0809:0A0B:0C0D:0E0F", "::1", "1::"]);
+
+    let pool = Pool::new(database_url());
+
+    let mut client = pool.get_handle().await?;
+    client
+        .execute("DROP TABLE IF EXISTS clickhouse_test_ipv6")
+        .await?;
+    client.execute(ddl).await?;
+    client
+        .insert("clickhouse_test_ipv6", source_block)
+        .await?;
+    let block = client
+        .query("SELECT ip_v6 FROM clickhouse_test_ipv6")
+        .fetch_all()
+        .await?;
+
+    let ip1: Ipv6Addr = block.get(0, "ip_v6")?;
+    let ip2: Ipv6Addr = block.get(1, "ip_v6")?;
+    let ip3: Ipv6Addr = block.get(2, "ip_v6")?;
+
+    assert_eq!(ip1, Ipv6Addr::new(0x0001, 0x0203, 0x0405, 0x0607, 0x0809, 0x0A0B, 0x0C0D, 0x0E0F));
+    assert_eq!(ip2, Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1));
+    assert_eq!(ip3, Ipv6Addr::new(1, 0, 0, 0, 0, 0, 0, 0));
+    Ok(())
+}
+
+#[cfg(feature = "tokio_io")]
+#[tokio::test]
+async fn test_ipv6_db_representation() -> Result<(), Error> {
+    let ddl = r"
+        CREATE TABLE IF NOT EXISTS clickhouse_test_ipv6_db_rep (
+            ip_v6 IPv6
+        ) ENGINE = Memory
+    ";
+
+    let source_block = Block::new()
+        .column("ip_v6", vec!["0001:0203:0405:0607:0809:0A0B:0C0D:0E0F", "::1", "1::"]);
+
+    let pool = Pool::new(database_url());
+
+    let mut client = pool.get_handle().await?;
+    client
+        .execute("DROP TABLE IF EXISTS clickhouse_test_ipv6_db_rep")
+        .await?;
+    client.execute(ddl).await?;
+    client
+        .insert("clickhouse_test_ipv6_db_rep", source_block)
+        .await?;
+    let block = client
+        .query("SELECT IPv6NumToString(ip_v6) AS ip_v6_str FROM clickhouse_test_ipv6_db_rep")
+        .fetch_all()
+        .await?;
+
+    let ip1: &str = block.get(0, "ip_v6_str")?;
+    let ip2: &str  = block.get(1, "ip_v6_str")?;
+    let ip3: &str = block.get(2, "ip_v6_str")?;
+
+    assert_eq!(ip1, "1:203:405:607:809:a0b:c0d:e0f");
+    assert_eq!(ip2, "::1");
+    assert_eq!(ip3, "1::");
+    Ok(())
+}

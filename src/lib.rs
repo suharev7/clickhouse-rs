@@ -112,7 +112,7 @@ use std::{fmt, future::Future, time::Duration};
 use futures_util::{
     future, future::BoxFuture, future::FutureExt, stream, stream::BoxStream, StreamExt,
 };
-use log::info;
+use log::{info, warn};
 
 use crate::{
     connecting_stream::ConnectingStream,
@@ -256,6 +256,9 @@ impl Client {
                 };
 
                 info!("try to connect to {}", addr);
+                if addr.port() == Some(8123) {
+                    warn!("You should use port 9000 instead of 8123 because clickhouse-rs work through the binary interface.");
+                }
                 let mut stream = ConnectingStream::new(addr, &options).await?;
                 stream.set_nodelay(options.nodelay)?;
                 stream.set_keepalive(options.keepalive)?;

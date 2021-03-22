@@ -301,9 +301,9 @@ impl Block<Simple> {
 }
 
 impl<K: ColumnType> Block<K> {
-    pub(crate) fn cast_to(self, header: &Block<K>) -> Result<Self> {
+    pub(crate) fn cast_to(&self, header: &Block<K>) -> Result<Self> {
         let info = self.info;
-        let mut columns = self.columns;
+        let mut columns = self.columns.clone();
         columns.reverse();
 
         if header.column_count() != columns.len() {

@@ -406,16 +406,17 @@ impl ClientHandle {
     }
 
     /// Convenience method to insert block of data.
-    pub async fn insert<Q>(&mut self, table: Q, block: Block) -> Result<()>
+    pub async fn insert<Q, B>(&mut self, table: Q, block: B) -> Result<()>
     where
         Query: From<Q>,
+        B: AsRef<Block>,
     {
-        let transport = self.insert_(table, block).await?;
+        let transport = self.insert_(table, block.as_ref()).await?;
         self.inner = Some(transport);
         Ok(())
     }
 
-    async fn insert_<Q>(&mut self, table: Q, block: Block) -> Result<ClickhouseTransport>
+    async fn insert_<Q>(&mut self, table: Q, block: &Block) -> Result<ClickhouseTransport>
     where
         Query: From<Q>,
     {
@@ -467,7 +468,7 @@ impl ClientHandle {
 
     pub(crate) async fn wrap_future<T, R, F>(&mut self, f: F) -> Result<T>
     where
-        F: FnOnce(&mut Self) -> R + Send + 'static,
+        F: FnOnce(&mut Self) -> R + Send,
         R: Future<Output = Result<T>>,
         T: 'static,
     {

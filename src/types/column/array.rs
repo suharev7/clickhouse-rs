@@ -31,7 +31,7 @@ impl ArrayColumnData {
             0 => 0,
             _ => offsets.at(rows - 1) as usize,
         };
-        let inner = ColumnData::load_data::<ArcColumnWrapper, _>(reader, type_name, size, tz)?;
+        let inner = <dyn ColumnData>::load_data::<ArcColumnWrapper, _>(reader, type_name, size, tz)?;
 
         Ok(ArrayColumnData { inner, offsets })
     }

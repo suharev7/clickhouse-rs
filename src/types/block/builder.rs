@@ -91,7 +91,7 @@ fn put_param<K: ColumnType>(
 
                 let column = Column {
                     name: key.clone().into(),
-                    data: ColumnData::from_type::<ArcColumnWrapper>(sql_type, timezone, block.capacity)?,
+                    data: <dyn ColumnData>::from_type::<ArcColumnWrapper>(sql_type, timezone, block.capacity)?,
                     _marker: marker::PhantomData,
                 };
 

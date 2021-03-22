@@ -410,7 +410,7 @@ mod test {
 
         match runtime.block_on(future::try_join_all(tasks)) {
             Ok(_) => {}
-            Err(e) => panic!(e),
+            Err(e) => panic!("{}", e),
         }
     }
 

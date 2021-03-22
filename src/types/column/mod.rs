@@ -192,7 +192,7 @@ impl<K: ColumnType> Column<K> {
     pub(crate) fn read<R: ReadEx>(reader: &mut R, size: usize, tz: Tz) -> Result<Column<K>> {
         let name = reader.read_string()?;
         let type_name = reader.read_string()?;
-        let data = ColumnData::load_data::<ArcColumnWrapper, _>(reader, &type_name, size, tz)?;
+        let data = <dyn ColumnData>::load_data::<ArcColumnWrapper, _>(reader, &type_name, size, tz)?;
         let column = Self {
             name,
             data,

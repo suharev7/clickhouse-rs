@@ -131,11 +131,11 @@ impl dyn ColumnData {
             ),
             SqlType::DateTime(_) => W::wrap(DateColumnData::<u32>::with_capacity(capacity, timezone)),
             SqlType::Nullable(inner_type) => W::wrap(NullableColumnData {
-                inner: ColumnData::from_type::<ArcColumnWrapper>(inner_type.clone(), timezone, capacity)?,
+                inner: <dyn ColumnData>::from_type::<ArcColumnWrapper>(inner_type.clone(), timezone, capacity)?,
                 nulls: Vec::new(),
             }),
             SqlType::Array(inner_type) => W::wrap(ArrayColumnData {
-                inner: ColumnData::from_type::<ArcColumnWrapper>(inner_type.clone(), timezone, capacity)?,
+                inner: <dyn ColumnData>::from_type::<ArcColumnWrapper>(inner_type.clone(), timezone, capacity)?,
                 offsets: List::with_capacity(capacity),
             }),
             SqlType::Decimal(precision, scale) => {
@@ -147,7 +147,7 @@ impl dyn ColumnData {
                 };
 
                 W::wrap(DecimalColumnData {
-                    inner: ColumnData::from_type::<BoxColumnWrapper>(
+                    inner: <dyn ColumnData>::from_type::<BoxColumnWrapper>(
                         inner_type, timezone, capacity,
                     )?,
                     precision,
@@ -157,7 +157,7 @@ impl dyn ColumnData {
             }
             SqlType::Enum8(enum_values) => W::wrap(Enum8ColumnData {
                 enum_values,
-                inner: ColumnData::from_type::<BoxColumnWrapper>(
+                inner: <dyn ColumnData>::from_type::<BoxColumnWrapper>(
                     SqlType::Int8,
                     timezone,
                     capacity,
@@ -165,7 +165,7 @@ impl dyn ColumnData {
             }),
             SqlType::Enum16(enum_values) => W::wrap(Enum16ColumnData {
                 enum_values,
-                inner: ColumnData::from_type::<BoxColumnWrapper>(
+                inner: <dyn ColumnData>::from_type::<BoxColumnWrapper>(
                     SqlType::Int16,
                     timezone,
                     capacity,

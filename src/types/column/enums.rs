@@ -40,7 +40,7 @@ impl Enum16ColumnData {
     ) -> Result<Self> {
         let type_name = "Int16";
 
-        let inner = ColumnData::load_data::<BoxColumnWrapper, _>(reader, type_name, size, tz)?;
+        let inner = <dyn ColumnData>::load_data::<BoxColumnWrapper, _>(reader, type_name, size, tz)?;
 
         Ok(Enum16ColumnData { enum_values, inner })
     }
@@ -235,7 +235,7 @@ impl Enum8ColumnData {
     ) -> Result<Self> {
         let type_name = "Int8";
 
-        let inner = ColumnData::load_data::<BoxColumnWrapper, _>(reader, type_name, size, tz)?;
+        let inner = <dyn ColumnData>::load_data::<BoxColumnWrapper, _>(reader, type_name, size, tz)?;
 
         Ok(Enum8ColumnData { enum_values, inner })
     }

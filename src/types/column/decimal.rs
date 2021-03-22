@@ -51,7 +51,7 @@ impl DecimalColumnData {
             NoBits::N32 => "Int32",
             NoBits::N64 => "Int64",
         };
-        let inner = ColumnData::load_data::<BoxColumnWrapper, _>(reader, type_name, size, tz)?;
+        let inner = <dyn ColumnData>::load_data::<BoxColumnWrapper, _>(reader, type_name, size, tz)?;
 
         Ok(DecimalColumnData {
             inner,

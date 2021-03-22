@@ -25,7 +25,7 @@ impl NullableColumnData {
     ) -> Result<Self> {
         let mut nulls = vec![0; size];
         reader.read_bytes(nulls.as_mut())?;
-        let inner = ColumnData::load_data::<ArcColumnWrapper, _>(reader, type_name, size, tz)?;
+        let inner = <dyn ColumnData>::load_data::<ArcColumnWrapper, _>(reader, type_name, size, tz)?;
         Ok(NullableColumnData { inner, nulls })
     }
 }

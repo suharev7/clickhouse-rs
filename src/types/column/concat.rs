@@ -81,9 +81,8 @@ where
     I: iter::Iterator<Item = usize> + 'a,
 {
     let mut acc = 0;
-    let mut index = Vec::new();
+    let mut index = vec![acc];
 
-    index.push(acc);
     for size in sizes {
         acc += size;
         index.push(acc);

@@ -289,15 +289,10 @@ impl Drop for ClientHandle {
 mod test {
     use std::{
         str::FromStr,
-        sync::{
-            Arc,
-            atomic::{AtomicBool, Ordering},
-        },
         time::{Duration, Instant},
     };
 
     use futures_util::future;
-    use tokio::runtime::Builder;
 
     use crate::{Block, errors::Result, Options, test_misc::DATABASE_URL};
 
@@ -376,42 +371,6 @@ mod test {
 
         assert_eq!(pool.info().idle_len, 6);
         Ok(())
-    }
-
-    #[test]
-    fn test_race_condition() {
-        let options = Options::from_str(DATABASE_URL.as_str())
-            .unwrap()
-            .pool_min(80)
-            .pool_max(99);
-
-        let barrier = Arc::new(AtomicBool::new(true));
-        let pool = Pool::new(options);
-
-        let runtime = Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-
-        let tasks: Vec<_> = (0..100)
-            .map(|_| {
-                let local_pool = pool.clone();
-                let local_barer = Arc::clone(&barrier);
-
-                runtime.spawn(async move {
-                    while local_barer.load(Ordering::SeqCst) {}
-
-                    let _ = local_pool.get_handle().await;
-                })
-            })
-            .collect();
-
-        barrier.store(false, Ordering::SeqCst);
-
-        match runtime.block_on(future::try_join_all(tasks)) {
-            Ok(_) => {}
-            Err(e) => panic!("{}", e),
-        }
     }
 
     #[tokio::test]

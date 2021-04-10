@@ -512,7 +512,7 @@ mod test {
         let date_value: Date<Tz> = UTC.ymd(2016, 10, 22);
         let date_time_value: DateTime<Tz> = UTC.ymd(2014, 7, 8).and_hms(14, 0, 0);
 
-        let d: Value = Value::from(date_value.clone());
+        let d: Value = Value::from(date_value);
         let dt: Value = date_time_value.into();
 
         assert_eq!(

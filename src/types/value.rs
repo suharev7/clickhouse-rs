@@ -36,6 +36,7 @@ pub enum Value {
     Date(u16, Tz),
     DateTime(u32, Tz),
     DateTime64(i64, (u32, Tz)),
+    ChronoDateTime(DateTime<Tz>),
     Ipv4([u8; 4]),
     Ipv6([u8; 16]),
     Uuid([u8; 16]),
@@ -70,6 +71,7 @@ impl PartialEq for Value {
                 let time_b = tz_b.timestamp(i64::from(*b), 0);
                 time_a == time_b
             }
+            (Value::ChronoDateTime(a), Value::ChronoDateTime(b)) => *a == *b,
             (Value::Nullable(a), Value::Nullable(b)) => *a == *b,
             (Value::Array(ta, a), Value::Array(tb, b)) => *ta == *tb && *a == *b,
             (Value::Decimal(a), Value::Decimal(b)) => *a == *b,
@@ -148,6 +150,9 @@ impl fmt::Display for Value {
                 let time = to_datetime(*value, *precision, *tz);
                 write!(f, "{}", time.to_rfc2822())
             }
+            Value::ChronoDateTime(time) => {
+                write!(f, "{}", time.to_rfc2822())
+            }
             Value::Date(v, tz) if f.alternate() => {
                 let time = tz.timestamp(i64::from(*v) * 24 * 3600, 0);
                 let date = time.date();
@@ -204,6 +209,7 @@ impl convert::From<Value> for SqlType {
             Value::Float64(_) => SqlType::Float64,
             Value::Date(_, _) => SqlType::Date,
             Value::DateTime(_, _) => SqlType::DateTime(DateTimeType::DateTime32),
+            Value::ChronoDateTime(_) => SqlType::DateTime(DateTimeType::DateTime32),
             Value::Nullable(d) => match d {
                 Either::Left(t) => SqlType::Nullable(t),
                 Either::Right(inner) => {
@@ -274,7 +280,7 @@ impl convert::From<Enum16> for Value {
 
 impl convert::From<AppDateTime> for Value {
     fn from(v: AppDateTime) -> Value {
-        Value::DateTime(v.timestamp() as u32, v.timezone())
+        Value::ChronoDateTime(v)
     }
 }
 
@@ -381,6 +387,7 @@ impl convert::From<Value> for AppDateTime {
                 let (precision, tz) = params;
                 to_datetime(u, precision, tz)
             }
+            Value::ChronoDateTime(dt) => dt,
             _ => {
                 let from = SqlType::from(v);
                 panic!("Can't convert Value::{} into {}", from, "DateTime<Tz>")
@@ -484,11 +491,6 @@ mod test {
     }
 
     #[test]
-    fn test_time() {
-        test_from_t(&Tz::Africa__Addis_Ababa.ymd(2016, 10, 22).and_hms(12, 0, 0));
-    }
-
-    #[test]
     fn test_from_u32() {
         let v = Value::UInt32(32);
         let u: u32 = u32::from(v);
@@ -510,7 +512,7 @@ mod test {
         let date_value: Date<Tz> = UTC.ymd(2016, 10, 22);
         let date_time_value: DateTime<Tz> = UTC.ymd(2014, 7, 8).and_hms(14, 0, 0);
 
-        let d: Value = Value::from(date_value);
+        let d: Value = Value::from(date_value.clone());
         let dt: Value = date_time_value.into();
 
         assert_eq!(
@@ -518,10 +520,7 @@ mod test {
             d
         );
         assert_eq!(
-            Value::DateTime(
-                date_time_value.timestamp() as u32,
-                date_time_value.timezone()
-            ),
+            Value::ChronoDateTime(date_time_value),
             dt
         );
     }
@@ -608,7 +607,7 @@ mod test {
     #[test]
     fn test_size_of() {
         use std::mem;
-        assert_eq!(32, mem::size_of::<[Value; 1]>());
+        assert_eq!(56, mem::size_of::<[Value; 1]>());
     }
 
     #[test]
@@ -625,9 +624,10 @@ mod test {
             Value::from(Some(3.1)),
             Value::Nullable(Either::Right(Value::Float64(3.1).into()))
         );
+        let date_time_val = UTC.ymd(2019, 1, 1).and_hms(0, 0, 0);
         assert_eq!(
-            Value::from(Some(UTC.ymd(2019, 1, 1).and_hms(0, 0, 0))),
-            Value::Nullable(Either::Right(Value::DateTime(1_546_300_800, Tz::UTC).into()))
+            Value::from(Some(date_time_val)),
+            Value::Nullable(Either::Right(Value::ChronoDateTime(date_time_val).into()))
         );
     }
 }

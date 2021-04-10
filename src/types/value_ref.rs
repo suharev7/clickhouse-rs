@@ -338,6 +338,7 @@ impl<'a> From<&'a Value> for ValueRef<'a> {
             Value::Ipv4(v) => ValueRef::Ipv4(*v),
             Value::Ipv6(v) => ValueRef::Ipv6(*v),
             Value::Uuid(v) => ValueRef::Uuid(*v),
+            Value::ChronoDateTime(_) => unimplemented!(),
         }
     }
 }

@@ -6,12 +6,13 @@ use crate::{
     binary::Encoder,
     errors::Result,
     types::{
+        SqlType,
         DateTimeType,
         column::{
             column_data::{BoxColumnData, ArcColumnData, ColumnData},
             datetime64::from_datetime,
             nullable::NullableColumnData,
-            ArcColumnWrapper, ColumnFrom, ColumnWrapper, SqlType, Value, ValueRef,
+            ArcColumnWrapper, ColumnFrom, ColumnWrapper, Value, ValueRef,
         }
     },
 };
@@ -19,6 +20,13 @@ use crate::{
 pub struct ChronoDateTimeColumnData {
     data: Vec<DateTime<Tz>>,
     tz: Tz,
+}
+
+impl ChronoDateTimeColumnData {
+    pub(crate) fn with_capacity(capacity: usize, tz: Tz) -> ChronoDateTimeColumnData {
+        let data = Vec::with_capacity(capacity);
+        ChronoDateTimeColumnData { data, tz }
+    }
 }
 
 pub(crate) struct ChronoDateTimeAdapter {

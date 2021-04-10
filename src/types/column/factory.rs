@@ -19,6 +19,7 @@ use crate::{
             column_data::ColumnData,
             date::DateColumnData,
             datetime64::DateTime64ColumnData,
+            chrono_datetime::ChronoDateTimeColumnData,
             decimal::DecimalColumnData,
             fixed_string::FixedStringColumnData,
             ip::{IpColumnData, Ipv4, Ipv6, Uuid},
@@ -129,7 +130,7 @@ impl dyn ColumnData {
             SqlType::DateTime(DateTimeType::DateTime64(precision, timezone)) => W::wrap(
                 DateTime64ColumnData::with_capacity(capacity, precision, timezone),
             ),
-            SqlType::DateTime(_) => W::wrap(DateColumnData::<u32>::with_capacity(capacity, timezone)),
+            SqlType::DateTime(_) => W::wrap(ChronoDateTimeColumnData::with_capacity(capacity, timezone)),
             SqlType::Nullable(inner_type) => W::wrap(NullableColumnData {
                 inner: <dyn ColumnData>::from_type::<ArcColumnWrapper>(inner_type.clone(), timezone, capacity)?,
                 nulls: Vec::new(),

@@ -196,7 +196,7 @@ mod test {
         );
 
         assert_eq!(block.columns[13].sql_type(), SqlType::Date);
-        assert_eq!(block.columns[14].sql_type(), SqlType::DateTime(DateTimeType::DateTime32));
+        assert_eq!(block.columns[14].sql_type(), SqlType::DateTime(DateTimeType::Chrono));
         assert_eq!(block.columns[15].sql_type(), SqlType::Decimal(18, 4));
     }
 }

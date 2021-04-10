@@ -25,6 +25,7 @@ use clickhouse_rs::{
     errors::Error,
     types::{Decimal, Enum16, Enum8, FromSql},
     Block, Pool,
+    row,
 };
 use uuid::Uuid;
 use Tz::UTC;
@@ -1346,5 +1347,37 @@ async fn test_ipv6_db_representation() -> Result<(), Error> {
     assert_eq!(ip1, "1:203:405:607:809:a0b:c0d:e0f");
     assert_eq!(ip2, "::1");
     assert_eq!(ip3, "1::");
+    Ok(())
+}
+
+#[cfg(feature = "tokio_io")]
+#[tokio::test]
+async fn test_insert_date64() -> Result<(), Error> {
+    let ddl = r"
+        CREATE TABLE IF NOT EXISTS clickhouse_test_insert_date64 (
+            `id` UInt32,
+            `date` DateTime64(9, 'UTC')
+        ) ENGINE = Memory
+    ";
+
+    let date = chrono_tz::UTC.ymd(2020, 2, 3).and_hms_nano(13, 45, 50, 8927265);
+    let mut block = Block::new();
+    block.push(row!{
+        id: 1u32,
+        date,
+    })?;
+
+
+    let pool = Pool::new(database_url());
+
+    let mut client = pool.get_handle().await?;
+    client.execute("DROP TABLE IF EXISTS clickhouse_test_insert_date64").await?;
+    client.execute(ddl).await?;
+
+    client.insert("clickhouse_test_insert_date64", &block).await?;
+
+    let result = client.query("SELECT * FROM clickhouse_test_insert_date64").fetch_all().await?;
+    assert_eq!(result.row_count(), 1);
+
     Ok(())
 }

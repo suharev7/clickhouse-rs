@@ -7,9 +7,6 @@ use std::{
 
 use chrono_tz::Tz;
 
-use crate::types::column::enums::{
-    Enum16Adapter, Enum8Adapter, NullableEnum16Adapter, NullableEnum8Adapter,
-};
 use crate::{
     binary::{Encoder, ReadEx},
     errors::{Error, FromSqlError, Result},
@@ -18,9 +15,13 @@ use crate::{
             column_data::ArcColumnData,
             decimal::{DecimalAdapter, NullableDecimalAdapter},
             fixed_string::{FixedStringAdapter, NullableFixedStringAdapter},
+            simple_agg_func::SimpleAggregateFunctionColumnData,
             ip::{IpColumnData, Ipv4, Ipv6},
             string::StringAdapter,
             iter::Iterable,
+            enums::{
+                Enum16Adapter, Enum8Adapter, NullableEnum16Adapter, NullableEnum8Adapter,
+            }
         },
         decimal::NoBits,
         SqlType, Value, ValueRef,
@@ -49,6 +50,7 @@ mod nullable;
 mod numeric;
 mod string;
 mod string_pool;
+mod simple_agg_func;
 
 /// Represents Clickhouse Column
 pub struct Column<K: ColumnType> {
@@ -421,6 +423,17 @@ impl<K: ColumnType> Column<K> {
                     _marker: marker::PhantomData,
                 })
             }
+            (SqlType::SimpleAggregateFunction(func, nested), _) => {
+                let inner_column = self.cast_to(nested.clone())?;
+                Ok(Column {
+                    name: inner_column.name,
+                    data: Arc::new(SimpleAggregateFunctionColumnData {
+                        inner: inner_column.data,
+                        func
+                    }),
+                    _marker: marker::PhantomData,
+                })
+            },
             _ => {
                 if let Some(data) = self.data.cast_to(&self.data, &dst_type) {
                     let name = self.name().to_owned();

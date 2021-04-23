@@ -12,6 +12,7 @@ use crate::{
     binary::ReadEx,
     errors::Result,
     types::{
+        SimpleAggFunc,
         DateTimeType,
         decimal::NoBits,
         column::{
@@ -25,6 +26,7 @@ use crate::{
             ip::{IpColumnData, Ipv4, Ipv6, Uuid},
             list::List,
             nullable::NullableColumnData,
+            simple_agg_func::SimpleAggregateFunctionColumnData,
             numeric::VectorColumnData,
             string::StringColumnData,
             BoxColumnWrapper, ArcColumnWrapper, ColumnWrapper,
@@ -93,6 +95,8 @@ impl dyn ColumnData {
                 } else if let Some((precision, timezone)) = parse_date_time64(type_name) {
                     let column_timezone = get_timezone(&timezone, tz)?;
                     W::wrap(DateTime64ColumnData::load(reader, size, precision, column_timezone)?)
+                } else if let Some((func, inner_type)) = parse_simple_agg_fun(type_name) {
+                    W::wrap(SimpleAggregateFunctionColumnData::load(reader, func, inner_type, size, tz)?)
                 } else {
                     let message = format!("Unsupported column type \"{}\".", type_name);
                     return Err(message.into());
@@ -138,6 +142,10 @@ impl dyn ColumnData {
             SqlType::Array(inner_type) => W::wrap(ArrayColumnData {
                 inner: <dyn ColumnData>::from_type::<ArcColumnWrapper>(inner_type.clone(), timezone, capacity)?,
                 offsets: List::with_capacity(capacity),
+            }),
+            SqlType::SimpleAggregateFunction(func, inner_type) => W::wrap(SimpleAggregateFunctionColumnData {
+                inner: <dyn ColumnData>::from_type::<ArcColumnWrapper>(inner_type.clone(), timezone, capacity)?,
+                func
             }),
             SqlType::Decimal(precision, scale) => {
                 let nobits = NoBits::from_precision(precision).unwrap();
@@ -209,6 +217,25 @@ fn parse_array_type(source: &str) -> Option<&str> {
 
     let inner_type = &source[6..source.len() - 1];
     Some(inner_type)
+}
+
+fn parse_simple_agg_fun(source: &str) -> Option<(SimpleAggFunc, &str)> {
+    if !source.starts_with("SimpleAggregateFunction(") || !source.ends_with(')') {
+        return None;
+    }
+
+    let args = source[23..].trim_matches(|c| c == '(' || c == ')');
+    let sep_index = args.find(',')?;
+
+    let agg_func = args[..sep_index].trim();
+    let agg_type = args[sep_index+1..].trim();
+
+    let func: SimpleAggFunc = match agg_func.parse() {
+        Ok(func) => func,
+        Err(_) => return None,
+    };
+
+    Some((func, agg_type))
 }
 
 fn parse_decimal(source: &str) -> Option<(u8, u8, NoBits)> {
@@ -594,5 +621,12 @@ mod test {
         let source = " DateTime64( 5 )";
         let res = parse_date_time64(source).unwrap();
         assert_eq!(res, (5, None))
+    }
+
+    #[test]
+    fn test_parse_simple_agg_fun() {
+        let expected = Some((SimpleAggFunc::Sum, "Double"));
+        let actual = parse_simple_agg_fun("SimpleAggregateFunction( sum , Double )");
+        assert_eq!(expected, actual);
     }
 }

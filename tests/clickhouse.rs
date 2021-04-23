@@ -1381,3 +1381,38 @@ async fn test_insert_date64() -> Result<(), Error> {
 
     Ok(())
 }
+
+#[cfg(feature = "tokio_io")]
+#[tokio::test]
+async fn test_simple_agg_func() -> Result<(), Error> {
+    let ddl = r"
+        CREATE TABLE IF NOT EXISTS clickhouse_test_simple_agg_func (
+            id UInt64,
+            val SimpleAggregateFunction(sum, Int64)
+        ) ENGINE=AggregatingMergeTree ORDER BY id";
+
+    let mut block = Block::with_capacity(5);
+    block.push(row! { id: 1_u64, val:  1_i64 })?;
+    block.push(row! { id: 1_u64, val:  2_i64 })?;
+    block.push(row! { id: 1_u64, val:  3_i64 })?;
+    block.push(row! { id: 2_u64, val:  4_i64 })?;
+    block.push(row! { id: 2_u64, val:  5_i64 })?;
+    block.push(row! { id: 3_u64, val:  7_i64 })?;
+
+    let pool = Pool::new(database_url());
+
+    let mut client = pool.get_handle().await?;
+    client.execute("DROP TABLE IF EXISTS clickhouse_test_simple_agg_func").await?;
+    client.execute(ddl).await?;
+    client.insert("clickhouse_test_simple_agg_func", &block).await?;
+
+    let result = client.query("SELECT * FROM clickhouse_test_simple_agg_func").fetch_all().await?;
+    let actual: Vec<_> = result
+        .get_column("val")?
+        .iter::<i64>()?
+        .copied()
+        .collect();
+    assert_eq!(actual, vec![6_i64, 9, 7]);
+    Ok(())
+}
+

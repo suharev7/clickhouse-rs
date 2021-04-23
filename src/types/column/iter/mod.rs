@@ -19,6 +19,14 @@ use crate::{
     },
 };
 
+fn check_type(src: &SqlType, dst: &SqlType) -> bool {
+    if let SqlType::SimpleAggregateFunction(_, nested) = src {
+        check_type(nested, dst)
+    } else {
+        src == dst
+    }
+}
+
 macro_rules! simple_num_iterable {
     ( $($t:ty: $k:ident),* ) => {
         $(
@@ -26,7 +34,7 @@ macro_rules! simple_num_iterable {
                 type Iter = slice::Iter<'a, $t>;
 
                 fn iter(column: &'a Column<Simple>, column_type: SqlType) -> Result<Self::Iter> {
-                    if column_type != SqlType::$k {
+                    if !check_type(&column_type, &SqlType::$k) {
                         return Err(Error::FromSql(FromSqlError::InvalidType {
                             src: column.sql_type().to_string(),
                             dst: SqlType::$k.to_string(),

@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashMap, fmt, mem, pin::Pin, sync::Mutex};
+use std::{borrow::Cow, collections::HashMap, fmt, mem, pin::Pin, sync::Mutex, str::FromStr};
 
 use chrono::prelude::*;
 use chrono_tz::Tz;
@@ -203,6 +203,75 @@ pub enum DateTimeType {
     Chrono
 }
 
+#[derive(Debug, Copy, Clone, PartialOrd, Eq, PartialEq, Hash)]
+pub enum SimpleAggFunc {
+    Any,
+    AnyLast,
+    Min,
+    Max,
+    Sum,
+    SumWithOverflow,
+    GroupBitAnd,
+    GroupBitOr,
+    GroupBitXor,
+    GroupArrayArray,
+    GroupUniqArrayArray,
+    SumMap,
+    MinMap,
+    MaxMap,
+    ArgMin,
+    ArgMax,
+}
+
+impl From<SimpleAggFunc> for &str {
+    fn from(source: SimpleAggFunc) -> &'static str {
+        match source {
+            SimpleAggFunc::Any => "any",
+            SimpleAggFunc::AnyLast => "anyLast",
+            SimpleAggFunc::Min => "min",
+            SimpleAggFunc::Max => "max",
+            SimpleAggFunc::Sum => "sum",
+            SimpleAggFunc::SumWithOverflow => "sumWithOverflow",
+            SimpleAggFunc::GroupBitAnd => "groupBitAnd",
+            SimpleAggFunc::GroupBitOr => "groupBitOr",
+            SimpleAggFunc::GroupBitXor => "groupBitXor",
+            SimpleAggFunc::GroupArrayArray => "groupArrayArray",
+            SimpleAggFunc::GroupUniqArrayArray => "groupUniqArrayArray",
+            SimpleAggFunc::SumMap => "sumMap",
+            SimpleAggFunc::MinMap => "minMap",
+            SimpleAggFunc::MaxMap => "maxMap",
+            SimpleAggFunc::ArgMin => "argMin",
+            SimpleAggFunc::ArgMax => "argMax",
+        }
+    }
+}
+
+impl FromStr for SimpleAggFunc {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "any" => Ok(SimpleAggFunc::Any),
+            "anyLast" => Ok(SimpleAggFunc::AnyLast),
+            "min" => Ok(SimpleAggFunc::Min),
+            "max" => Ok(SimpleAggFunc::Max),
+            "sum" => Ok(SimpleAggFunc::Sum),
+            "sumWithOverflow" => Ok(SimpleAggFunc::SumWithOverflow),
+            "groupBitAnd" => Ok(SimpleAggFunc::GroupBitAnd),
+            "groupBitOr" => Ok(SimpleAggFunc::GroupBitOr),
+            "groupBitXor" => Ok(SimpleAggFunc::GroupBitXor),
+            "groupArrayArray" => Ok(SimpleAggFunc::GroupArrayArray),
+            "groupUniqArrayArray" => Ok(SimpleAggFunc::GroupUniqArrayArray),
+            "sumMap" => Ok(SimpleAggFunc::SumMap),
+            "minMap" => Ok(SimpleAggFunc::MinMap),
+            "maxMap" => Ok(SimpleAggFunc::MaxMap),
+            "argMin" => Ok(SimpleAggFunc::ArgMin),
+            "argMax" => Ok(SimpleAggFunc::ArgMax),
+            _ => Err(()),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum SqlType {
     UInt8,
@@ -227,6 +296,7 @@ pub enum SqlType {
     Decimal(u8, u8),
     Enum8(Vec<(String, i8)>),
     Enum16(Vec<(String, i16)>),
+    SimpleAggregateFunction(SimpleAggFunc, &'static SqlType),
 }
 
 lazy_static! {
@@ -287,6 +357,10 @@ impl SqlType {
             SqlType::Ipv6 => "IPv6".into(),
             SqlType::Uuid => "UUID".into(),
             SqlType::Nullable(nested) => format!("Nullable({})", &nested).into(),
+            SqlType::SimpleAggregateFunction(func, nested) => {
+                let func_str: &str = func.into();
+                format!("SimpleAggregateFunction({}, {})", func_str, &nested).into()
+            }
             SqlType::Array(nested) => format!("Array({})", &nested).into(),
             SqlType::Decimal(precision, scale) => {
                 format!("Decimal({}, {})", precision, scale).into()

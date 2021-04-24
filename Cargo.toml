@@ -39,7 +39,7 @@ version = "0.3.12"
 features = ["sink"]
 
 [dependencies.tokio]
-version = "1.0"
+version = "1.5"
 default-features = false
 features = ["io-util", "time", "net", "sync", "rt-multi-thread"]
 optional = true
@@ -74,6 +74,6 @@ env_logger = "^0.8"
 rand = "^0.8"
 
 [dev-dependencies.tokio]
-version = "1.0"
+version = "1.5"
 default-features = false
 features = ["macros"]

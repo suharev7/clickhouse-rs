@@ -525,10 +525,7 @@ fn get_username_from_url(url: &Url) -> Option<&str> {
 }
 
 fn get_password_from_url(url: &Url) -> Option<&str> {
-    match url.password() {
-        None => None,
-        Some(password) => Some(password),
-    }
+    url.password().map(|password| password)
 }
 
 fn get_database_from_url(url: &Url) -> Result<Option<&str>> {

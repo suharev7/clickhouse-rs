@@ -305,11 +305,7 @@ fn parse_decimal(source: &str) -> Option<(u8, u8, NoBits)> {
                 return None;
             }
 
-            if let Some(nobits) = NoBits::from_precision(precision) {
-                Some((precision, scale, nobits))
-            } else {
-                None
-            }
+            NoBits::from_precision(precision).map(|nobits| (precision, scale, nobits))
         }
         (None, Some(scale), Some(bits)) => {
             let precision = match bits {

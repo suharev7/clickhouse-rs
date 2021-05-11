@@ -755,6 +755,46 @@ async fn test_fixed_string() -> Result<(), Error> {
 
 #[cfg(feature = "tokio_io")]
 #[tokio::test]
+async fn test_foreign_columns() -> Result<(), Error> {
+    let ddl = "
+        CREATE TABLE clickhouse_foreign_columns (
+            column1      UInt32,
+            `中文key`     UInt32,
+            `русскийkey` UInt32
+        ) Engine=Memory";
+
+    let query = "
+        SELECT
+            column1,
+            `中文key`,
+            `русскийkey`
+        FROM clickhouse_foreign_columns";
+
+    let block = Block::new()
+        .column("column1", vec![1u32, 10u32])
+        .column("中文key", vec![2u32, 10u32])
+        .column("русскийkey", vec![3u32, 10u32]);
+
+    let pool = Pool::new(database_url());
+    let mut c = pool.get_handle().await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_foreign_columns").await?;
+    c.execute(ddl).await?;
+    c.insert("clickhouse_foreign_columns", block).await?;
+    let block = c.query(query).fetch_all().await?;
+
+    let v1: u32 = block.get(0, "column1")?;
+    let v2: u32 = block.get(0, "中文key")?;
+    let v3: u32 = block.get(0, "русскийkey")?;
+
+    assert_eq!(v1, 1u32);
+    assert_eq!(v2, 2u32);
+    assert_eq!(v3, 3u32);
+
+    Ok(())
+}
+
+#[cfg(feature = "tokio_io")]
+#[tokio::test]
 async fn test_binary_string() -> Result<(), Error> {
     let ddl = "
         CREATE TABLE IF NOT EXISTS clickhouse_binary_string (

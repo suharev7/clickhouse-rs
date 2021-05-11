@@ -287,6 +287,12 @@ impl convert::From<AppDateTime> for Value {
     }
 }
 
+impl convert::From<DateTime<Utc>> for Value {
+    fn from(v: DateTime<Utc>) -> Value {
+        Value::DateTime(v.timestamp() as u32, Tz::UTC)
+    }
+}
+
 impl convert::From<String> for Value {
     fn from(v: String) -> Value {
         Value::String(Arc::new(v.into_bytes()))
@@ -302,6 +308,24 @@ impl convert::From<Vec<u8>> for Value {
 impl convert::From<&[u8]> for Value {
     fn from(v: &[u8]) -> Value {
         Value::String(Arc::new(v.to_vec()))
+    }
+}
+
+impl convert::From<Uuid> for Value {
+    fn from(v: Uuid) -> Value {
+        let mut buffer = *v.as_bytes();
+        buffer[..8].reverse();
+        buffer[8..].reverse();
+        Value::Uuid(buffer)
+    }
+}
+
+impl convert::From<bool> for Value {
+    fn from(v: bool) -> Value {
+        match v {
+            true => Value::UInt8(1_u8),
+            false => Value::UInt8(0_u8),
+        }
     }
 }
 
@@ -503,11 +527,15 @@ mod test {
     #[test]
     fn test_uuid() {
         let uuid = Uuid::parse_str("936da01f-9abd-4d9d-80c7-02af85c822a8").unwrap();
-        let mut buffer = *uuid.as_bytes();
-        buffer[..8].reverse();
-        buffer[8..].reverse();
-        let v = Value::Uuid(buffer);
+        let v = Value::from(uuid);
         assert_eq!(v.to_string(), "936da01f-9abd-4d9d-80c7-02af85c822a8");
+    }
+
+    #[test]
+    fn test_from_datetime_utc() {
+        let date_time_value: DateTime<Utc> = Utc.ymd(2014, 7, 8).and_hms(14, 0, 0);
+        let v = Value::from(date_time_value);
+        assert_eq!(v, Value::DateTime(date_time_value.timestamp() as u32, Tz::UTC));
     }
 
     #[test]
@@ -526,6 +554,16 @@ mod test {
             Value::ChronoDateTime(date_time_value),
             dt
         );
+    }
+
+    #[test]
+    fn test_boolean() {
+        let f = false;
+        let t = true;
+        let v = Value::from(f);
+        let w = Value::from(t);
+        assert_eq!(v, Value::UInt8(0));
+        assert_eq!(w, Value::UInt8(1));
     }
 
     #[test]

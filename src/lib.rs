@@ -158,7 +158,23 @@ pub mod types;
 /// # make_block().unwrap()
 /// ```
 ///
-/// you can also use `Vec<(String, Value)>` to construct row to insert into a block:
+/// If a column name has special characters, you can use the alternative syntax
+/// with `=>` to pass an expression as column name:
+///
+/// ```rust
+/// # use clickhouse_rs::{Block, row, errors::Error};
+/// # fn make_block() -> Result<(), Error> {
+///       let mut block = Block::new();
+///       block.push(row!{"customer.id" => 1, amount: 2, "account.name" => "foo"})?;
+///       block.push(row!{"customer.id" => 4, amount: 4, "account.name" => "bar"})?;
+///       block.push(row!{"customer.id" => 5, amount: 5, "account.name" => "baz"})?;
+/// #     assert_eq!(block.row_count(), 3);
+/// #     Ok(())
+/// # }
+/// # make_block().unwrap()
+/// ```
+///
+/// You can also use `Vec<(String, Value)>` to construct a row and insert it into a block:
 ///
 /// ```rust
 /// # use clickhouse_rs::{Block, errors::Error, types::Value};

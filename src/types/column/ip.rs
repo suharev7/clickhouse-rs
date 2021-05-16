@@ -265,7 +265,7 @@ pub(crate) struct IpColumnData<V: IpVersion> {
 impl<V: IpVersion> IpColumnData<V> {
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
-            inner: vec![0; capacity * V::size()],
+            inner: Vec::with_capacity(capacity * V::size()),
             phantom: PhantomData,
         }
     }

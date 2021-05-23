@@ -79,7 +79,9 @@ impl<'a> PartialEq for ValueRef<'a> {
                 let that_time = to_datetime(*that, that_precision2, that_tz);
 
                 this_time == that_time
-            }
+            },
+            (ValueRef::Ipv4(a), ValueRef::Ipv4(b)) => a == b,
+            (ValueRef::Ipv6(a), ValueRef::Ipv6(b)) => a == b,
             _ => false,
         }
     }

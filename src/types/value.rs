@@ -1,6 +1,6 @@
 use std::{
     convert, fmt, mem,
-    net::{Ipv4Addr, Ipv6Addr},
+    net::{IpAddr, Ipv4Addr, Ipv6Addr},
     str,
     sync::Arc,
 };
@@ -76,6 +76,8 @@ impl PartialEq for Value {
             (Value::Enum16(values_a, val_a), Value::Enum16(values_b, val_b)) => {
                 *values_a == *values_b && *val_a == *val_b
             }
+            (Value::Ipv4(a), Value::Ipv4(b)) => a == b,
+            (Value::Ipv6(a), Value::Ipv6(b)) => a == b,
             _ => false,
         }
     }
@@ -316,6 +318,27 @@ impl<'a> convert::From<&'a str> for Value {
     fn from(v: &'a str) -> Self {
         let bytes: Vec<u8> = v.as_bytes().into();
         Value::String(Arc::new(bytes))
+    }
+}
+
+impl From<Ipv4Addr> for Value {
+    fn from(v: Ipv4Addr) -> Value {
+        Value::Ipv4(v.octets())
+    }
+}
+
+impl From<Ipv6Addr> for Value {
+    fn from(v: Ipv6Addr) -> Value {
+        Value::Ipv6(v.octets())
+    }
+}
+
+impl From<IpAddr> for Value {
+    fn from(v: IpAddr) -> Value {
+        match v {
+            IpAddr::V4(inner) => Value::Ipv4(inner.octets()),
+            IpAddr::V6(inner) => Value::Ipv6(inner.octets()),
+        }
     }
 }
 
@@ -630,5 +653,29 @@ mod test {
             Value::from(Some(UTC.ymd(2019, 1, 1).and_hms(0, 0, 0))),
             Value::Nullable(Either::Right(Value::DateTime(1_546_300_800, Tz::UTC).into()))
         );
+    }
+
+    #[test]
+    fn test_compare_ip_addr() {
+        let v4: Ipv4Addr = "127.0.0.1".parse().unwrap();
+        let v6: Ipv6Addr = "::1".parse().unwrap();
+        assert_eq!(Value::Ipv4(v4.octets()), Value::Ipv4(v4.octets()));
+        assert_ne!(
+            Value::Ipv4(v4.octets()),
+            Value::Ipv4("0.0.0.0".parse::<Ipv4Addr>().unwrap().octets())
+        );
+        assert_eq!(Value::Ipv6(v6.octets()), Value::Ipv6(v6.octets()));
+        assert_ne!(
+            Value::Ipv6(v6.octets()),
+            Value::Ipv6("::32".parse::<Ipv6Addr>().unwrap().octets())
+        );
+    }
+
+    #[test]
+    fn test_from_ip_addr() {
+        let v4: Ipv4Addr = "127.0.0.1".parse().unwrap();
+        let v6: Ipv6Addr = "::1".parse().unwrap();
+        assert!(matches!(Value::from(v4), Value::Ipv4(_)));
+        assert!(matches!(Value::from(v6), Value::Ipv6(_)));
     }
 }

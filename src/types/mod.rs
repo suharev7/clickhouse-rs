@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashMap, fmt, mem, pin::Pin, sync::Mutex, str::FromStr};
+use std::{borrow::Cow, collections::HashMap, fmt, mem, pin::Pin, str::FromStr, sync::Mutex};
 
 use chrono::prelude::*;
 use chrono_tz::Tz;
@@ -10,15 +10,15 @@ use crate::errors::ServerError;
 
 pub use self::{
     block::{Block, RCons, RNil, Row, RowBuilder, Rows},
-    column::{Column, ColumnType, Simple, Complex},
+    column::{Column, ColumnType, Complex, Simple},
     decimal::Decimal,
     enums::{Enum16, Enum8},
     from_sql::{FromSql, FromSqlResult},
-    value_ref::ValueRef,
     options::Options,
     query::Query,
     query_result::QueryResult,
     value::Value,
+    value_ref::ValueRef,
 };
 
 pub(crate) use self::{
@@ -51,10 +51,24 @@ mod enums;
 mod options;
 
 #[derive(Copy, Clone, Debug, Default, PartialEq)]
-pub(crate) struct Progress {
+pub struct Progress {
     pub rows: u64,
     pub bytes: u64,
     pub total_rows: u64,
+}
+
+impl Progress {
+    pub(crate) fn update(&mut self, progress: Progress) {
+        self.rows += progress.rows;
+        self.bytes += progress.bytes;
+        self.total_rows += progress.total_rows;
+    }
+
+    pub(crate) fn reset(&mut self) {
+        self.rows = 0;
+        self.bytes = 0;
+        self.total_rows = 0;
+    }
 }
 
 #[derive(Copy, Clone, Default, Debug, PartialEq)]
@@ -200,7 +214,7 @@ has_sql_type! {
 pub enum DateTimeType {
     DateTime32,
     DateTime64(u32, Tz),
-    Chrono
+    Chrono,
 }
 
 #[derive(Debug, Copy, Clone, PartialOrd, Eq, PartialEq, Hash)]
@@ -351,7 +365,9 @@ impl SqlType {
             SqlType::Float32 => "Float32".into(),
             SqlType::Float64 => "Float64".into(),
             SqlType::Date => "Date".into(),
-            SqlType::DateTime(DateTimeType::DateTime64(precision, tz)) => format!("DateTime64({}, '{:?}')", precision, tz).into(),
+            SqlType::DateTime(DateTimeType::DateTime64(precision, tz)) => {
+                format!("DateTime64({}, '{:?}')", precision, tz).into()
+            }
             SqlType::DateTime(_) => "DateTime".into(),
             SqlType::Ipv4 => "IPv4".into(),
             SqlType::Ipv6 => "IPv6".into(),

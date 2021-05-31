@@ -1,6 +1,6 @@
-use std::{env, error::Error};
 use clickhouse_rs::{row, types::Block, Pool};
 use futures_util::StreamExt;
+use std::{env, error::Error};
 
 async fn execute(database_url: String) -> Result<(), Box<dyn Error>> {
     env::set_var("RUST_LOG", "clickhouse_rs=debug");
@@ -25,16 +25,20 @@ async fn execute(database_url: String) -> Result<(), Box<dyn Error>> {
     let mut client = pool.get_handle().await?;
     client.execute(ddl).await?;
     client.insert("payment", block).await?;
-    let mut stream = client.query("SELECT * FROM payment").stream();
 
-    while let Some(row) = stream.next().await {
-        let row = row?;
-        let id: u32 = row.get("customer_id")?;
-        let amount: u32 = row.get("amount")?;
-        let name: Option<&str> = row.get("account_name")?;
-        println!("Found payment {}: {} {:?}", id, amount, name);
+    {
+        let mut stream = client.query("SELECT * FROM payment").stream();
+        while let Some(row) = stream.next().await {
+            let row = row?;
+            let id: u32 = row.get("customer_id")?;
+            let amount: u32 = row.get("amount")?;
+            let name: Option<&str> = row.get("account_name")?;
+            println!("Found payment {}: {} {:?}", id, amount, name);
+        }
     }
 
+    let progress = client.progress();
+    println!("Progress results: {:?}", progress);
     Ok(())
 }
 
@@ -49,9 +53,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 #[cfg(all(feature = "tokio_io", feature = "tls"))]
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let database_url = env::var("DATABASE_URL").unwrap_or_else(|_| {
-        "tcp://localhost:9440?secure=true&skip_verify=true".into()
-    });
+    let database_url = env::var("DATABASE_URL")
+        .unwrap_or_else(|_| "tcp://localhost:9440?secure=true&skip_verify=true".into());
     execute(database_url).await
 }
 

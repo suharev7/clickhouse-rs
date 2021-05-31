@@ -1,7 +1,8 @@
 use std::{
-    fmt, mem, pin::Pin,
-    sync::Arc,
+    fmt, mem,
+    pin::Pin,
     sync::atomic::{self, Ordering},
+    sync::Arc,
     task::{Context, Poll, Waker},
 };
 
@@ -9,9 +10,9 @@ use futures_util::future::BoxFuture;
 use log::error;
 
 use crate::{
-    Client,
-    ClientHandle,
-    errors::Result, types::{IntoOptions, OptionsSource},
+    errors::Result,
+    types::{IntoOptions, OptionsSource, Progress},
+    Client, ClientHandle,
 };
 
 pub use self::futures::GetHandle;
@@ -215,16 +216,16 @@ impl Pool {
             match new.poll_unpin(cx) {
                 Poll::Ready(Ok(client)) => {
                     self.inner.idle.push(client).unwrap();
-                },
+                }
                 Poll::Pending => {
                     // NOTE: it is okay to drop the construction task
                     // because another construction will be attempted
                     // later in Pool::poll
                     let _ = self.inner.new.push(new);
-                },
+                }
                 Poll::Ready(Err(err)) => {
                     return Err(err);
-                },
+                }
             }
         }
 
@@ -277,6 +278,7 @@ impl Drop for ClientHandle {
             let client = Self {
                 inner: Some(inner),
                 pool: pool.clone(),
+                progress: Progress::default(),
                 context,
             };
             pool.return_conn(client);
@@ -294,7 +296,7 @@ mod test {
 
     use futures_util::future;
 
-    use crate::{Block, errors::Result, Options, test_misc::DATABASE_URL};
+    use crate::{errors::Result, test_misc::DATABASE_URL, Block, Options};
 
     use super::Pool;
     use url::Url;
@@ -404,7 +406,8 @@ mod test {
 
     #[test]
     fn test_get_addr() {
-        let options = Options::from_str("tcp://host1:9000?alt_hosts=host2:9000,host3:9000").unwrap();
+        let options =
+            Options::from_str("tcp://host1:9000?alt_hosts=host2:9000,host3:9000").unwrap();
         let pool = Pool::new(options);
 
         assert_eq!(pool.get_addr(), &Url::from_str("tcp://host1:9000").unwrap());

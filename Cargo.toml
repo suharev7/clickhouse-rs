@@ -49,7 +49,6 @@ version = "1.6"
 optional = true
 
 [dependencies.clickhouse-rs-cityhash-sys]
-path = "clickhouse-rs-cityhash-sys"
 version = "0.1.2"
 
 [dependencies.log]

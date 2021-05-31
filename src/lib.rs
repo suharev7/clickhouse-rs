@@ -114,7 +114,6 @@
 extern crate byteorder;
 extern crate chrono;
 extern crate chrono_tz;
-extern crate clickhouse_rs_cityhash_sys;
 extern crate core;
 #[macro_use]
 extern crate futures;
@@ -129,6 +128,7 @@ extern crate rand;
 extern crate tokio;
 extern crate tokio_timer;
 extern crate url;
+extern crate cityhash_rs;
 
 use std::{fmt, time::Duration};
 

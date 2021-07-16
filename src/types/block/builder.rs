@@ -3,12 +3,13 @@ use std::{borrow::Cow, marker};
 use chrono_tz::Tz;
 
 use crate::{
-        Block,
     errors::{Error, FromSqlError, Result},
     types::{
-        block::ColumnIdx, ColumnType,
-        column::{ArcColumnWrapper, ColumnData, Either}, Column, Value,
+        block::ColumnIdx,
+        column::{ArcColumnWrapper, ColumnData, Either},
+        Column, ColumnType, Value,
     },
+    Block,
 };
 
 pub trait RowBuilder {
@@ -62,7 +63,7 @@ where
 {
     #[inline(always)]
     fn apply<K: ColumnType>(self, block: &mut Block<K>) -> Result<()> {
-        put_param(self.key, self.value, block)?;
+        block.push_value(&self.key, self.value)?;
         self.tail.apply(block)
     }
 }
@@ -70,45 +71,13 @@ where
 impl RowBuilder for Vec<(String, Value)> {
     fn apply<K: ColumnType>(self, block: &mut Block<K>) -> Result<()> {
         for (k, v) in self {
-            put_param(k.into(), v, block)?;
+            block.push_value(&k, v)?;
         }
         Ok(())
     }
 }
 
-fn put_param<K: ColumnType>(
-    key: Cow<'static, str>,
-    value: Value,
-    block: &mut Block<K>,
-) -> Result<()> {
-    let col_index = match key.as_ref().get_index(&block.columns) {
-        Ok(col_index) => col_index,
-        Err(Error::FromSql(FromSqlError::OutOfRange)) => {
-            if block.row_count() <= 1 {
-                let sql_type = From::from(value.clone());
-
-                let timezone = extract_timezone(&value);
-
-                let column = Column {
-                    name: key.clone().into(),
-                    data: <dyn ColumnData>::from_type::<ArcColumnWrapper>(sql_type, timezone, block.capacity)?,
-                    _marker: marker::PhantomData,
-                };
-
-                block.columns.push(column);
-                return put_param(key, value, block);
-            } else {
-                return Err(Error::FromSql(FromSqlError::OutOfRange));
-            }
-        }
-        Err(err) => return Err(err),
-    };
-
-    block.columns[col_index].push(value);
-    Ok(())
-}
-
-fn extract_timezone(value: &Value) -> Tz {
+pub fn extract_timezone(value: &Value) -> Tz {
     match value {
         Value::Date(_, tz) => *tz,
         Value::DateTime(_, tz) => *tz,
@@ -131,7 +100,7 @@ mod test {
 
     use crate::{
         row,
-        types::{Decimal, SqlType, Simple, DateTimeType},
+        types::{DateTimeType, Decimal, Simple, SqlType},
     };
 
     use super::*;
@@ -196,7 +165,10 @@ mod test {
         );
 
         assert_eq!(block.columns[13].sql_type(), SqlType::Date);
-        assert_eq!(block.columns[14].sql_type(), SqlType::DateTime(DateTimeType::Chrono));
+        assert_eq!(
+            block.columns[14].sql_type(),
+            SqlType::DateTime(DateTimeType::Chrono)
+        );
         assert_eq!(block.columns[15].sql_type(), SqlType::Decimal(18, 4));
     }
 }

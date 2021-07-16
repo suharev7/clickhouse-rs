@@ -80,86 +80,6 @@ pub struct Block<K: ColumnType = Simple> {
     capacity: usize,
 }
 
-impl<K: ColumnType> Block<K> {
-    /// Adds a value to a block column
-    ///
-    /// # Arguments
-    /// * `key` - A string representing the column name
-    /// * `value` - The value to add to the end of the column
-    ///
-    /// This method should be cautiously used outside of RowBuilder implementations.
-    /// Clickhouse requires that every column has the same number of items
-    ///
-    ///
-    /// This can be used to add the RowBuilder trait to custom-defined structs
-    /// ```
-    /// use clickhouse_rs::errors;
-    /// use clickhouse_rs::types;
-    ///
-    /// struct Person {
-    ///  name: String,
-    ///  age: i32
-    /// }
-    ///
-    /// impl types::RowBuilder for Person {
-    ///     fn apply<K>(
-    ///        self,
-    ///        block: &mut types::Block<K>,
-    ///     ) -> Result<(), errors::Error>
-    ///     where
-    ///         K: types::ColumnType,
-    ///     {
-    ///          block.push_value("name", self.name.into())?;
-    ///          block.push_value("age", self.age.into())?;
-    ///          Ok(())
-    ///     }
-    ///}
-    ///
-    /// # fn main(){
-    /// let mut block = types::Block::new();
-    /// let person = Person {
-    ///   name: "Bob".to_string(),
-    ///   age: 42,
-    /// };
-    ///
-    /// block.push(person).unwrap();
-    /// assert_eq!(block.row_count(), 1);
-    /// # }
-    /// ```
-    /// Note this requires the types to have either Into or From for Value implemented
-    pub fn push_value(&mut self, key: &str, value: Value) -> Result<()> {
-        let col_index = match key.get_index(&self.columns) {
-            Ok(col_index) => col_index,
-            Err(Error::FromSql(FromSqlError::OutOfRange)) => {
-                if self.row_count() <= 1 {
-                    let sql_type = From::from(value.clone());
-
-                    let timezone = extract_timezone(&value);
-
-                    let column = Column {
-                        name: key.clone().into(),
-                        data: <dyn ColumnData>::from_type::<ArcColumnWrapper>(
-                            sql_type,
-                            timezone,
-                            self.capacity,
-                        )?,
-                        _marker: PhantomData,
-                    };
-
-                    self.columns.push(column);
-                    return self.push_value(key, value);
-                } else {
-                    return Err(Error::FromSql(FromSqlError::OutOfRange));
-                }
-            }
-            Err(err) => return Err(err),
-        };
-
-        self.columns[col_index].push(value);
-        Ok(())
-    }
-}
-
 impl<L: ColumnType, R: ColumnType> PartialEq<Block<R>> for Block<L> {
     fn eq(&self, other: &Block<R>) -> bool {
         if self.columns.len() != other.columns.len() {
@@ -351,6 +271,84 @@ impl<K: ColumnType> Block<K> {
         let column_index = col.get_index(self.columns())?;
         let column = &self.columns[column_index];
         Ok(column)
+    }
+
+    /// Adds a value to a block column
+    ///
+    /// # Arguments
+    /// * `key` - A string representing the column name
+    /// * `value` - The value to add to the end of the column
+    ///
+    /// This method should be cautiously used outside of RowBuilder implementations.
+    /// Clickhouse requires that every column has the same number of items
+    ///
+    ///
+    /// This can be used to add the RowBuilder trait to custom-defined structs
+    /// ```
+    /// use clickhouse_rs::errors;
+    /// use clickhouse_rs::types;
+    ///
+    /// struct Person {
+    ///  name: String,
+    ///  age: i32
+    /// }
+    ///
+    /// impl types::RowBuilder for Person {
+    ///     fn apply<K>(
+    ///        self,
+    ///        block: &mut types::Block<K>,
+    ///     ) -> Result<(), errors::Error>
+    ///     where
+    ///         K: types::ColumnType,
+    ///     {
+    ///          block.push_value("name", self.name.into())?;
+    ///          block.push_value("age", self.age.into())?;
+    ///          Ok(())
+    ///     }
+    ///}
+    ///
+    /// # fn main(){
+    /// let mut block = types::Block::new();
+    /// let person = Person {
+    ///   name: "Bob".to_string(),
+    ///   age: 42,
+    /// };
+    ///
+    /// block.push(person).unwrap();
+    /// assert_eq!(block.row_count(), 1);
+    /// # }
+    /// ```
+    /// Note this requires the types to have either Into or From for Value implemented
+    pub fn push_value(&mut self, key: &str, value: Value) -> Result<()> {
+        let col_index = match key.get_index(&self.columns) {
+            Ok(col_index) => col_index,
+            Err(Error::FromSql(FromSqlError::OutOfRange)) => {
+                if self.row_count() <= 1 {
+                    let sql_type = From::from(value.clone());
+
+                    let timezone = extract_timezone(&value);
+
+                    let column = Column {
+                        name: key.clone().into(),
+                        data: <dyn ColumnData>::from_type::<ArcColumnWrapper>(
+                            sql_type,
+                            timezone,
+                            self.capacity,
+                        )?,
+                        _marker: PhantomData,
+                    };
+
+                    self.columns.push(column);
+                    return self.push_value(key, value);
+                } else {
+                    return Err(Error::FromSql(FromSqlError::OutOfRange));
+                }
+            }
+            Err(err) => return Err(err),
+        };
+
+        self.columns[col_index].push(value);
+        Ok(())
     }
 }
 

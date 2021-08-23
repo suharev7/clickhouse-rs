@@ -322,10 +322,7 @@ impl convert::From<Uuid> for Value {
 
 impl convert::From<bool> for Value {
     fn from(v: bool) -> Value {
-        match v {
-            true => Value::UInt8(1_u8),
-            false => Value::UInt8(0_u8),
-        }
+        Value::UInt8(if v {1} else {0})
     }
 }
 
@@ -558,10 +555,8 @@ mod test {
 
     #[test]
     fn test_boolean() {
-        let f = false;
-        let t = true;
-        let v = Value::from(f);
-        let w = Value::from(t);
+        let v = Value::from(false);
+        let w = Value::from(true);
         assert_eq!(v, Value::UInt8(0));
         assert_eq!(w, Value::UInt8(1));
     }

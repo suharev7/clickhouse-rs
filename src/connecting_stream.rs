@@ -22,7 +22,7 @@ use url::Url;
 
 use crate::{errors::ConnectionError, io::Stream as InnerStream, Options};
 #[cfg(feature = "tls")]
-use tokio_tls::TlsStream;
+use tokio_native_tls::TlsStream;
 
 type Result<T> = std::result::Result<T, ConnectionError>;
 
@@ -179,7 +179,7 @@ impl ConnectingStream {
                             let (s, _) = socket.await?;
 
                             let cx = builder.build()?;
-                            let cx = tokio_tls::TlsConnector::from(cx);
+                            let cx = tokio_native_tls::TlsConnector::from(cx);
 
                             Ok(cx.connect(&host, s).await?)
                         })

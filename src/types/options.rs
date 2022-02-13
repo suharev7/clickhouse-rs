@@ -14,6 +14,7 @@ use crate::errors::{Error, Result, UrlError};
 use std::fmt::Formatter;
 #[cfg(feature = "tls")]
 use native_tls;
+use percent_encoding::percent_decode;
 use url::Url;
 
 const DEFAULT_MIN_CONNS: usize = 10;
@@ -505,7 +506,8 @@ fn parse_param<'a, F, T, E>(
 where
     F: Fn(&str) -> std::result::Result<T, E>,
 {
-    match parse(value.as_ref()) {
+    let source = percent_decode(value.as_bytes()).decode_utf8_lossy();
+    match parse(source.as_ref()) {
         Ok(value) => Ok(value),
         Err(_) => Err(UrlError::InvalidParamValue {
             param: param.into(),
@@ -514,16 +516,19 @@ where
     }
 }
 
-fn get_username_from_url(url: &Url) -> Option<&str> {
+fn get_username_from_url(url: &Url) -> Option<Cow<'_, str>> {
     let user = url.username();
     if user.is_empty() {
         return None;
     }
-    Some(user)
+    Some(percent_decode(user.as_bytes())
+        .decode_utf8_lossy())
 }
 
-fn get_password_from_url(url: &Url) -> Option<&str> {
-    url.password()
+fn get_password_from_url(url: &Url) -> Option<Cow<'_, str>> {
+    let password = url.password()?;
+    Some(percent_decode(password.as_bytes())
+        .decode_utf8_lossy())
 }
 
 fn get_database_from_url(url: &Url) -> Result<Option<&str>> {
@@ -642,6 +647,25 @@ mod test {
                 compression: true,
                 secure: true,
                 skip_verify: true,
+                ..Options::default()
+            },
+            from_url(url).unwrap(),
+        );
+    }
+
+    #[test]
+    fn test_parse_encoded_creds() {
+        let url = "tcp://user%20%3Cbar%3E:password%20%3Cbar%3E@host1:9001/database?ping_timeout=42ms&keepalive=99s&compression=lz4&connection_timeout=10s";
+        assert_eq!(
+            Options {
+                username: "user <bar>".into(),
+                password: "password <bar>".into(),
+                addr: Url::parse("tcp://user%20%3Cbar%3E:password%20%3Cbar%3E@host1:9001").unwrap(),
+                database: "database".into(),
+                keepalive: Some(Duration::from_secs(99)),
+                ping_timeout: Duration::from_millis(42),
+                connection_timeout: Duration::from_secs(10),
+                compression: true,
                 ..Options::default()
             },
             from_url(url).unwrap(),

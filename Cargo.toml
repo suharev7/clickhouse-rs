@@ -21,7 +21,7 @@ tokio_io = ["tokio"]
 
 [dependencies]
 byteorder = "^1.3"
-chrono-tz = "0.5"
+chrono-tz = "0.6"
 crossbeam = "0.8.0"
 thiserror = "1.0.20"
 futures-core = "0.3.16"
@@ -33,6 +33,7 @@ pin-project = "1.0.8"
 url="^2"
 uuid = "0.8.1"
 combine = "4.2.3"
+percent-encoding = "2.1.0"
 
 [dependencies.futures-util]
 version = "0.3.16"

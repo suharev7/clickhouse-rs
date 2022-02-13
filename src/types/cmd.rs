@@ -37,7 +37,7 @@ fn encode_command(cmd: &Cmd) -> Result<Vec<u8>> {
         Cmd::Hello(context) => encode_hello(context),
         Cmd::Ping => Ok(encode_ping()),
         Cmd::SendQuery(query, context) => encode_query(query, context),
-        Cmd::SendData(block, context) => encode_data(&block, context),
+        Cmd::SendData(block, context) => encode_data(block, context),
         Cmd::Union(first, second) => encode_union(first.as_ref(), second.as_ref()),
         Cmd::Cancel => Ok(encode_cancel()),
     }

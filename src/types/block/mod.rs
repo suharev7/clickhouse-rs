@@ -384,7 +384,7 @@ impl<K: ColumnType> fmt::Debug for Block<K> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let titles: Vec<&str> = self.columns.iter().map(|column| column.name()).collect();
 
-        let cells: Vec<_> = self.columns.iter().map(|col| text_cells(&col)).collect();
+        let cells: Vec<_> = self.columns.iter().map(|col| text_cells(col)).collect();
 
         let titles_len: Vec<_> = titles
             .iter()

@@ -271,13 +271,13 @@ impl convert::From<AppDate> for Value {
 
 impl convert::From<Enum8> for Value {
     fn from(v: Enum8) -> Value {
-        Value::Enum8 { 0: vec![], 1: v }
+        Value::Enum8(Vec::new(), v)
     }
 }
 
 impl convert::From<Enum16> for Value {
     fn from(v: Enum16) -> Value {
-        Value::Enum16 { 0: vec![], 1: v }
+        Value::Enum16(Vec::new(), v)
     }
 }
 
@@ -480,7 +480,7 @@ mod test {
         Value: convert::Into<T> + convert::From<T>,
         T: PartialEq + fmt::Debug + Clone,
     {
-        test_into_t::<T>(Value::from(value.clone()), &value);
+        test_into_t::<T>(Value::from(value.clone()), value);
     }
 
     macro_rules! test_type {

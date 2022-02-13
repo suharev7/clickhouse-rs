@@ -10,7 +10,7 @@ documentation = "https://docs.rs/clickhouse-rs/"
 readme = "README.md"
 keywords = ["tokio", "database", "clickhouse"]
 categories = ["database"]
-edition = "2018"
+edition = "2021"
 exclude = ["tests/*", "examples/*"]
 
 [features]

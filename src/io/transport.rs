@@ -259,7 +259,7 @@ impl Stream for ClickhouseTransport {
 
         // Fill the buffer!
         while !*this.done {
-            match read_to_end(this.inner.as_mut(), cx, &mut this.rd) {
+            match read_to_end(this.inner.as_mut(), cx, this.rd) {
                 Poll::Ready(Ok(0)) => {
                     *this.done = true;
                     break;

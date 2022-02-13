@@ -279,13 +279,13 @@ fn parse_decimal(source: &str) -> Option<(u8, u8, NoBits)> {
 
     match nobits {
         Some(_) => {
-            scale = (&source[params_indexes.0 + 1..params_indexes.1])
+            scale = (source[params_indexes.0 + 1..params_indexes.1])
                 .parse()
                 .ok()
         }
         None => {
             for (idx, cell) in
-                (&source[params_indexes.0 + 1..params_indexes.1])
+                (source[params_indexes.0 + 1..params_indexes.1])
                     .split(',')
                     .map(|s| s.trim())
                     .enumerate()

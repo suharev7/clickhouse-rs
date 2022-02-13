@@ -65,12 +65,12 @@ pub trait ColumnFrom {
 
 pub trait ColumnType: Send + Copy + Sync + 'static {}
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 pub struct Simple {
     _private: (),
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 pub struct Complex {
     _private: (),
 }
@@ -78,18 +78,6 @@ pub struct Complex {
 impl ColumnType for Simple {}
 
 impl ColumnType for Complex {}
-
-impl Default for Simple {
-    fn default() -> Self {
-        Self { _private: () }
-    }
-}
-
-impl Default for Complex {
-    fn default() -> Self {
-        Self { _private: () }
-    }
-}
 
 impl<K: ColumnType> ColumnFrom for Column<K> {
     fn column_from<W: ColumnWrapper>(source: Self) -> W::Wrapper {
@@ -136,7 +124,7 @@ impl Column<Simple> {
         let chunks: Vec<_> = items_vec.iter().map(|column| column.data.clone()).collect();
         match items_vec.first() {
             None => unreachable!(),
-            Some(ref first_column) => {
+            Some(first_column) => {
                 let name: String = first_column.name().to_string();
                 let data = ConcatColumnData::concat(chunks);
                 Column {

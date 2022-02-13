@@ -79,8 +79,8 @@ async fn test_create_table() -> Result<(), Error> {
 
     if let Err(err) = c.execute(ddl).await {
         assert_eq!(
-            "Server error: `ERROR DB::Exception (57): DB::Exception: Table default.clickhouse_test_create_table already exists.`",
-            format!("{}", err)
+            "Server error",
+            &format!("{}", err)[..12]
         );
     } else {
         panic!("should fail")
@@ -363,7 +363,7 @@ fn test_simple_select() {
 
 #[cfg(feature = "tokio_io")]
 #[tokio::test]
-async fn test_simple_select() -> Result<(), Error> {
+async fn test_simple_selects() -> Result<(), Error> {
     let pool = Pool::new(database_url());
     let mut c = pool.get_handle().await?;
     let actual = c.query("SELECT a FROM (SELECT 1 AS a UNION ALL SELECT 2 AS a UNION ALL SELECT 3 AS a) ORDER BY a ASC").fetch_all().await?;

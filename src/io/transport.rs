@@ -270,6 +270,10 @@ impl Stream for ClickhouseTransport {
             }
         }
 
+        if *this.done {
+            return Poll::Ready(None);
+        }
+
         // Try to parse the new data!
         let ret = this.try_parse_msg();
 

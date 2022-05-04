@@ -132,11 +132,11 @@ impl ColumnData for MapColumnData {
     }
 
     fn cast_to(&self, _this: &ArcColumnData, target: &SqlType) -> Option<ArcColumnData> {
-        if let SqlType::Array(inner_target) = target {
-            if let Some(inner) = self.keys.cast_to(&self.keys, inner_target) {
+        if let SqlType::Map(key, value) = target {
+            if let Some(inner) = self.keys.cast_to(&self.keys, key) {
                 let keys = inner;
 
-                if let Some(inner_values) = self.values.cast_to(&self.values, inner_target) {
+                if let Some(inner_values) = self.values.cast_to(&self.values, value) {
                     let values = inner_values;
 
                     return Some(Arc::new(Self {

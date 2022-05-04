@@ -3,6 +3,7 @@ extern crate chrono_tz;
 extern crate clickhouse_rs;
 extern crate tokio;
 
+use std::collections::HashMap;
 use std::{
     env,
     f64::EPSILON,
@@ -23,9 +24,9 @@ use futures_util::{
 
 use clickhouse_rs::{
     errors::Error,
+    row,
     types::{Decimal, Enum16, Enum8, FromSql},
     Block, Pool,
-    row,
 };
 use uuid::Uuid;
 use Tz::UTC;
@@ -78,10 +79,7 @@ async fn test_create_table() -> Result<(), Error> {
     c.execute(ddl).await?;
 
     if let Err(err) = c.execute(ddl).await {
-        assert_eq!(
-            "Server error",
-            &format!("{}", err)[..12]
-        );
+        assert_eq!("Server error", &format!("{}", err)[..12]);
     } else {
         panic!("should fail")
     }
@@ -397,7 +395,6 @@ async fn test_simple_selects() -> Result<(), Error> {
         .await?;
     assert!((2_f64 - r.get::<f64, _>(0, 0)?).abs() < EPSILON);
 
-
     let expected = Block::new().column("a", vec![1_u8, 2, 3]);
     assert_eq!(expected, actual);
 
@@ -633,7 +630,12 @@ async fn test_nullable() -> Result<(), Error> {
             "ipv6",
             vec![Some(Ipv6Addr::new(0, 0, 0, 0, 0, 0xffff, 0xc00a, 0x2ff))],
         )
-        .column("uuid", vec![Some(Uuid::parse_str("936da01f-9abd-4d9d-80c7-02af85c822a8").unwrap())]);
+        .column(
+            "uuid",
+            vec![Some(
+                Uuid::parse_str("936da01f-9abd-4d9d-80c7-02af85c822a8").unwrap(),
+            )],
+        );
 
     let pool = Pool::new(database_url());
     let mut c = pool.get_handle().await?;
@@ -682,7 +684,10 @@ async fn test_nullable() -> Result<(), Error> {
         Some(Ipv6Addr::new(0, 0, 0, 0, 0, 0xffff, 0xc00a, 0x2ff))
     );
 
-    assert_eq!(uuid, Some(Uuid::parse_str("936da01f-9abd-4d9d-80c7-02af85c822a8").unwrap()));
+    assert_eq!(
+        uuid,
+        Some(Uuid::parse_str("936da01f-9abd-4d9d-80c7-02af85c822a8").unwrap())
+    );
 
     Ok(())
 }
@@ -777,7 +782,8 @@ async fn test_foreign_columns() -> Result<(), Error> {
 
     let pool = Pool::new(database_url());
     let mut c = pool.get_handle().await?;
-    c.execute("DROP TABLE IF EXISTS clickhouse_foreign_columns").await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_foreign_columns")
+        .await?;
     c.execute(ddl).await?;
     c.insert("clickhouse_foreign_columns", block).await?;
     let block = c.query(query).fetch_all().await?;
@@ -1100,7 +1106,10 @@ async fn test_column_iter() -> Result<(), Error> {
         .column("array", vec![vec![42_u32], Vec::new(), Vec::new()])
         .column("ipv4", vec!["127.0.0.1", "127.0.0.1", "127.0.0.1"])
         .column("ipv6", vec!["::1", "::1", "::1"])
-        .column("uuid", vec![Uuid::parse_str("936da01f-9abd-4d9d-80c7-02af85c822a8").unwrap(); 3]);
+        .column(
+            "uuid",
+            vec![Uuid::parse_str("936da01f-9abd-4d9d-80c7-02af85c822a8").unwrap(); 3],
+        );
 
     let pool = Pool::new(database_url());
     let mut c = pool.get_handle().await?;
@@ -1171,7 +1180,10 @@ async fn test_column_iter() -> Result<(), Error> {
         assert_eq!(ipv6_iter, vec![Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1); 3]);
 
         let uuid_iter: Vec<_> = block.get_column("uuid")?.iter::<Uuid>()?.collect();
-        assert_eq!(uuid_iter, vec![Uuid::parse_str("936da01f-9abd-4d9d-80c7-02af85c822a8").unwrap(); 3]);
+        assert_eq!(
+            uuid_iter,
+            vec![Uuid::parse_str("936da01f-9abd-4d9d-80c7-02af85c822a8").unwrap(); 3]
+        );
     }
 
     Ok(())
@@ -1290,8 +1302,7 @@ async fn test_ip_from_string() -> Result<(), Error> {
         ) ENGINE = Memory
     ";
 
-    let source_block = Block::new()
-        .column("ip_v4", vec!["192.168.2.1", "1.2.3.4"]);
+    let source_block = Block::new().column("ip_v4", vec!["192.168.2.1", "1.2.3.4"]);
 
     let pool = Pool::new(database_url());
 
@@ -1300,9 +1311,7 @@ async fn test_ip_from_string() -> Result<(), Error> {
         .execute("DROP TABLE IF EXISTS clickhouse_test_ipv4")
         .await?;
     client.execute(ddl).await?;
-    client
-        .insert("clickhouse_test_ipv4", source_block)
-        .await?;
+    client.insert("clickhouse_test_ipv4", source_block).await?;
     let block = client
         .query("SELECT ip_v4 FROM clickhouse_test_ipv4")
         .fetch_all()
@@ -1325,8 +1334,10 @@ async fn test_ipv6_from_string() -> Result<(), Error> {
         ) ENGINE = Memory
     ";
 
-    let source_block = Block::new()
-        .column("ip_v6", vec!["0001:0203:0405:0607:0809:0A0B:0C0D:0E0F", "::1", "1::"]);
+    let source_block = Block::new().column(
+        "ip_v6",
+        vec!["0001:0203:0405:0607:0809:0A0B:0C0D:0E0F", "::1", "1::"],
+    );
 
     let pool = Pool::new(database_url());
 
@@ -1335,9 +1346,7 @@ async fn test_ipv6_from_string() -> Result<(), Error> {
         .execute("DROP TABLE IF EXISTS clickhouse_test_ipv6")
         .await?;
     client.execute(ddl).await?;
-    client
-        .insert("clickhouse_test_ipv6", source_block)
-        .await?;
+    client.insert("clickhouse_test_ipv6", source_block).await?;
     let block = client
         .query("SELECT ip_v6 FROM clickhouse_test_ipv6")
         .fetch_all()
@@ -1347,7 +1356,10 @@ async fn test_ipv6_from_string() -> Result<(), Error> {
     let ip2: Ipv6Addr = block.get(1, "ip_v6")?;
     let ip3: Ipv6Addr = block.get(2, "ip_v6")?;
 
-    assert_eq!(ip1, Ipv6Addr::new(0x0001, 0x0203, 0x0405, 0x0607, 0x0809, 0x0A0B, 0x0C0D, 0x0E0F));
+    assert_eq!(
+        ip1,
+        Ipv6Addr::new(0x0001, 0x0203, 0x0405, 0x0607, 0x0809, 0x0A0B, 0x0C0D, 0x0E0F)
+    );
     assert_eq!(ip2, Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1));
     assert_eq!(ip3, Ipv6Addr::new(1, 0, 0, 0, 0, 0, 0, 0));
     Ok(())
@@ -1362,8 +1374,10 @@ async fn test_ipv6_db_representation() -> Result<(), Error> {
         ) ENGINE = Memory
     ";
 
-    let source_block = Block::new()
-        .column("ip_v6", vec!["0001:0203:0405:0607:0809:0A0B:0C0D:0E0F", "::1", "1::"]);
+    let source_block = Block::new().column(
+        "ip_v6",
+        vec!["0001:0203:0405:0607:0809:0A0B:0C0D:0E0F", "::1", "1::"],
+    );
 
     let pool = Pool::new(database_url());
 
@@ -1381,7 +1395,7 @@ async fn test_ipv6_db_representation() -> Result<(), Error> {
         .await?;
 
     let ip1: &str = block.get(0, "ip_v6_str")?;
-    let ip2: &str  = block.get(1, "ip_v6_str")?;
+    let ip2: &str = block.get(1, "ip_v6_str")?;
     let ip3: &str = block.get(2, "ip_v6_str")?;
 
     assert_eq!(ip1, "1:203:405:607:809:a0b:c0d:e0f");
@@ -1400,23 +1414,31 @@ async fn test_insert_date64() -> Result<(), Error> {
         ) ENGINE = Memory
     ";
 
-    let date = chrono_tz::UTC.ymd(2020, 2, 3).and_hms_nano(13, 45, 50, 8927265);
+    let date = chrono_tz::UTC
+        .ymd(2020, 2, 3)
+        .and_hms_nano(13, 45, 50, 8927265);
     let mut block = Block::new();
-    block.push(row!{
+    block.push(row! {
         id: 1u32,
         date,
     })?;
 
-
     let pool = Pool::new(database_url());
 
     let mut client = pool.get_handle().await?;
-    client.execute("DROP TABLE IF EXISTS clickhouse_test_insert_date64").await?;
+    client
+        .execute("DROP TABLE IF EXISTS clickhouse_test_insert_date64")
+        .await?;
     client.execute(ddl).await?;
 
-    client.insert("clickhouse_test_insert_date64", &block).await?;
+    client
+        .insert("clickhouse_test_insert_date64", &block)
+        .await?;
 
-    let result = client.query("SELECT * FROM clickhouse_test_insert_date64").fetch_all().await?;
+    let result = client
+        .query("SELECT * FROM clickhouse_test_insert_date64")
+        .fetch_all()
+        .await?;
     assert_eq!(result.row_count(), 1);
 
     Ok(())
@@ -1442,17 +1464,74 @@ async fn test_simple_agg_func() -> Result<(), Error> {
     let pool = Pool::new(database_url());
 
     let mut client = pool.get_handle().await?;
-    client.execute("DROP TABLE IF EXISTS clickhouse_test_simple_agg_func").await?;
+    client
+        .execute("DROP TABLE IF EXISTS clickhouse_test_simple_agg_func")
+        .await?;
     client.execute(ddl).await?;
-    client.insert("clickhouse_test_simple_agg_func", &block).await?;
+    client
+        .insert("clickhouse_test_simple_agg_func", &block)
+        .await?;
 
-    let result = client.query("SELECT * FROM clickhouse_test_simple_agg_func").fetch_all().await?;
-    let actual: Vec<_> = result
-        .get_column("val")?
-        .iter::<i64>()?
-        .copied()
-        .collect();
+    let result = client
+        .query("SELECT * FROM clickhouse_test_simple_agg_func")
+        .fetch_all()
+        .await?;
+    let actual: Vec<_> = result.get_column("val")?.iter::<i64>()?.copied().collect();
     assert_eq!(actual, vec![6_i64, 9, 7]);
     Ok(())
 }
 
+#[cfg(feature = "tokio_io")]
+#[tokio::test]
+async fn test_map() -> Result<(), Error> {
+    let mut map = HashMap::new();
+    map.insert("test".to_string(), 4);
+    map.insert("foo".to_string(), 5);
+
+    let b = map.clone();
+
+    let mut block = Block::new();
+    block.push(row! {
+        id: 1u32,
+        map,
+    })?;
+
+    let pool = Pool::new(database_url());
+    let mut client = pool.get_handle().await?;
+
+    client
+        .execute("DROP TABLE IF EXISTS map_test")
+        .await
+        .unwrap();
+    client
+        .execute(
+            "
+        CREATE TABLE IF NOT EXISTS map_test (
+            id UInt32,
+            map Map(String, Int32)
+        ) Engine=MergeTree ORDER BY id;
+         ",
+        )
+        .await
+        .unwrap();
+
+    client.insert("map_test", &block).await.unwrap();
+
+    let result = client
+        .query("SELECT * FROM map_test")
+        .fetch_all()
+        .await
+        .unwrap();
+
+    assert_eq!(result.row_count(), 1);
+
+    for row in result.rows() {
+        let id: u32 = row.get("id")?;
+        let map: HashMap<String, i32> = row.get("map")?;
+
+        assert_eq!(id, 1);
+        assert_eq!(map, b);
+    }
+
+    Ok(())
+}

@@ -1,4 +1,4 @@
-use std::{fmt, cmp::Ordering};
+use std::{cmp::Ordering, fmt};
 
 static FACTORS10: &[i64] = &[
     1,
@@ -37,7 +37,7 @@ pub(crate) enum NoBits {
 }
 
 /// Provides arbitrary-precision floating point decimal.
-#[derive(Clone)]
+#[derive(Clone, Hash)]
 pub struct Decimal {
     pub(crate) underlying: i64,
     pub(crate) nobits: NoBits, // its domain is {32, 64}
@@ -114,13 +114,13 @@ impl PartialEq for Decimal {
                 let delta = other.scale() - self.scale();
                 let underlying = self.underlying * FACTORS10[delta];
                 other.underlying == underlying
-            },
+            }
             Ordering::Equal => self.underlying == other.underlying,
             Ordering::Greater => {
                 let delta = self.scale() - other.scale();
                 let underlying = other.underlying * FACTORS10[delta];
                 self.underlying == underlying
-            },
+            }
         }
     }
 }

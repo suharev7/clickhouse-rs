@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 use std::{
     convert, fmt, mem,
     net::{Ipv4Addr, Ipv6Addr},
@@ -11,7 +13,7 @@ use chrono_tz::Tz;
 use crate::types::{
     column::{datetime64::to_datetime, Either},
     decimal::{Decimal, NoBits},
-    DateConverter, Enum16, Enum8, SqlType, DateTimeType, HasSqlType
+    DateConverter, DateTimeType, Enum16, Enum8, HasSqlType, SqlType,
 };
 
 use uuid::Uuid;
@@ -45,7 +47,23 @@ pub enum Value {
     Decimal(Decimal),
     Enum8(Vec<(String, i8)>, Enum8),
     Enum16(Vec<(String, i16)>, Enum16),
+    Map(
+        &'static SqlType,
+        &'static SqlType,
+        Arc<HashMap<Value, Value>>,
+    ),
 }
+
+impl Hash for Value {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            Self::String(s) => s.hash(state),
+            _ => unimplemented!(),
+        }
+    }
+}
+
+impl Eq for Value {}
 
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
@@ -102,9 +120,7 @@ impl Value {
             SqlType::DateTime(DateTimeType::DateTime64(_, _)) => {
                 Value::DateTime64(0, (1, Tz::Zulu))
             }
-            SqlType::SimpleAggregateFunction(_, nested) => {
-                Value::default(nested.clone())
-            }
+            SqlType::SimpleAggregateFunction(_, nested) => Value::default(nested.clone()),
             SqlType::DateTime(_) => 0_u32.to_date(Tz::Zulu).into(),
             SqlType::Nullable(inner) => Value::Nullable(Either::Left(inner)),
             SqlType::Array(inner) => Value::Array(inner, Arc::new(Vec::default())),
@@ -119,6 +135,7 @@ impl Value {
             SqlType::Uuid => Value::Uuid([0_u8; 16]),
             SqlType::Enum8(values) => Value::Enum8(values, Enum8(0)),
             SqlType::Enum16(values) => Value::Enum16(values, Enum16(0)),
+            SqlType::Map(k, v) => Value::Map(k, v, Arc::new(HashMap::default())),
         }
     }
 }
@@ -177,7 +194,7 @@ impl fmt::Display for Value {
             Value::Decimal(v) => fmt::Display::fmt(v, f),
             Value::Ipv4(v) => {
                 write!(f, "{}", decode_ipv4(v))
-            },
+            }
             Value::Ipv6(v) => {
                 write!(f, "{}", decode_ipv6(v))
             }
@@ -192,6 +209,13 @@ impl fmt::Display for Value {
             }
             Value::Enum8(ref _v1, ref v2) => write!(f, "Enum8, {}", v2),
             Value::Enum16(ref _v1, ref v2) => write!(f, "Enum16, {}", v2),
+            Value::Map(_, _, hm) => {
+                let cells: Vec<String> = hm
+                    .iter()
+                    .map(|(k, v)| format!("key=>{} value=>{}", k, v))
+                    .collect();
+                write!(f, "[{}]", cells.join(", "))
+            }
         }
     }
 }
@@ -230,7 +254,8 @@ impl convert::From<Value> for SqlType {
             Value::DateTime64(_, params) => {
                 let (precision, tz) = params;
                 SqlType::DateTime(DateTimeType::DateTime64(precision, tz))
-            },
+            }
+            Value::Map(k, v, _) => SqlType::Map(k, v),
         }
     }
 }
@@ -322,7 +347,26 @@ impl convert::From<Uuid> for Value {
 
 impl convert::From<bool> for Value {
     fn from(v: bool) -> Value {
-        Value::UInt8(if v {1} else {0})
+        Value::UInt8(if v { 1 } else { 0 })
+    }
+}
+
+impl<K, V> convert::From<HashMap<K, V>> for Value
+where
+    K: convert::Into<Value> + HasSqlType,
+    V: convert::Into<Value> + HasSqlType,
+{
+    fn from(hm: HashMap<K, V>) -> Self {
+        let mut res = HashMap::with_capacity(hm.capacity());
+
+        for (k, v) in hm {
+            res.insert(k.into(), v.into());
+        }
+        Self::Map(
+            K::get_sql_type().clone().into(),
+            V::get_sql_type().clone().into(),
+            Arc::new(res),
+        )
     }
 }
 
@@ -532,7 +576,10 @@ mod test {
     fn test_from_datetime_utc() {
         let date_time_value: DateTime<Utc> = Utc.ymd(2014, 7, 8).and_hms(14, 0, 0);
         let v = Value::from(date_time_value);
-        assert_eq!(v, Value::DateTime(date_time_value.timestamp() as u32, Tz::UTC));
+        assert_eq!(
+            v,
+            Value::DateTime(date_time_value.timestamp() as u32, Tz::UTC)
+        );
     }
 
     #[test]
@@ -547,10 +594,7 @@ mod test {
             Value::Date(u16::get_days(date_value), date_value.timezone()),
             d
         );
-        assert_eq!(
-            Value::ChronoDateTime(date_time_value),
-            dt
-        );
+        assert_eq!(Value::ChronoDateTime(date_time_value), dt);
     }
 
     #[test]

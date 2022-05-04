@@ -1485,8 +1485,8 @@ async fn test_simple_agg_func() -> Result<(), Error> {
 #[tokio::test]
 async fn test_map() -> Result<(), Error> {
     let mut map = HashMap::new();
-    map.insert("test".to_string(), 4);
-    map.insert("foo".to_string(), 5);
+    map.insert("test".to_string(), 0_u8);
+    map.insert("foo".to_string(), 1);
 
     let b = map.clone();
 
@@ -1508,7 +1508,7 @@ async fn test_map() -> Result<(), Error> {
             "
         CREATE TABLE IF NOT EXISTS map_test (
             id UInt32,
-            map Map(String, Int32)
+            map Map(String, UInt8)
         ) Engine=MergeTree ORDER BY id;
          ",
         )
@@ -1527,7 +1527,7 @@ async fn test_map() -> Result<(), Error> {
 
     for row in result.rows() {
         let id: u32 = row.get("id")?;
-        let map: HashMap<String, i32> = row.get("map")?;
+        let map: HashMap<String, u8> = row.get("map")?;
 
         assert_eq!(id, 1);
         assert_eq!(map, b);

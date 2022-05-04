@@ -4,6 +4,7 @@ use std::sync::Arc;
 use chrono_tz::Tz;
 
 use crate::types::column::{ColumnFrom, ColumnWrapper};
+use crate::types::{HasSqlType, Marshal, StatBuffer, Unmarshal};
 use crate::{
     binary::{Encoder, ReadEx},
     errors::Result,
@@ -151,10 +152,69 @@ impl ColumnData for MapColumnData {
     }
 }
 
-impl ColumnFrom for Vec<HashMap<String, i32>> {
+impl<V> ColumnFrom for Vec<HashMap<String, V>>
+where
+    V: Copy
+        + From<Value>
+        + HasSqlType
+        + Marshal
+        + StatBuffer
+        + Unmarshal<V>
+        + Sync
+        + Send
+        + 'static,
+    Value: From<V>,
+{
     fn column_from<W: ColumnWrapper>(source: Self) -> W::Wrapper {
         let fake_keys: Vec<String> = Vec::with_capacity(source.len());
-        let fake_values: Vec<i32> = Vec::with_capacity(source.len());
+        let fake_values: Vec<V> = Vec::with_capacity(source.len());
+
+        let keys = Vec::column_from::<ArcColumnWrapper>(fake_keys);
+        let key_type = keys.sql_type();
+
+        let values = Vec::column_from::<ArcColumnWrapper>(fake_values);
+        let value_type = values.sql_type();
+
+        let mut data = MapColumnData {
+            keys,
+            values,
+            offsets: List::with_capacity(source.len()),
+        };
+
+        for array in source {
+            data.push(to_string_map(key_type.clone(), value_type.clone(), array));
+        }
+
+        W::wrap(data)
+    }
+}
+
+impl<K, V> ColumnFrom for Vec<HashMap<K, V>>
+where
+    K: Copy
+        + From<Value>
+        + Marshal
+        + HasSqlType
+        + StatBuffer
+        + Unmarshal<K>
+        + Sync
+        + Send
+        + 'static,
+    Value: From<K>,
+    V: Copy
+        + From<Value>
+        + HasSqlType
+        + Marshal
+        + StatBuffer
+        + Unmarshal<V>
+        + Sync
+        + Send
+        + 'static,
+    Value: From<V>,
+{
+    fn column_from<W: ColumnWrapper>(source: Self) -> W::Wrapper {
+        let fake_keys: Vec<K> = Vec::with_capacity(source.len());
+        let fake_values: Vec<V> = Vec::with_capacity(source.len());
 
         let keys = Vec::column_from::<ArcColumnWrapper>(fake_keys);
         let key_type = keys.sql_type();
@@ -176,7 +236,10 @@ impl ColumnFrom for Vec<HashMap<String, i32>> {
     }
 }
 
-fn to_map(keys_type: SqlType, values_type: SqlType, vs: HashMap<String, i32>) -> Value {
+fn to_string_map<V>(keys_type: SqlType, values_type: SqlType, vs: HashMap<String, V>) -> Value
+where
+    Value: From<V>,
+{
     let mut inner = HashMap::with_capacity(vs.len());
     for (k, v) in vs {
         let key: Value = k.into();
@@ -186,29 +249,19 @@ fn to_map(keys_type: SqlType, values_type: SqlType, vs: HashMap<String, i32>) ->
     Value::Map(keys_type.into(), values_type.into(), Arc::new(inner))
 }
 
-// fn make_hashmap<W: ColumnWrapper, S: StringSource>(
-//     source: Vec<Vec<S>>,
-// ) -> <W as ColumnWrapper>::Wrapper {
-//     let fake: Vec<String> = Vec::with_capacity(source.len());
-//     let inner = Vec::column_from::<ArcColumnWrapper>(fake);
-//     let sql_type = inner.sql_type();
-//
-//     let mut data = MapColumnData {
-//         inner,
-//         offsets: List::with_capacity(source.len()),
-//     };
-//
-//     for vs in source {
-//         let mut inner = Vec::with_capacity(vs.len());
-//         for v in vs {
-//             let value: Value = v.into_value();
-//             inner.push(value)
-//         }
-//         data.push(Value::Array(sql_type.clone().into(), Arc::new(inner)));
-//     }
-//
-//     W::wrap(data)
-// }
+fn to_map<K, V>(keys_type: SqlType, values_type: SqlType, vs: HashMap<K, V>) -> Value
+where
+    Value: From<K>,
+    Value: From<V>,
+{
+    let mut inner = HashMap::with_capacity(vs.len());
+    for (k, v) in vs {
+        let key: Value = k.into();
+        let value: Value = v.into();
+        inner.insert(key, value);
+    }
+    Value::Map(keys_type.into(), values_type.into(), Arc::new(inner))
+}
 
 #[cfg(test)]
 mod test {
@@ -221,7 +274,7 @@ mod test {
     #[test]
     fn test_write_and_read() {
         let mut a = HashMap::new();
-        a.insert("test".to_string(), 4);
+        a.insert("test".to_string(), 4_u8);
         a.insert("foo".to_string(), 5);
 
         let block = Block::<Simple>::new().column("vals", vec![a]);

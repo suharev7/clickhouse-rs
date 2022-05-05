@@ -1,12 +1,13 @@
 use chrono::prelude::*;
 use chrono_tz::Tz;
+use either::Either;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 use crate::types::{Enum16, Enum8};
 use crate::{
     errors::{Error, FromSqlError, Result},
     types::{
-        column::{datetime64::to_datetime, Either},
+        column::datetime64::to_datetime,
         value::{decode_ipv4, decode_ipv6},
         Decimal, SqlType, ValueRef,
     },
@@ -324,9 +325,10 @@ from_sql_impl! {
 
 #[cfg(test)]
 mod test {
-    use crate::types::{column::Either, from_sql::FromSql, DateTimeType, SqlType, ValueRef};
+    use crate::types::{from_sql::FromSql, DateTimeType, SqlType, ValueRef};
     use chrono::prelude::*;
     use chrono_tz::Tz;
+    use either::Either;
 
     #[test]
     fn test_u8() {

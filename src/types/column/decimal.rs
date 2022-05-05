@@ -1,19 +1,19 @@
-use std::sync::Arc;
 use chrono_tz::Tz;
+use either::Either;
+use std::sync::Arc;
 
 use crate::{
     binary::{Encoder, ReadEx},
     errors::Result,
     types::{
-        ColumnType,
         column::{
-            BoxColumnWrapper, column_data::BoxColumnData, column_data::ColumnData,
-            ColumnFrom, ColumnWrapper, Either, list::List, nullable::NullableColumnData,
+            column_data::BoxColumnData, column_data::ColumnData, list::List,
+            nullable::NullableColumnData, BoxColumnWrapper, ColumnFrom, ColumnWrapper,
             VectorColumnData,
         },
-        Column,
         decimal::{Decimal, NoBits},
-        from_sql::FromSql, SqlType, Value, ValueRef,
+        from_sql::FromSql,
+        Column, ColumnType, SqlType, Value, ValueRef,
     },
 };
 
@@ -51,7 +51,8 @@ impl DecimalColumnData {
             NoBits::N32 => "Int32",
             NoBits::N64 => "Int64",
         };
-        let inner = <dyn ColumnData>::load_data::<BoxColumnWrapper, _>(reader, type_name, size, tz)?;
+        let inner =
+            <dyn ColumnData>::load_data::<BoxColumnWrapper, _>(reader, type_name, size, tz)?;
 
         Ok(DecimalColumnData {
             inner,

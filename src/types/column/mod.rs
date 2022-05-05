@@ -14,14 +14,12 @@ use crate::{
         column::{
             column_data::ArcColumnData,
             decimal::{DecimalAdapter, NullableDecimalAdapter},
+            enums::{Enum16Adapter, Enum8Adapter, NullableEnum16Adapter, NullableEnum8Adapter},
             fixed_string::{FixedStringAdapter, NullableFixedStringAdapter},
-            simple_agg_func::SimpleAggregateFunctionColumnData,
             ip::{IpColumnData, Ipv4, Ipv6},
-            string::StringAdapter,
             iter::Iterable,
-            enums::{
-                Enum16Adapter, Enum8Adapter, NullableEnum16Adapter, NullableEnum8Adapter,
-            }
+            simple_agg_func::SimpleAggregateFunctionColumnData,
+            string::StringAdapter,
         },
         decimal::NoBits,
         SqlType, Value, ValueRef,
@@ -33,12 +31,12 @@ pub(crate) use self::{column_data::ColumnData, string_pool::StringPool};
 pub use self::{concat::ConcatColumnData, numeric::VectorColumnData};
 
 mod array;
+pub(crate) mod chrono_datetime;
 mod chunk;
 mod column_data;
 mod concat;
 mod date;
 pub(crate) mod datetime64;
-pub(crate) mod chrono_datetime;
 mod decimal;
 mod enums;
 mod factory;
@@ -48,9 +46,9 @@ pub(crate) mod iter;
 mod list;
 mod nullable;
 mod numeric;
+mod simple_agg_func;
 mod string;
 mod string_pool;
-mod simple_agg_func;
 
 /// Represents Clickhouse Column
 pub struct Column<K: ColumnType> {
@@ -182,7 +180,8 @@ impl<K: ColumnType> Column<K> {
     pub(crate) fn read<R: ReadEx>(reader: &mut R, size: usize, tz: Tz) -> Result<Column<K>> {
         let name = reader.read_string()?;
         let type_name = reader.read_string()?;
-        let data = <dyn ColumnData>::load_data::<ArcColumnWrapper, _>(reader, &type_name, size, tz)?;
+        let data =
+            <dyn ColumnData>::load_data::<ArcColumnWrapper, _>(reader, &type_name, size, tz)?;
         let column = Self {
             name,
             data,
@@ -417,11 +416,11 @@ impl<K: ColumnType> Column<K> {
                     name: inner_column.name,
                     data: Arc::new(SimpleAggregateFunctionColumnData {
                         inner: inner_column.data,
-                        func
+                        func,
                     }),
                     _marker: marker::PhantomData,
                 })
-            },
+            }
             _ => {
                 if let Some(data) = self.data.cast_to(&self.data, &dst_type) {
                     let name = self.name().to_owned();
@@ -436,7 +435,7 @@ impl<K: ColumnType> Column<K> {
                         dst: dst_type.to_string(),
                     }))
                 }
-            },
+            }
         }
     }
 
@@ -468,16 +467,6 @@ pub(crate) fn new_column<K: ColumnType>(
         data,
         _marker: marker::PhantomData,
     }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum Either<L, R>
-where
-    L: fmt::Debug + PartialEq + Clone,
-    R: fmt::Debug + PartialEq + Clone,
-{
-    Left(L),
-    Right(R),
 }
 
 pub trait ColumnWrapper {

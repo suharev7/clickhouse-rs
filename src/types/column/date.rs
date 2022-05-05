@@ -2,6 +2,7 @@ use std::{convert, fmt, sync::Arc};
 
 use chrono::{prelude::*, Date};
 use chrono_tz::Tz;
+use either::Either;
 
 use crate::{
     binary::{Encoder, ReadEx},
@@ -12,7 +13,7 @@ use crate::{
         list::List,
         nullable::NullableColumnData,
         numeric::save_data,
-        ArcColumnWrapper, ColumnFrom, ColumnWrapper, Either,
+        ArcColumnWrapper, ColumnFrom, ColumnWrapper,
     },
     types::{DateConverter, Marshal, SqlType, StatBuffer, Unmarshal, Value, ValueRef},
 };

@@ -1,14 +1,16 @@
 use std::{borrow::Cow, marker};
 
 use chrono_tz::Tz;
+use either::Either;
 
 use crate::{
-        Block,
     errors::{Error, FromSqlError, Result},
     types::{
-        block::ColumnIdx, ColumnType,
-        column::{ArcColumnWrapper, ColumnData, Either}, Column, Value,
+        block::ColumnIdx,
+        column::{ArcColumnWrapper, ColumnData},
+        Column, ColumnType, Value,
     },
+    Block,
 };
 
 pub trait RowBuilder {
@@ -91,7 +93,11 @@ fn put_param<K: ColumnType>(
 
                 let column = Column {
                     name: key.clone().into(),
-                    data: <dyn ColumnData>::from_type::<ArcColumnWrapper>(sql_type, timezone, block.capacity)?,
+                    data: <dyn ColumnData>::from_type::<ArcColumnWrapper>(
+                        sql_type,
+                        timezone,
+                        block.capacity,
+                    )?,
                     _marker: marker::PhantomData,
                 };
 
@@ -131,7 +137,7 @@ mod test {
 
     use crate::{
         row,
-        types::{Decimal, SqlType, Simple, DateTimeType},
+        types::{DateTimeType, Decimal, Simple, SqlType},
     };
 
     use super::*;
@@ -196,7 +202,10 @@ mod test {
         );
 
         assert_eq!(block.columns[13].sql_type(), SqlType::Date);
-        assert_eq!(block.columns[14].sql_type(), SqlType::DateTime(DateTimeType::Chrono));
+        assert_eq!(
+            block.columns[14].sql_type(),
+            SqlType::DateTime(DateTimeType::Chrono)
+        );
         assert_eq!(block.columns[15].sql_type(), SqlType::Decimal(18, 4));
     }
 }

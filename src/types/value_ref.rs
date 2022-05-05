@@ -2,15 +2,15 @@ use std::{convert, fmt, str, sync::Arc};
 
 use chrono::prelude::*;
 use chrono_tz::Tz;
+use either::Either;
 
 use crate::{
     errors::{Error, FromSqlError, Result},
     types::{
-        Enum8, Enum16,
-        column::{Either, datetime64::to_datetime},
+        column::datetime64::to_datetime,
         decimal::Decimal,
-        value::{AppDate, AppDateTime, decode_ipv4, decode_ipv6},
-        SqlType, DateTimeType, Value,
+        value::{decode_ipv4, decode_ipv6, AppDate, AppDateTime},
+        DateTimeType, Enum16, Enum8, SqlType, Value,
     },
 };
 
@@ -378,7 +378,7 @@ impl<'a> From<ValueRef<'a>> for AppDateTime {
             ValueRef::DateTime64(x, params) => {
                 let (precision, tz) = *params;
                 to_datetime(x, precision, tz)
-            },
+            }
             _ => {
                 let from = format!("{}", SqlType::from(value.clone()));
                 panic!("Can't convert ValueRef::{} into {}.", from, "DateTime<Tz>")

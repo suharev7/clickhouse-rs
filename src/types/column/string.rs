@@ -1,15 +1,16 @@
 use std::{io::Write, string::ToString, sync::Arc};
 
+use either::Either;
+
 use crate::{
     binary::{Encoder, ReadEx},
     errors::Result,
     types::{
-        ColumnType,
         column::{
-            array::ArrayColumnData, ArcColumnWrapper, ColumnWrapper, Either,
-            list::List, nullable::NullableColumnData, StringPool,
+            array::ArrayColumnData, list::List, nullable::NullableColumnData, ArcColumnWrapper,
+            ColumnWrapper, StringPool,
         },
-        Column, FromSql, SqlType, Value, ValueRef,
+        Column, ColumnType, FromSql, SqlType, Value, ValueRef,
     },
 };
 

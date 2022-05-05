@@ -1,16 +1,17 @@
-use std::sync::Arc;
 use chrono_tz::Tz;
+use either::Either;
+use std::sync::Arc;
 
 use crate::{
     binary::{Encoder, ReadEx},
     errors::Result,
     types::{
-        enums::{Enum16, Enum8},
         column::{
             column_data::BoxColumnData, column_data::ColumnData, list::List,
             nullable::NullableColumnData, BoxColumnWrapper, ColumnFrom, ColumnWrapper,
-            VectorColumnData, Either,
+            VectorColumnData,
         },
+        enums::{Enum16, Enum8},
         from_sql::FromSql,
         Column, ColumnType, SqlType, Value, ValueRef,
     },
@@ -40,7 +41,8 @@ impl Enum16ColumnData {
     ) -> Result<Self> {
         let type_name = "Int16";
 
-        let inner = <dyn ColumnData>::load_data::<BoxColumnWrapper, _>(reader, type_name, size, tz)?;
+        let inner =
+            <dyn ColumnData>::load_data::<BoxColumnWrapper, _>(reader, type_name, size, tz)?;
 
         Ok(Enum16ColumnData { enum_values, inner })
     }
@@ -235,7 +237,8 @@ impl Enum8ColumnData {
     ) -> Result<Self> {
         let type_name = "Int8";
 
-        let inner = <dyn ColumnData>::load_data::<BoxColumnWrapper, _>(reader, type_name, size, tz)?;
+        let inner =
+            <dyn ColumnData>::load_data::<BoxColumnWrapper, _>(reader, type_name, size, tz)?;
 
         Ok(Enum8ColumnData { enum_values, inner })
     }

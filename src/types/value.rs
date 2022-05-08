@@ -58,6 +58,14 @@ impl Hash for Value {
     fn hash<H: Hasher>(&self, state: &mut H) {
         match self {
             Self::String(s) => s.hash(state),
+            Self::Int8(i) => i.hash(state),
+            Self::Int16(i) => i.hash(state),
+            Self::Int32(i) => i.hash(state),
+            Self::Int64(i) => i.hash(state),
+            Self::UInt8(i) => i.hash(state),
+            Self::UInt16(i) => i.hash(state),
+            Self::UInt32(i) => i.hash(state),
+            Self::UInt64(i) => i.hash(state),
             _ => unimplemented!(),
         }
     }

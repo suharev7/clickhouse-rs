@@ -390,6 +390,7 @@ impl SqlType {
         match self {
             SqlType::Nullable(inner) => 1 + inner.level(),
             SqlType::Array(inner) => 1 + inner.level(),
+            SqlType::Map(key, _value) => 1 + key.level(),
             _ => 0,
         }
     }

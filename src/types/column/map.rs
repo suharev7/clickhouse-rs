@@ -121,15 +121,15 @@ impl ColumnData for MapColumnData {
         })
     }
 
-    unsafe fn get_internal(&self, _pointers: &[*mut *const u8], _level: u8) -> Result<()> {
-        panic!("not implemented");
-        // if level == self.sql_type().level() {
-        //     *pointers[0] = self.offsets.as_ptr() as *const u8;
-        //     *(pointers[1] as *mut usize) = self.offsets.len();
-        //     Ok(())
-        // } else {
-        //     self.keys.get_internal(pointers, level)
-        // }
+    unsafe fn get_internal(&self, pointers: &[*mut *const u8], level: u8) -> Result<()> {
+        if level == self.sql_type().level() {
+            *pointers[0] = self.offsets.as_ptr() as *const u8;
+            *(pointers[1] as *mut usize) = self.offsets.len();
+            Ok(())
+        } else {
+            self.keys.get_internal(pointers, level)?;
+            self.values.get_internal(pointers, level)
+        }
     }
 
     fn cast_to(&self, _this: &ArcColumnData, target: &SqlType) -> Option<ArcColumnData> {

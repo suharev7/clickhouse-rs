@@ -1,4 +1,5 @@
 use chrono_tz::Tz;
+use std::sync::{Arc, RwLock};
 
 use combine::{
     any,
@@ -210,6 +211,8 @@ impl dyn ColumnData {
                     timezone,
                     capacity,
                 )?,
+                counter: Arc::new(RwLock::new(0)),
+                size: 0,
             }),
         })
     }

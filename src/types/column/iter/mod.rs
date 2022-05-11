@@ -738,7 +738,6 @@ impl<'a> Iterable<'a, Simple> for &[u8] {
                     )?;
                     &*(string_pool as *const StringPool)
                 };
-
                 StringInnerIterator::String(string_pool)
             }
             SqlType::FixedString(str_len) => {

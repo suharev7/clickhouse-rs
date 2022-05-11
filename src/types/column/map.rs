@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use chrono_tz::Tz;
 
@@ -22,6 +22,11 @@ pub(crate) struct MapColumnData {
     pub(crate) keys: ArcColumnData,
     pub(crate) values: ArcColumnData,
     pub(crate) offsets: List<u64>,
+    ///this is used in self.get_internal()
+    ///first the keys are read until counter is equal to size
+    ///then we switch to the values
+    pub(crate) counter: Arc<RwLock<usize>>,
+    pub(crate) size: usize,
 }
 
 impl MapColumnData {
@@ -47,6 +52,8 @@ impl MapColumnData {
             keys,
             values,
             offsets,
+            counter: Arc::new(RwLock::new(0)),
+            size,
         })
     }
 }
@@ -118,17 +125,23 @@ impl ColumnData for MapColumnData {
             keys: self.keys.clone(),
             values: self.values.clone(),
             offsets: self.offsets.clone(),
+            counter: self.counter.clone(),
+            size: self.size,
         })
     }
 
     unsafe fn get_internal(&self, pointers: &[*mut *const u8], level: u8) -> Result<()> {
+        let mut counter = self.counter.write().unwrap();
+
         if level == self.sql_type().level() {
             *pointers[0] = self.offsets.as_ptr() as *const u8;
             *(pointers[1] as *mut usize) = self.offsets.len();
             Ok(())
-        } else {
-            self.keys.get_internal(pointers, level)?;
+        } else if *counter >= self.size {
             self.values.get_internal(pointers, level)
+        } else {
+            *counter += 1;
+            self.keys.get_internal(pointers, level)
         }
     }
 
@@ -144,6 +157,8 @@ impl ColumnData for MapColumnData {
                         keys,
                         values,
                         offsets: self.offsets.clone(),
+                        counter: self.counter.clone(),
+                        size: self.size,
                     }));
                 }
             }
@@ -179,6 +194,8 @@ where
             keys,
             values,
             offsets: List::with_capacity(source.len()),
+            counter: Arc::new(RwLock::new(0)),
+            size: source.len(),
         };
 
         for array in source {
@@ -226,6 +243,8 @@ where
             keys,
             values,
             offsets: List::with_capacity(source.len()),
+            counter: Arc::new(RwLock::new(0)),
+            size: source.len(),
         };
 
         for array in source {

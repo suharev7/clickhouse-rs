@@ -4,11 +4,12 @@ use std::{convert, fmt, str, sync::Arc};
 
 use chrono::prelude::*;
 use chrono_tz::Tz;
+use either::Either;
 
 use crate::{
     errors::{Error, FromSqlError, Result},
     types::{
-        column::{datetime64::to_datetime, Either},
+        column::datetime64::to_datetime,
         decimal::Decimal,
         value::{decode_ipv4, decode_ipv6, AppDate, AppDateTime},
         DateTimeType, Enum16, Enum8, SqlType, Value,

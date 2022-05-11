@@ -9,9 +9,10 @@ use std::{
 
 use chrono::prelude::*;
 use chrono_tz::Tz;
+use either::Either;
 
 use crate::types::{
-    column::{datetime64::to_datetime, Either},
+    column::datetime64::to_datetime,
     decimal::{Decimal, NoBits},
     DateConverter, DateTimeType, Enum16, Enum8, HasSqlType, SqlType,
 };

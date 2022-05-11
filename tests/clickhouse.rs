@@ -234,6 +234,9 @@ async fn test_insert() -> Result<(), Error> {
         .fetch_all()
         .await?;
 
+    println!("{expected:#?}");
+    println!("{actual:#?}");
+
     assert_eq!(format!("{:?}", expected.as_ref()), format!("{:?}", &actual));
     Ok(())
 }

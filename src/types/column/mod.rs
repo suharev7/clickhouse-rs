@@ -1,5 +1,5 @@
 use std::{
-    fmt, marker,
+    marker,
     net::{Ipv4Addr, Ipv6Addr},
     ops,
     sync::Arc,
@@ -468,16 +468,6 @@ pub(crate) fn new_column<K: ColumnType>(
         data,
         _marker: marker::PhantomData,
     }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum Either<L, R>
-where
-    L: fmt::Debug + PartialEq + Clone,
-    R: fmt::Debug + PartialEq + Clone,
-{
-    Left(L),
-    Right(R),
 }
 
 pub trait ColumnWrapper {

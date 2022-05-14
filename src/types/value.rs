@@ -79,6 +79,9 @@ impl PartialEq for Value {
             (Value::Enum16(values_a, val_a), Value::Enum16(values_b, val_b)) => {
                 *values_a == *values_b && *val_a == *val_b
             }
+            (Value::Ipv4(a), Value::Ipv4(b)) => *a == *b,
+            (Value::Ipv6(a), Value::Ipv6(b)) => *a == *b,
+            (Value::Uuid(a), Value::Uuid(b)) => *a == *b,
             _ => false,
         }
     }
@@ -339,7 +342,10 @@ value_from! {
     f32: Float32,
     f64: Float64,
 
-    Decimal: Decimal
+    Decimal: Decimal,
+
+    [u8; 4]: Ipv4,
+    [u8; 16]: Ipv6
 }
 
 impl<'a> convert::From<&'a str> for Value {
@@ -429,7 +435,8 @@ from_value! {
     i32: Int32,
     i64: Int64,
     f32: Float32,
-    f64: Float64
+    f64: Float64,
+    [u8; 4]: Ipv4
 }
 
 pub(crate) fn decode_ipv4(octets: &[u8; 4]) -> Ipv4Addr {
@@ -483,7 +490,7 @@ mod test {
     }
 
     macro_rules! test_type {
-        ( $( $k:ident : $t:ident ),* ) => {
+        ( $( $k:ident : $t:ty ),* ) => {
             $(
                 #[test]
                 fn $k() {
@@ -505,7 +512,9 @@ mod test {
         test_i64: i64,
 
         test_f32: f32,
-        test_f64: f64
+        test_f64: f64,
+
+        test_ipv4: [u8; 4]
     }
 
     #[test]

@@ -16,6 +16,9 @@ use crate::{
         Column, ColumnType, SqlType, Value, ValueRef,
     },
 };
+use crate::types::column::ArcColumnWrapper;
+use crate::types::column::array::ArrayColumnData;
+use crate::types::column::column_data::ArcColumnData;
 
 pub(crate) struct Enum16ColumnData {
     pub(crate) enum_values: Vec<(String, i16)>,
@@ -276,6 +279,19 @@ impl ColumnData for Enum8ColumnData {
             enum_values: self.enum_values.clone(),
         })
     }
+
+    fn cast_to(&self, _this: &ArcColumnData, target: &SqlType) -> Option<ArcColumnData> {
+
+        if let SqlType::Enum8(data)  = target {
+            let data: Enum8ColumnData = Enum8ColumnData {
+                inner:  self.inner.clone_instance(),
+                enum_values: data.clone()
+            };
+            Some(Arc::new(data))
+        } else {
+            None
+        }
+    }
 }
 
 impl<K: ColumnType> ColumnData for Enum8Adapter<K> {
@@ -381,6 +397,30 @@ impl ColumnFrom for Vec<Enum8> {
         W::wrap(column)
     }
 }
+
+impl ColumnFrom for Vec<Vec<Enum8>> {
+    fn column_from<W: ColumnWrapper>(source: Self) -> W::Wrapper {
+        let fake: Vec<Enum8> = Vec::with_capacity(source.len());
+        let inner = Vec::column_from::<ArcColumnWrapper>(fake);
+        let sql_type = inner.sql_type();
+
+        let mut data = ArrayColumnData {
+            inner,
+            offsets: List::with_capacity(source.len())
+        };
+
+        for vs in source {
+            let mut inner: Vec<Value> = Vec::with_capacity(vs.len());
+            for v in vs {
+
+                inner.push(v.into());
+            }
+            data.push(Value::Array(sql_type.clone().into(), Arc::new(inner)));
+        }
+        W::wrap(data)
+    }
+}
+
 
 impl ColumnFrom for Vec<Option<Enum8>> {
     fn column_from<W: ColumnWrapper>(source: Self) -> W::Wrapper {

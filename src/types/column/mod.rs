@@ -1,5 +1,5 @@
 use std::{
-    fmt, marker,
+    marker,
     net::{Ipv4Addr, Ipv6Addr},
     ops,
     sync::Arc,

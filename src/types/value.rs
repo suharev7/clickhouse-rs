@@ -76,12 +76,40 @@ impl PartialEq for Value {
             (Value::Nullable(a), Value::Nullable(b)) => *a == *b,
             (Value::Array(ta, a), Value::Array(tb, b)) => *ta == *tb && *a == *b,
             (Value::Decimal(a), Value::Decimal(b)) => *a == *b,
+            (Value::Enum8(values_a, val_a), Value::Enum8(values_b, val_b)) => {
+                *values_a == *values_b && *val_a == *val_b
+            }
             (Value::Enum16(values_a, val_a), Value::Enum16(values_b, val_b)) => {
                 *values_a == *values_b && *val_a == *val_b
             }
             (Value::Ipv4(a), Value::Ipv4(b)) => *a == *b,
             (Value::Ipv6(a), Value::Ipv6(b)) => *a == *b,
             (Value::Uuid(a), Value::Uuid(b)) => *a == *b,
+            (Value::DateTime64(a, (prec_a, tz_a)), Value::DateTime64(b, (prec_b, tz_b))) => {
+                // chrono has no "variable-precision" offset method. As a
+                // fallback, we always use `timestamp_nanos` and multiply by
+                // the correct value.
+                #[rustfmt::skip]
+                const MULTIPLIERS: [i64; 10] = [
+                    1_000_000_000, // 1 s  is 10^9 nanos
+                      100_000_000,
+                       10_000_000,
+                        1_000_000, // 1 ms is 10^6 nanos
+                          100_000,
+                           10_000,
+                            1_000, // 1 µs is 10^3 nanos
+                              100,
+                               10,
+                                1, // 1 ns is 1 nanos!
+                ];
+
+                // The precision must be in the [0 - 9] range. As such, the
+                // following indexing can not fail.
+                prec_a == prec_b
+                    && tz_a.timestamp_nanos(a * MULTIPLIERS[*prec_a as usize])
+                        == tz_b.timestamp_nanos(b * MULTIPLIERS[*prec_b as usize])
+            }
+
             _ => false,
         }
     }

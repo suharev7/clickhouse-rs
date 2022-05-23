@@ -187,8 +187,10 @@ from_sql_vec_impl! {
     &'a [u8]: SqlType::String => |v| v.as_bytes(),
     Vec<u8>: SqlType::String => |v| v.as_bytes().map(<[u8]>::to_vec),
     Date<Tz>: SqlType::Date => |z| Ok(z.into()),
-    DateTime<Tz>: SqlType::DateTime(_) => |z| Ok(z.into())
+    DateTime<Tz>: SqlType::DateTime(_) => |z| Ok(z.into()),
+    Enum8: SqlType::Enum8(_) => |z| Ok(z.into())
 }
+
 
 impl<'a> FromSql<'a> for Vec<u8> {
     fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
@@ -204,6 +206,8 @@ impl<'a> FromSql<'a> for Vec<u8> {
         }
     }
 }
+
+
 
 macro_rules! from_sql_vec_impl {
     ( $( $t:ident: $k:ident ),* ) => {

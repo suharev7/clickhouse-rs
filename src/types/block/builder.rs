@@ -68,6 +68,15 @@ where
     }
 }
 
+impl RowBuilder for Vec<(&'static str, Value)> {
+    fn apply<K: ColumnType>(self, block: &mut Block<K>) -> Result<()> {
+        for (k, v) in self {
+            block.push_value(k, v)?;
+        }
+        Ok(())
+    }
+}
+
 impl RowBuilder for Vec<(String, Value)> {
     fn apply<K: ColumnType>(self, block: &mut Block<K>) -> Result<()> {
         for (k, v) in self {

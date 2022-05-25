@@ -353,7 +353,7 @@ impl<K: ColumnType> Block<K> {
 }
 
 impl Block<Simple> {
-    pub(crate) fn concat(blocks: &[Self]) -> Block<Complex> {
+    pub fn concat(blocks: &[Self]) -> Block<Complex> {
         let first = blocks.first().expect("blocks should not be empty.");
 
         for block in blocks {

@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashMap, fmt, mem, pin::Pin, sync::Mutex, str::FromStr};
+use std::{borrow::Cow, collections::HashMap, fmt, mem, pin::Pin, str::FromStr, sync::Mutex};
 
 use chrono::prelude::*;
 use chrono_tz::Tz;
@@ -10,15 +10,15 @@ use crate::errors::ServerError;
 
 pub use self::{
     block::{Block, RCons, RNil, Row, RowBuilder, Rows},
-    column::{Column, ColumnType, Simple, Complex},
+    column::{Column, ColumnType, Complex, Simple},
     decimal::Decimal,
     enums::{Enum16, Enum8},
     from_sql::{FromSql, FromSqlResult},
-    value_ref::ValueRef,
     options::Options,
     query::Query,
     query_result::QueryResult,
     value::Value,
+    value_ref::ValueRef,
 };
 
 pub(crate) use self::{
@@ -200,7 +200,7 @@ has_sql_type! {
 pub enum DateTimeType {
     DateTime32,
     DateTime64(u32, Tz),
-    Chrono
+    Chrono,
 }
 
 #[derive(Debug, Copy, Clone, PartialOrd, Eq, PartialEq, Hash)]
@@ -297,6 +297,7 @@ pub enum SqlType {
     Enum8(Vec<(String, i8)>),
     Enum16(Vec<(String, i16)>),
     SimpleAggregateFunction(SimpleAggFunc, &'static SqlType),
+    Map(&'static SqlType, &'static SqlType),
 }
 
 lazy_static! {
@@ -351,7 +352,9 @@ impl SqlType {
             SqlType::Float32 => "Float32".into(),
             SqlType::Float64 => "Float64".into(),
             SqlType::Date => "Date".into(),
-            SqlType::DateTime(DateTimeType::DateTime64(precision, tz)) => format!("DateTime64({}, '{:?}')", precision, tz).into(),
+            SqlType::DateTime(DateTimeType::DateTime64(precision, tz)) => {
+                format!("DateTime64({}, '{:?}')", precision, tz).into()
+            }
             SqlType::DateTime(_) => "DateTime".into(),
             SqlType::Ipv4 => "IPv4".into(),
             SqlType::Ipv6 => "IPv6".into(),
@@ -379,6 +382,7 @@ impl SqlType {
                     .collect();
                 format!("Enum16({})", a.join(",")).into()
             }
+            SqlType::Map(k, v) => format!("Map({}, {})", &k, &v).into(),
         }
     }
 
@@ -386,6 +390,7 @@ impl SqlType {
         match self {
             SqlType::Nullable(inner) => 1 + inner.level(),
             SqlType::Array(inner) => 1 + inner.level(),
+            SqlType::Map(key, _value) => 1 + key.level(),
             _ => 0,
         }
     }

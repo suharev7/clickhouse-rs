@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 use std::{convert, fmt, str, sync::Arc};
 
 use chrono::prelude::*;
@@ -40,7 +42,31 @@ pub enum ValueRef<'a> {
     Uuid([u8; 16]),
     Enum16(Vec<(String, i16)>, Enum16),
     Enum8(Vec<(String, i8)>, Enum8),
+    Map(
+        &'static SqlType,
+        &'static SqlType,
+        Arc<HashMap<ValueRef<'a>, ValueRef<'a>>>,
+    ),
 }
+
+impl<'a> Hash for ValueRef<'a> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            Self::String(s) => s.hash(state),
+            Self::Int8(i) => i.hash(state),
+            Self::Int16(i) => i.hash(state),
+            Self::Int32(i) => i.hash(state),
+            Self::Int64(i) => i.hash(state),
+            Self::UInt8(i) => i.hash(state),
+            Self::UInt16(i) => i.hash(state),
+            Self::UInt32(i) => i.hash(state),
+            Self::UInt64(i) => i.hash(state),
+            _ => unimplemented!(),
+        }
+    }
+}
+
+impl<'a> Eq for ValueRef<'a> {}
 
 impl<'a> PartialEq for ValueRef<'a> {
     fn eq(&self, other: &Self) -> bool {
@@ -79,6 +105,12 @@ impl<'a> PartialEq for ValueRef<'a> {
                 let that_time = to_datetime(*that, that_precision2, that_tz);
 
                 this_time == that_time
+            }
+            (ValueRef::Map(a1, a2, map1), ValueRef::Map(b1, b2, map2)) => {
+                if map1.len() != map2.len() || a1 != b1 || a2 != b2 {
+                    return false;
+                }
+                map1 == map2
             }
             _ => false,
         }
@@ -151,6 +183,10 @@ impl<'a> fmt::Display for ValueRef<'a> {
             }
             ValueRef::Enum8(_, v) => fmt::Display::fmt(v, f),
             ValueRef::Enum16(_, v) => fmt::Display::fmt(v, f),
+            ValueRef::Map(_, _, vs) => {
+                let cells: Vec<String> = vs.iter().map(|v| format!("{}-{}", v.0, v.1)).collect();
+                write!(f, "[{}]", cells.join(", "))
+            }
         }
     }
 }
@@ -186,6 +222,7 @@ impl<'a> convert::From<ValueRef<'a>> for SqlType {
                 let (precision, tz) = params;
                 SqlType::DateTime(DateTimeType::DateTime64(*precision, *tz))
             }
+            ValueRef::Map(k, v, _) => SqlType::Map(k, v),
         }
     }
 }
@@ -257,6 +294,15 @@ impl<'a> From<ValueRef<'a>> for Value {
             ValueRef::Ipv6(v) => Value::Ipv6(v),
             ValueRef::Uuid(v) => Value::Uuid(v),
             ValueRef::DateTime64(v, params) => Value::DateTime64(v, *params),
+            ValueRef::Map(k, v, vs) => {
+                let mut value_list: HashMap<Value, Value> = HashMap::with_capacity(vs.len());
+                for (k, v) in vs.iter() {
+                    let key: Value = k.clone().into();
+                    let value: Value = v.clone().into();
+                    value_list.insert(key, value);
+                }
+                Value::Map(k, v, Arc::new(value_list))
+            }
         }
     }
 }
@@ -339,6 +385,15 @@ impl<'a> From<&'a Value> for ValueRef<'a> {
             Value::Ipv6(v) => ValueRef::Ipv6(*v),
             Value::Uuid(v) => ValueRef::Uuid(*v),
             Value::ChronoDateTime(_) => unimplemented!(),
+            Value::Map(k, v, vs) => {
+                let mut ref_map = HashMap::with_capacity(vs.len());
+                for (k, v) in vs.iter() {
+                    let key_ref: ValueRef<'a> = From::from(k);
+                    let value_ref: ValueRef<'a> = From::from(v);
+                    ref_map.insert(key_ref, value_ref);
+                }
+                ValueRef::Map(*k, *v, Arc::new(ref_map))
+            }
         }
     }
 }

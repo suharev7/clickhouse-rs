@@ -1,4 +1,5 @@
 use chrono_tz::Tz;
+use std::sync::{Arc, RwLock};
 
 use combine::{
     any,
@@ -8,30 +9,30 @@ use combine::{
     sep_by1, token, Parser,
 };
 
+use crate::types::column::map::MapColumnData;
 use crate::{
     binary::ReadEx,
     errors::Result,
     types::{
-        SimpleAggFunc,
-        DateTimeType,
-        decimal::NoBits,
         column::{
             array::ArrayColumnData,
+            chrono_datetime::ChronoDateTimeColumnData,
             column_data::ColumnData,
             date::DateColumnData,
             datetime64::DateTime64ColumnData,
-            chrono_datetime::ChronoDateTimeColumnData,
             decimal::DecimalColumnData,
+            enums::{Enum16ColumnData, Enum8ColumnData},
             fixed_string::FixedStringColumnData,
             ip::{IpColumnData, Ipv4, Ipv6, Uuid},
             list::List,
             nullable::NullableColumnData,
-            simple_agg_func::SimpleAggregateFunctionColumnData,
             numeric::VectorColumnData,
+            simple_agg_func::SimpleAggregateFunctionColumnData,
             string::StringColumnData,
-            BoxColumnWrapper, ArcColumnWrapper, ColumnWrapper,
-            enums::{Enum16ColumnData, Enum8ColumnData}
-        }
+            ArcColumnWrapper, BoxColumnWrapper, ColumnWrapper,
+        },
+        decimal::NoBits,
+        DateTimeType, SimpleAggFunc,
     },
     SqlType,
 };
@@ -84,6 +85,8 @@ impl dyn ColumnData {
                     W::wrap(FixedStringColumnData::load(reader, size, str_len)?)
                 } else if let Some(inner_type) = parse_array_type(type_name) {
                     W::wrap(ArrayColumnData::load(reader, inner_type, size, tz)?)
+                } else if let Some(inner_type) = parse_map_type(type_name) {
+                    W::wrap(MapColumnData::load(reader, inner_type, size, tz)?)
                 } else if let Some((precision, scale, nobits)) = parse_decimal(type_name) {
                     W::wrap(DecimalColumnData::load(
                         reader, precision, scale, nobits, size, tz,
@@ -134,19 +137,35 @@ impl dyn ColumnData {
             SqlType::DateTime(DateTimeType::DateTime64(precision, timezone)) => W::wrap(
                 DateTime64ColumnData::with_capacity(capacity, precision, timezone),
             ),
-            SqlType::DateTime(_) => W::wrap(ChronoDateTimeColumnData::with_capacity(capacity, timezone)),
+            SqlType::DateTime(_) => {
+                W::wrap(ChronoDateTimeColumnData::with_capacity(capacity, timezone))
+            }
             SqlType::Nullable(inner_type) => W::wrap(NullableColumnData {
-                inner: <dyn ColumnData>::from_type::<ArcColumnWrapper>(inner_type.clone(), timezone, capacity)?,
+                inner: <dyn ColumnData>::from_type::<ArcColumnWrapper>(
+                    inner_type.clone(),
+                    timezone,
+                    capacity,
+                )?,
                 nulls: Vec::new(),
             }),
             SqlType::Array(inner_type) => W::wrap(ArrayColumnData {
-                inner: <dyn ColumnData>::from_type::<ArcColumnWrapper>(inner_type.clone(), timezone, capacity)?,
+                inner: <dyn ColumnData>::from_type::<ArcColumnWrapper>(
+                    inner_type.clone(),
+                    timezone,
+                    capacity,
+                )?,
                 offsets: List::with_capacity(capacity),
             }),
-            SqlType::SimpleAggregateFunction(func, inner_type) => W::wrap(SimpleAggregateFunctionColumnData {
-                inner: <dyn ColumnData>::from_type::<ArcColumnWrapper>(inner_type.clone(), timezone, capacity)?,
-                func
-            }),
+            SqlType::SimpleAggregateFunction(func, inner_type) => {
+                W::wrap(SimpleAggregateFunctionColumnData {
+                    inner: <dyn ColumnData>::from_type::<ArcColumnWrapper>(
+                        inner_type.clone(),
+                        timezone,
+                        capacity,
+                    )?,
+                    func,
+                })
+            }
             SqlType::Decimal(precision, scale) => {
                 let nobits = NoBits::from_precision(precision).unwrap();
 
@@ -179,6 +198,21 @@ impl dyn ColumnData {
                     timezone,
                     capacity,
                 )?,
+            }),
+            SqlType::Map(k, v) => W::wrap(MapColumnData {
+                keys: <dyn ColumnData>::from_type::<ArcColumnWrapper>(
+                    k.clone().into(),
+                    timezone,
+                    capacity,
+                )?,
+                offsets: List::with_capacity(capacity),
+                values: <dyn ColumnData>::from_type::<ArcColumnWrapper>(
+                    v.clone().into(),
+                    timezone,
+                    capacity,
+                )?,
+                counter: Arc::new(RwLock::new(0)),
+                size: 0,
             }),
         })
     }
@@ -219,6 +253,19 @@ fn parse_array_type(source: &str) -> Option<&str> {
     Some(inner_type)
 }
 
+fn parse_map_type(source: &str) -> Option<(&str, &str)> {
+    if !source.starts_with("Map") {
+        return None;
+    }
+
+    let types: Vec<&str> = source[4..source.len() - 1].split(",").collect();
+
+    let key = types.get(0)?.trim();
+    let value = types.get(1)?.trim();
+
+    Some((key, value))
+}
+
 fn parse_simple_agg_fun(source: &str) -> Option<(SimpleAggFunc, &str)> {
     if !source.starts_with("SimpleAggregateFunction(") || !source.ends_with(')') {
         return None;
@@ -228,7 +275,7 @@ fn parse_simple_agg_fun(source: &str) -> Option<(SimpleAggFunc, &str)> {
     let sep_index = args.find(',')?;
 
     let agg_func = args[..sep_index].trim();
-    let agg_type = args[sep_index+1..].trim();
+    let agg_type = args[sep_index + 1..].trim();
 
     let func: SimpleAggFunc = match agg_func.parse() {
         Ok(func) => func,
@@ -284,11 +331,10 @@ fn parse_decimal(source: &str) -> Option<(u8, u8, NoBits)> {
                 .ok()
         }
         None => {
-            for (idx, cell) in
-                (source[params_indexes.0 + 1..params_indexes.1])
-                    .split(',')
-                    .map(|s| s.trim())
-                    .enumerate()
+            for (idx, cell) in (source[params_indexes.0 + 1..params_indexes.1])
+                .split(',')
+                .map(|s| s.trim())
+                .enumerate()
             {
                 match idx {
                     0 => precision = cell.parse().ok(),

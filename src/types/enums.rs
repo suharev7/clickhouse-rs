@@ -1,10 +1,10 @@
 use std::fmt;
 
 // TODO Using strings as a keys
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Hash)]
 pub struct Enum8(pub(crate) i8);
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Hash)]
 pub struct Enum16(pub(crate) i16);
 
 impl PartialEq for Enum16 {

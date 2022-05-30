@@ -1,6 +1,8 @@
 use chrono::prelude::*;
 use chrono_tz::Tz;
 use either::Either;
+use std::collections::HashMap;
+use std::hash::Hash;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 use crate::types::{Enum16, Enum8};
@@ -99,6 +101,26 @@ impl<'a> FromSql<'a> for &'a [u8] {
 impl<'a> FromSql<'a> for String {
     fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
         value.as_str().map(str::to_string)
+    }
+}
+
+impl<'a, K, V> FromSql<'a> for HashMap<K, V>
+where
+    K: FromSql<'a> + Eq + PartialEq + Hash,
+    V: FromSql<'a>,
+{
+    fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
+        if let ValueRef::Map(_k, _v, hm) = value {
+            let mut res = HashMap::with_capacity(hm.capacity());
+
+            for (k, v) in hm.iter() {
+                res.insert(K::from_sql(k.clone())?, V::from_sql(v.clone())?);
+            }
+
+            return Ok(res);
+        }
+
+        Err(Error::from("ohh no"))
     }
 }
 

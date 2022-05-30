@@ -1,5 +1,5 @@
 use std::{
-    fmt, marker,
+    marker,
     net::{Ipv4Addr, Ipv6Addr},
     ops,
     sync::Arc,
@@ -44,6 +44,7 @@ pub(crate) mod fixed_string;
 mod ip;
 pub(crate) mod iter;
 mod list;
+mod map;
 mod nullable;
 mod numeric;
 mod simple_agg_func;

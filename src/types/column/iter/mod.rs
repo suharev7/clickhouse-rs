@@ -1,5 +1,7 @@
 #![allow(clippy::cast_ptr_alignment)]
 
+use std::collections::HashMap;
+use std::hash::Hash;
 use std::{
     iter::FusedIterator,
     marker, mem,
@@ -13,7 +15,7 @@ use chrono_tz::Tz;
 use crate::{
     errors::{Error, FromSqlError, Result},
     types::{
-        column::{column_data::ArcColumnData, StringPool, datetime64::to_datetime},
+        column::{column_data::ArcColumnData, datetime64::to_datetime, StringPool},
         decimal::NoBits,
         Column, ColumnType, Complex, Decimal, Simple, SqlType,
     },
@@ -195,6 +197,13 @@ pub struct NullableIterator<'a, I> {
 
 pub struct ArrayIterator<'a, I> {
     inner: I,
+    offsets: &'a [u64],
+    index: usize,
+    size: usize,
+}
+
+pub struct MapIterator<'a, K, V> {
+    inner: (K, V),
     offsets: &'a [u64],
     index: usize,
     size: usize,
@@ -427,12 +436,12 @@ impl<'a> DateTimeIterator<'a> {
                 let current_value = **ptr;
                 *ptr = ptr.offset(1);
                 self.tz.timestamp(i64::from(current_value), 0)
-            },
+            }
             DateTimeInnerIterator::DateTime64(ptr, _, precision) => {
                 let current_value = **ptr;
                 *ptr = ptr.offset(1);
                 to_datetime(current_value, *precision, self.tz)
-            },
+            }
         }
     }
 
@@ -451,8 +460,12 @@ impl ExactSizeIterator for DateTimeIterator<'_> {
     #[inline(always)]
     fn len(&self) -> usize {
         match self.inner {
-            DateTimeInnerIterator::DateTime32(ptr, end) => (end as usize - ptr as usize) / mem::size_of::<u32>(),
-            DateTimeInnerIterator::DateTime64(ptr, end, _) => (end as usize - ptr as usize) / mem::size_of::<i64>(),
+            DateTimeInnerIterator::DateTime32(ptr, end) => {
+                (end as usize - ptr as usize) / mem::size_of::<u32>()
+            }
+            DateTimeInnerIterator::DateTime64(ptr, end, _) => {
+                (end as usize - ptr as usize) / mem::size_of::<i64>()
+            }
         }
     }
 }
@@ -497,9 +510,6 @@ impl<'a> Iterator for DateTimeIterator<'a> {
         self.next()
     }
 }
-
-
-
 
 impl<'a, I> ExactSizeIterator for NullableIterator<'a, I>
 where
@@ -595,6 +605,61 @@ impl<'a, I: Iterator> Iterator for ArrayIterator<'a, I> {
 
 impl<'a, I: Iterator> FusedIterator for ArrayIterator<'a, I> {}
 
+impl<'a, K: Iterator, V: Iterator> ExactSizeIterator for MapIterator<'a, K, V>
+where
+    K::Item: Eq + Hash,
+{
+    #[inline(always)]
+    fn len(&self) -> usize {
+        self.size - self.index
+    }
+}
+
+impl<'a, K: Iterator, V: Iterator> Iterator for MapIterator<'a, K, V>
+where
+    K::Item: Eq + Hash,
+{
+    type Item = HashMap<K::Item, V::Item>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index == self.size {
+            return None;
+        }
+
+        let start = if self.index > 0 {
+            self.offsets[self.index - 1] as usize
+        } else {
+            0_usize
+        };
+        let end = self.offsets[self.index] as usize;
+
+        let size = end - start;
+
+        let mut v = HashMap::with_capacity(size);
+        for _ in 0..size {
+            if let Some(key) = self.inner.0.next() {
+                if let Some(value) = self.inner.1.next() {
+                    v.insert(key, value);
+                }
+            }
+        }
+
+        self.index += 1;
+        Some(v)
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let exact = self.len();
+        (exact, Some(exact))
+    }
+
+    #[inline]
+    fn count(self) -> usize {
+        self.len()
+    }
+}
+
 impl<'a> Iterable<'a, Simple> for Ipv4Addr {
     type Iter = Ipv4Iterator<'a>;
 
@@ -673,7 +738,6 @@ impl<'a> Iterable<'a, Simple> for &[u8] {
                     )?;
                     &*(string_pool as *const StringPool)
                 };
-
                 StringInnerIterator::String(string_pool)
             }
             SqlType::FixedString(str_len) => {
@@ -756,7 +820,6 @@ impl<'a> Iterable<'a, Simple> for DateTime<Tz> {
     type Iter = DateTimeIterator<'a>;
 
     fn iter(column: &'a Column<Simple>, column_type: SqlType) -> Result<Self::Iter> {
-
         match column_type {
             SqlType::DateTime(_) => (),
             _ => {
@@ -794,7 +857,6 @@ impl<'a> Iterable<'a, Simple> for Date<Tz> {
     type Iter = DateIterator<'a>;
 
     fn iter(column: &'a Column<Simple>, column_type: SqlType) -> Result<Self::Iter> {
-
         if column_type != SqlType::Date {
             return Err(Error::FromSql(FromSqlError::InvalidType {
                 src: column.sql_type().to_string(),
@@ -815,10 +877,7 @@ impl<'a> Iterable<'a, Simple> for Date<Tz> {
     }
 }
 
-fn date_iter(
-    column: &Column<Simple>,
-) -> Result<(*const u8, usize, Tz, Option<u32>)> {
-
+fn date_iter(column: &Column<Simple>) -> Result<(*const u8, usize, Tz, Option<u32>)> {
     let (ptr, size, tz, precision) = unsafe {
         let mut ptr: *const u8 = ptr::null();
         let mut tz: *const Tz = ptr::null();
@@ -914,6 +973,48 @@ where
     }
 }
 
+impl<'a, K, V> Iterable<'a, Simple> for HashMap<K, V>
+where
+    K: Iterable<'a, Simple>,
+    <<K as Iterable<'a, Simple>>::Iter as Iterator>::Item: Eq + Hash,
+    V: Iterable<'a, Simple>,
+{
+    type Iter = MapIterator<'a, K::Iter, V::Iter>;
+
+    fn iter(column: &'a Column<Simple>, column_type: SqlType) -> Result<Self::Iter> {
+        let inner = if let SqlType::Map(k_type, v_type) = column_type {
+            (
+                K::iter(column, k_type.clone())?,
+                V::iter(column, v_type.clone())?,
+            )
+        } else {
+            return Err(Error::FromSql(FromSqlError::InvalidType {
+                src: column_type.to_string(),
+                dst: "Map".into(),
+            }));
+        };
+
+        let mut size: usize = 0;
+        let offsets = unsafe {
+            let mut ptr: *const u8 = ptr::null();
+            column.get_internal(
+                &[&mut ptr, &mut size as *mut usize as *mut *const u8],
+                column_type.level(),
+            )?;
+
+            assert!(!ptr.is_null());
+            slice::from_raw_parts(ptr as *const u64, size)
+        };
+
+        Ok(MapIterator {
+            inner,
+            offsets,
+            index: 0,
+            size,
+        })
+    }
+}
+
 pub struct ComplexIterator<'a, T>
 where
     T: Iterable<'a, Simple>,
@@ -946,7 +1047,8 @@ where
                 _marker: marker::PhantomData,
             };
 
-            let iter = unsafe { T::iter(mem::transmute(&column), self.column_type.clone()) }.unwrap();
+            let iter =
+                unsafe { T::iter(mem::transmute(&column), self.column_type.clone()) }.unwrap();
 
             self.current = Some(iter);
             self.current_index += 1;
@@ -1000,6 +1102,7 @@ where
 #[cfg(test)]
 mod test {
     use crate::types::Block;
+    use std::collections::HashMap;
 
     #[test]
     fn test_complex_iter() {
@@ -1012,5 +1115,28 @@ mod test {
         let actual: Vec<_> = columns.collect();
 
         assert_eq!(actual, vec![&1_u32, &2, &3, &4, &5])
+    }
+
+    #[test]
+    fn test_map_iter() {
+        let mut hm = HashMap::new();
+        hm.insert("a".to_string(), 5_u8);
+
+        let block = Block::new().column("?", vec![hm.clone()]);
+
+        let columns = block.columns()[0].iter::<HashMap<&[u8], u8>>().unwrap();
+        let actual: Vec<_> = columns.collect();
+        let mut aa = HashMap::new();
+
+        for a in &actual[0] {
+            aa.insert(a.0.clone(), *a.1.clone());
+        }
+
+        let mut expected = HashMap::new();
+        for h in &hm {
+            expected.insert(h.0.as_bytes(), *h.1);
+        }
+
+        assert_eq!(aa, expected)
     }
 }

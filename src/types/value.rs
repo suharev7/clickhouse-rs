@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 use std::{
     convert, fmt, mem,
     net::{Ipv4Addr, Ipv6Addr},
@@ -46,7 +48,31 @@ pub enum Value {
     Decimal(Decimal),
     Enum8(Vec<(String, i8)>, Enum8),
     Enum16(Vec<(String, i16)>, Enum16),
+    Map(
+        &'static SqlType,
+        &'static SqlType,
+        Arc<HashMap<Value, Value>>,
+    ),
 }
+
+impl Hash for Value {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            Self::String(s) => s.hash(state),
+            Self::Int8(i) => i.hash(state),
+            Self::Int16(i) => i.hash(state),
+            Self::Int32(i) => i.hash(state),
+            Self::Int64(i) => i.hash(state),
+            Self::UInt8(i) => i.hash(state),
+            Self::UInt16(i) => i.hash(state),
+            Self::UInt32(i) => i.hash(state),
+            Self::UInt64(i) => i.hash(state),
+            _ => unimplemented!(),
+        }
+    }
+}
+
+impl Eq for Value {}
 
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
@@ -149,6 +175,7 @@ impl Value {
             SqlType::Uuid => Value::Uuid([0_u8; 16]),
             SqlType::Enum8(values) => Value::Enum8(values, Enum8(0)),
             SqlType::Enum16(values) => Value::Enum16(values, Enum16(0)),
+            SqlType::Map(k, v) => Value::Map(k, v, Arc::new(HashMap::default())),
         }
     }
 }
@@ -222,6 +249,13 @@ impl fmt::Display for Value {
             }
             Value::Enum8(ref _v1, ref v2) => write!(f, "Enum8, {}", v2),
             Value::Enum16(ref _v1, ref v2) => write!(f, "Enum16, {}", v2),
+            Value::Map(_, _, hm) => {
+                let cells: Vec<String> = hm
+                    .iter()
+                    .map(|(k, v)| format!("key=>{} value=>{}", k, v))
+                    .collect();
+                write!(f, "[{}]", cells.join(", "))
+            }
         }
     }
 }
@@ -261,6 +295,7 @@ impl convert::From<Value> for SqlType {
                 let (precision, tz) = params;
                 SqlType::DateTime(DateTimeType::DateTime64(precision, tz))
             }
+            Value::Map(k, v, _) => SqlType::Map(k, v),
         }
     }
 }
@@ -353,6 +388,25 @@ impl convert::From<Uuid> for Value {
 impl convert::From<bool> for Value {
     fn from(v: bool) -> Value {
         Value::UInt8(if v { 1 } else { 0 })
+    }
+}
+
+impl<K, V> convert::From<HashMap<K, V>> for Value
+where
+    K: convert::Into<Value> + HasSqlType,
+    V: convert::Into<Value> + HasSqlType,
+{
+    fn from(hm: HashMap<K, V>) -> Self {
+        let mut res = HashMap::with_capacity(hm.capacity());
+
+        for (k, v) in hm {
+            res.insert(k.into(), v.into());
+        }
+        Self::Map(
+            K::get_sql_type().clone().into(),
+            V::get_sql_type().clone().into(),
+            Arc::new(res),
+        )
     }
 }
 

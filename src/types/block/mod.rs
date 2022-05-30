@@ -3,8 +3,8 @@ use std::{
     default::Default,
     fmt,
     io::{Cursor, Read},
-    os::raw::c_char,
     marker::PhantomData,
+    os::raw::c_char,
 };
 
 use byteorder::{LittleEndian, WriteBytesExt};
@@ -17,7 +17,7 @@ use crate::{
     errors::{Error, FromSqlError, Result},
     types::{
         column::{self, ArcColumnWrapper, Column, ColumnFrom},
-        FromSql, SqlType, ColumnType, Simple, Complex
+        ColumnType, Complex, FromSql, Simple, SqlType,
     },
 };
 
@@ -148,7 +148,7 @@ impl Block {
         Self {
             info: Default::default(),
             columns: vec![],
-            capacity
+            capacity,
         }
     }
 

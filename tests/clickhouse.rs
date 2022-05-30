@@ -3,6 +3,7 @@ extern crate chrono_tz;
 extern crate clickhouse_rs;
 extern crate tokio;
 
+use std::collections::HashMap;
 use std::{
     env,
     f64::EPSILON,
@@ -1480,5 +1481,60 @@ async fn test_simple_agg_func() -> Result<(), Error> {
         .await?;
     let actual: Vec<_> = result.get_column("val")?.iter::<i64>()?.copied().collect();
     assert_eq!(actual, vec![6_i64, 9, 7]);
+    Ok(())
+}
+
+#[cfg(feature = "tokio_io")]
+#[tokio::test]
+async fn test_map() -> Result<(), Error> {
+    let mut map = HashMap::new();
+    map.insert("test".to_string(), 0_u8);
+    map.insert("foo".to_string(), 1);
+
+    let b = map.clone();
+
+    let mut block = Block::new();
+    block.push(row! {
+        id: 1u32,
+        map,
+    })?;
+
+    let pool = Pool::new(database_url());
+    let mut client = pool.get_handle().await?;
+
+    client
+        .execute("DROP TABLE IF EXISTS map_test")
+        .await
+        .unwrap();
+    client
+        .execute(
+            "
+        CREATE TABLE IF NOT EXISTS map_test (
+            id UInt32,
+            map Map(String, UInt8)
+        ) Engine=MergeTree ORDER BY id;
+         ",
+        )
+        .await
+        .unwrap();
+
+    client.insert("map_test", &block).await.unwrap();
+
+    let result = client
+        .query("SELECT * FROM map_test")
+        .fetch_all()
+        .await
+        .unwrap();
+
+    assert_eq!(result.row_count(), 1);
+
+    for row in result.rows() {
+        let id: u32 = row.get("id")?;
+        let map: HashMap<String, u8> = row.get("map")?;
+
+        assert_eq!(id, 1);
+        assert_eq!(map, b);
+    }
+
     Ok(())
 }

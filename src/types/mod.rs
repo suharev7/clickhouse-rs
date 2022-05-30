@@ -196,6 +196,20 @@ has_sql_type! {
     DateTime<Tz>: SqlType::DateTime(DateTimeType::DateTime32)
 }
 
+
+impl<K, V> HasSqlType for HashMap<K, V>
+where
+    K: HasSqlType,
+    V: HasSqlType,
+{
+    fn get_sql_type() -> SqlType {
+        SqlType::Map(
+            K::get_sql_type().into(),
+            V::get_sql_type().into(),
+        )
+    }
+}
+
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum DateTimeType {
     DateTime32,
@@ -390,7 +404,16 @@ impl SqlType {
         match self {
             SqlType::Nullable(inner) => 1 + inner.level(),
             SqlType::Array(inner) => 1 + inner.level(),
-            SqlType::Map(key, _value) => 1 + key.level(),
+            SqlType::Map(_, value) => 1 + value.level(),
+            _ => 0,
+        }
+    }
+
+    pub(crate) fn map_level(&self) -> u8 {
+        match self {
+            SqlType::Nullable(inner) => inner.level(),
+            SqlType::Array(inner) => inner.level(),
+            SqlType::Map(_, value) => 1 + value.level(),
             _ => 0,
         }
     }

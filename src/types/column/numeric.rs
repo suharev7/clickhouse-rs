@@ -1,4 +1,4 @@
-use std::{convert, mem, sync::Arc};
+use std::{mem, sync::Arc};
 
 use crate::{
     binary::{Encoder, ReadEx},
@@ -23,8 +23,8 @@ where
         + Unmarshal<T>
         + Marshal
         + Copy
-        + convert::Into<Value>
-        + convert::From<Value>
+        + Into<Value>
+        + From<Value>
         + Sync
         + HasSqlType
         + 'static,
@@ -38,8 +38,8 @@ where
         + Unmarshal<T>
         + Marshal
         + Copy
-        + convert::Into<Value>
-        + convert::From<Value>
+        + Into<Value>
+        + From<Value>
         + Send
         + Sync
         + HasSqlType
@@ -56,13 +56,13 @@ where
 
 impl<T> ColumnFrom for Vec<Option<T>>
 where
-    Value: convert::From<T>,
+    Value: From<T>,
     T: StatBuffer
         + Unmarshal<T>
         + Marshal
         + Copy
-        + convert::Into<Value>
-        + convert::From<Value>
+        + Into<Value>
+        + From<Value>
         + Send
         + Sync
         + HasSqlType
@@ -87,13 +87,13 @@ where
 
 impl<T> ColumnFrom for Vec<Vec<T>>
 where
-    Value: convert::From<T>,
+    Value: From<T>,
     T: StatBuffer
         + Unmarshal<T>
         + Marshal
         + Copy
-        + convert::Into<Value>
-        + convert::From<Value>
+        + Into<Value>
+        + From<Value>
         + Send
         + Sync
         + HasSqlType
@@ -119,13 +119,13 @@ where
 
 fn to_array<T>(sql_type: SqlType, vs: Vec<T>) -> Value
 where
-    Value: convert::From<T>,
+    Value: From<T>,
     T: StatBuffer
         + Unmarshal<T>
         + Marshal
         + Copy
-        + convert::Into<Value>
-        + convert::From<Value>
+        + Into<Value>
+        + From<Value>
         + Send
         + Sync
         + HasSqlType
@@ -145,8 +145,8 @@ where
         + Unmarshal<T>
         + Marshal
         + Copy
-        + convert::Into<Value>
-        + convert::From<Value>
+        + Into<Value>
+        + From<Value>
         + Sync
         + HasSqlType
         + 'static,
@@ -173,8 +173,8 @@ where
         + Unmarshal<T>
         + Marshal
         + Copy
-        + convert::Into<Value>
-        + convert::From<Value>
+        + Into<Value>
+        + From<Value>
         + Send
         + Sync
         + HasSqlType
@@ -222,7 +222,7 @@ where
         })
     }
 
-    unsafe fn get_internal(&self, pointers: &[*mut *const u8], level: u8) -> Result<()> {
+    unsafe fn get_internal(&self, pointers: &[*mut *const u8], level: u8, _props: u32) -> Result<()> {
         assert_eq!(level, 0);
         *pointers[0] = self.data.as_ptr() as *const u8;
         *(pointers[1] as *mut usize) = self.len();

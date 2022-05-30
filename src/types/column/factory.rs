@@ -1,5 +1,4 @@
 use chrono_tz::Tz;
-use std::sync::{Arc, RwLock};
 
 use combine::{
     any,
@@ -9,7 +8,6 @@ use combine::{
     sep_by1, token, Parser,
 };
 
-use crate::types::column::map::MapColumnData;
 use crate::{
     binary::ReadEx,
     errors::Result,
@@ -25,6 +23,7 @@ use crate::{
             fixed_string::FixedStringColumnData,
             ip::{IpColumnData, Ipv4, Ipv6, Uuid},
             list::List,
+            map::MapColumnData,
             nullable::NullableColumnData,
             numeric::VectorColumnData,
             simple_agg_func::SimpleAggregateFunctionColumnData,
@@ -211,7 +210,6 @@ impl dyn ColumnData {
                     timezone,
                     capacity,
                 )?,
-                counter: Arc::new(RwLock::new(0)),
                 size: 0,
             }),
         })
@@ -258,10 +256,11 @@ fn parse_map_type(source: &str) -> Option<(&str, &str)> {
         return None;
     }
 
-    let types: Vec<&str> = source[4..source.len() - 1].split(",").collect();
+    let body = &source[4..source.len() - 1];
+    let comma_pos = body.chars().position(|c| c == ',')?;
 
-    let key = types.get(0)?.trim();
-    let value = types.get(1)?.trim();
+    let key = body[0..comma_pos].trim();
+    let value = body[comma_pos + 1..].trim();
 
     Some((key, value))
 }
@@ -670,5 +669,15 @@ mod test {
         let expected = Some((SimpleAggFunc::Sum, "Double"));
         let actual = parse_simple_agg_fun("SimpleAggregateFunction( sum , Double )");
         assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_parse_map_type() {
+        let s = "Map(UInt8, Map(UInt8,UInt8))";
+        let actual = parse_map_type(s);
+        let expected = Some(
+            ("UInt8", "Map(UInt8,UInt8)")
+        );
+        assert_eq!(actual, expected);
     }
 }

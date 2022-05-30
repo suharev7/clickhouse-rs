@@ -90,13 +90,13 @@ impl ColumnData for NullableColumnData {
         })
     }
 
-    unsafe fn get_internal(&self, pointers: &[*mut *const u8], level: u8) -> Result<()> {
+    unsafe fn get_internal(&self, pointers: &[*mut *const u8], level: u8, props: u32) -> Result<()> {
         if level == self.sql_type().level() {
             *pointers[0] = self.nulls.as_ptr();
             *(pointers[1] as *mut usize) = self.len();
             Ok(())
         } else {
-            self.inner.get_internal(pointers, level)
+            self.inner.get_internal(pointers, level, props)
         }
     }
 

@@ -58,8 +58,8 @@ impl ColumnData for SimpleAggregateFunctionColumnData {
         })
     }
 
-    unsafe fn get_internal(&self, pointers: &[*mut *const u8], level: u8) -> Result<()> {
-        self.inner.get_internal(pointers, level)
+    unsafe fn get_internal(&self, pointers: &[*mut *const u8], level: u8, props: u32) -> Result<()> {
+        self.inner.get_internal(pointers, level, props)
     }
 
     fn cast_to(&self, _this: &ArcColumnData, target: &SqlType) -> Option<ArcColumnData> {

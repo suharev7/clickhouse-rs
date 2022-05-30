@@ -260,7 +260,7 @@ impl fmt::Display for Value {
     }
 }
 
-impl convert::From<Value> for SqlType {
+impl From<Value> for SqlType {
     fn from(source: Value) -> Self {
         match source {
             Value::UInt8(_) => SqlType::UInt8,
@@ -300,9 +300,9 @@ impl convert::From<Value> for SqlType {
     }
 }
 
-impl<T> convert::From<Option<T>> for Value
+impl<T> From<Option<T>> for Value
 where
-    Value: convert::From<T>,
+    Value: From<T>,
     T: HasSqlType,
 {
     fn from(value: Option<T>) -> Value {
@@ -328,55 +328,55 @@ macro_rules! value_from {
     };
 }
 
-impl convert::From<AppDate> for Value {
+impl From<AppDate> for Value {
     fn from(v: AppDate) -> Value {
         Value::Date(u16::get_days(v), v.timezone())
     }
 }
 
-impl convert::From<Enum8> for Value {
+impl From<Enum8> for Value {
     fn from(v: Enum8) -> Value {
         Value::Enum8(Vec::new(), v)
     }
 }
 
-impl convert::From<Enum16> for Value {
+impl From<Enum16> for Value {
     fn from(v: Enum16) -> Value {
         Value::Enum16(Vec::new(), v)
     }
 }
 
-impl convert::From<AppDateTime> for Value {
+impl From<AppDateTime> for Value {
     fn from(v: AppDateTime) -> Value {
         Value::ChronoDateTime(v)
     }
 }
 
-impl convert::From<DateTime<Utc>> for Value {
+impl From<DateTime<Utc>> for Value {
     fn from(v: DateTime<Utc>) -> Value {
         Value::DateTime(v.timestamp() as u32, Tz::UTC)
     }
 }
 
-impl convert::From<String> for Value {
+impl From<String> for Value {
     fn from(v: String) -> Value {
         Value::String(Arc::new(v.into_bytes()))
     }
 }
 
-impl convert::From<Vec<u8>> for Value {
+impl From<Vec<u8>> for Value {
     fn from(v: Vec<u8>) -> Value {
         Value::String(Arc::new(v))
     }
 }
 
-impl convert::From<&[u8]> for Value {
+impl From<&[u8]> for Value {
     fn from(v: &[u8]) -> Value {
         Value::String(Arc::new(v.to_vec()))
     }
 }
 
-impl convert::From<Uuid> for Value {
+impl From<Uuid> for Value {
     fn from(v: Uuid) -> Value {
         let mut buffer = *v.as_bytes();
         buffer[..8].reverse();
@@ -385,16 +385,16 @@ impl convert::From<Uuid> for Value {
     }
 }
 
-impl convert::From<bool> for Value {
+impl From<bool> for Value {
     fn from(v: bool) -> Value {
         Value::UInt8(if v { 1 } else { 0 })
     }
 }
 
-impl<K, V> convert::From<HashMap<K, V>> for Value
+impl<K, V> From<HashMap<K, V>> for Value
 where
-    K: convert::Into<Value> + HasSqlType,
-    V: convert::Into<Value> + HasSqlType,
+    K: Into<Value> + HasSqlType,
+    V: Into<Value> + HasSqlType,
 {
     fn from(hm: HashMap<K, V>) -> Self {
         let mut res = HashMap::with_capacity(hm.capacity());
@@ -430,14 +430,14 @@ value_from! {
     [u8; 16]: Ipv6
 }
 
-impl<'a> convert::From<&'a str> for Value {
+impl<'a> From<&'a str> for Value {
     fn from(v: &'a str) -> Self {
         let bytes: Vec<u8> = v.as_bytes().into();
         Value::String(Arc::new(bytes))
     }
 }
 
-impl convert::From<Value> for String {
+impl From<Value> for String {
     fn from(mut v: Value) -> Self {
         if let Value::String(ref mut x) = &mut v {
             let mut tmp = Arc::new(Vec::new());
@@ -451,7 +451,7 @@ impl convert::From<Value> for String {
     }
 }
 
-impl convert::From<Value> for Vec<u8> {
+impl From<Value> for Vec<u8> {
     fn from(v: Value) -> Self {
         match v {
             Value::String(bs) => bs.to_vec(),
@@ -479,7 +479,7 @@ macro_rules! from_value {
     };
 }
 
-impl convert::From<Value> for AppDate {
+impl From<Value> for AppDate {
     fn from(v: Value) -> AppDate {
         if let Value::Date(x, tz) = v {
             let time = tz.timestamp(i64::from(x) * 24 * 3600, 0);
@@ -490,7 +490,7 @@ impl convert::From<Value> for AppDate {
     }
 }
 
-impl convert::From<Value> for AppDateTime {
+impl From<Value> for AppDateTime {
     fn from(v: Value) -> AppDateTime {
         match v {
             Value::DateTime(u, tz) => tz.timestamp(i64::from(u), 0),

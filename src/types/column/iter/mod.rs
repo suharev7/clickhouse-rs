@@ -1,17 +1,5 @@
 #![allow(clippy::cast_ptr_alignment)]
 
-use std::collections::HashMap;
-use std::hash::Hash;
-use std::{
-    iter::FusedIterator,
-    marker, mem,
-    net::{Ipv4Addr, Ipv6Addr},
-    ptr, slice,
-};
-
-use chrono::{prelude::*, Date};
-use chrono_tz::Tz;
-
 use crate::{
     errors::{Error, FromSqlError, Result},
     types::{
@@ -19,6 +7,16 @@ use crate::{
         decimal::NoBits,
         Column, ColumnType, Complex, Decimal, Simple, SqlType,
     },
+};
+use chrono::{prelude::*, Date};
+use chrono_tz::Tz;
+use std::{
+    collections::HashMap,
+    hash::Hash,
+    iter::FusedIterator,
+    marker, mem,
+    net::{Ipv4Addr, Ipv6Addr},
+    ptr, slice,
 };
 
 fn check_type(src: &SqlType, dst: &SqlType) -> bool {
@@ -35,7 +33,7 @@ macro_rules! simple_num_iterable {
             impl<'a> Iterable<'a, Simple> for $t {
                 type Iter = slice::Iter<'a, $t>;
 
-                fn iter(column: &'a Column<Simple>, column_type: SqlType) -> Result<Self::Iter> {
+                fn iter_with_props(column: &'a Column<Simple>, column_type: SqlType, props: u32) -> Result<Self::Iter> {
                     if !check_type(&column_type, &SqlType::$k) {
                         return Err(Error::FromSql(FromSqlError::InvalidType {
                             src: column.sql_type().to_string(),
@@ -46,7 +44,11 @@ macro_rules! simple_num_iterable {
                     unsafe {
                         let mut ptr: *const u8 = ptr::null();
                         let mut size: usize = 0;
-                        column.get_internal(&[&mut ptr, &mut size as *mut usize as *mut *const u8], 0)?;
+                        column.get_internal(
+                            &[&mut ptr, &mut size as *mut usize as *mut *const u8],
+                            0,
+                            props,
+                        )?;
                         assert_ne!(ptr, ptr::null());
                         Ok(slice::from_raw_parts(ptr as *const $t, size).iter())
                     }
@@ -129,7 +131,15 @@ macro_rules! exact_size_iterator {
 pub trait Iterable<'a, K: ColumnType> {
     type Iter: Iterator;
 
-    fn iter(column: &'a Column<K>, column_type: SqlType) -> Result<Self::Iter>;
+    fn iter(column: &'a Column<K>, column_type: SqlType) -> Result<Self::Iter> {
+        Self::iter_with_props(column, column_type, 0)
+    }
+
+    fn iter_with_props(
+        column: &'a Column<K>,
+        column_type: SqlType,
+        _props: u32,
+    ) -> Result<Self::Iter>;
 }
 
 enum StringInnerIterator<'a> {
@@ -632,7 +642,6 @@ where
             0_usize
         };
         let end = self.offsets[self.index] as usize;
-
         let size = end - start;
 
         let mut v = HashMap::with_capacity(size);
@@ -663,10 +672,14 @@ where
 impl<'a> Iterable<'a, Simple> for Ipv4Addr {
     type Iter = Ipv4Iterator<'a>;
 
-    fn iter(column: &'a Column<Simple>, _column_type: SqlType) -> Result<Self::Iter> {
+    fn iter_with_props(
+        column: &'a Column<Simple>,
+        _column_type: SqlType,
+        props: u32,
+    ) -> Result<Self::Iter> {
         let inner = unsafe {
             let mut inner: *const u8 = ptr::null();
-            column.get_internal(&[&mut inner], 0)?;
+            column.get_internal(&[&mut inner], 0, props)?;
             &*(inner as *const Vec<u8>)
         };
 
@@ -684,10 +697,14 @@ impl<'a> Iterable<'a, Simple> for Ipv4Addr {
 impl<'a> Iterable<'a, Simple> for Ipv6Addr {
     type Iter = Ipv6Iterator<'a>;
 
-    fn iter(column: &'a Column<Simple>, _column_type: SqlType) -> Result<Self::Iter> {
+    fn iter_with_props(
+        column: &'a Column<Simple>,
+        _column_type: SqlType,
+        props: u32,
+    ) -> Result<Self::Iter> {
         let inner = unsafe {
             let mut inner: *const u8 = ptr::null();
-            column.get_internal(&[&mut inner], 0)?;
+            column.get_internal(&[&mut inner], 0, props)?;
             &*(inner as *const Vec<u8>)
         };
 
@@ -705,10 +722,14 @@ impl<'a> Iterable<'a, Simple> for Ipv6Addr {
 impl<'a> Iterable<'a, Simple> for uuid::Uuid {
     type Iter = UuidIterator<'a>;
 
-    fn iter(column: &'a Column<Simple>, _column_type: SqlType) -> Result<Self::Iter> {
+    fn iter_with_props(
+        column: &'a Column<Simple>,
+        _column_type: SqlType,
+        props: u32,
+    ) -> Result<Self::Iter> {
         let inner = unsafe {
             let mut inner: *const u8 = ptr::null();
-            column.get_internal(&[&mut inner], 0)?;
+            column.get_internal(&[&mut inner], 0, props)?;
             &*(inner as *const Vec<u8>)
         };
 
@@ -726,7 +747,11 @@ impl<'a> Iterable<'a, Simple> for uuid::Uuid {
 impl<'a> Iterable<'a, Simple> for &[u8] {
     type Iter = StringIterator<'a>;
 
-    fn iter(column: &'a Column<Simple>, column_type: SqlType) -> Result<Self::Iter> {
+    fn iter_with_props(
+        column: &'a Column<Simple>,
+        column_type: SqlType,
+        props: u32,
+    ) -> Result<Self::Iter> {
         let mut size: usize = 0;
         let inner = match column_type {
             SqlType::String => {
@@ -735,6 +760,7 @@ impl<'a> Iterable<'a, Simple> for &[u8] {
                     column.get_internal(
                         &[&mut string_pool, &mut size as *mut usize as *mut *const u8],
                         0,
+                        props,
                     )?;
                     &*(string_pool as *const StringPool)
                 };
@@ -745,6 +771,7 @@ impl<'a> Iterable<'a, Simple> for &[u8] {
                     let mut buffer: *const u8 = ptr::null();
                     column.get_internal(
                         &[&mut buffer, &mut size as *mut usize as *mut *const u8],
+                        0,
                         0,
                     )?;
                     assert_ne!(buffer, ptr::null());
@@ -772,7 +799,11 @@ impl<'a> Iterable<'a, Simple> for &[u8] {
 impl<'a> Iterable<'a, Simple> for Decimal {
     type Iter = DecimalIterator<'a>;
 
-    fn iter(column: &'a Column<Simple>, column_type: SqlType) -> Result<Self::Iter> {
+    fn iter_with_props(
+        column: &'a Column<Simple>,
+        column_type: SqlType,
+        _props: u32,
+    ) -> Result<Self::Iter> {
         let (precision, scale) = if let SqlType::Decimal(precision, scale) = column_type {
             (precision, scale)
         } else {
@@ -792,6 +823,7 @@ impl<'a> Iterable<'a, Simple> for Decimal {
                     &mut size as *mut usize as *mut *const u8,
                     &mut nobits as *mut NoBits as *mut *const u8,
                 ],
+                0,
                 0,
             )?;
             assert_ne!(ptr, ptr::null());
@@ -819,7 +851,11 @@ impl<'a> Iterable<'a, Simple> for Decimal {
 impl<'a> Iterable<'a, Simple> for DateTime<Tz> {
     type Iter = DateTimeIterator<'a>;
 
-    fn iter(column: &'a Column<Simple>, column_type: SqlType) -> Result<Self::Iter> {
+    fn iter_with_props(
+        column: &'a Column<Simple>,
+        column_type: SqlType,
+        props: u32,
+    ) -> Result<Self::Iter> {
         match column_type {
             SqlType::DateTime(_) => (),
             _ => {
@@ -830,7 +866,7 @@ impl<'a> Iterable<'a, Simple> for DateTime<Tz> {
             }
         }
 
-        let (byte_ptr, size, tz, precision) = date_iter(column)?;
+        let (byte_ptr, size, tz, precision) = date_iter(column, props)?;
 
         let inner = match precision {
             None => {
@@ -856,7 +892,11 @@ impl<'a> Iterable<'a, Simple> for DateTime<Tz> {
 impl<'a> Iterable<'a, Simple> for Date<Tz> {
     type Iter = DateIterator<'a>;
 
-    fn iter(column: &'a Column<Simple>, column_type: SqlType) -> Result<Self::Iter> {
+    fn iter_with_props(
+        column: &'a Column<Simple>,
+        column_type: SqlType,
+        props: u32,
+    ) -> Result<Self::Iter> {
         if column_type != SqlType::Date {
             return Err(Error::FromSql(FromSqlError::InvalidType {
                 src: column.sql_type().to_string(),
@@ -864,7 +904,7 @@ impl<'a> Iterable<'a, Simple> for Date<Tz> {
             }));
         };
 
-        let (byte_ptr, size, tz, precision) = date_iter(column)?;
+        let (byte_ptr, size, tz, precision) = date_iter(column, props)?;
         assert!(precision.is_none());
         let ptr = byte_ptr as *const u16;
         let end = unsafe { ptr.add(size) };
@@ -877,7 +917,7 @@ impl<'a> Iterable<'a, Simple> for Date<Tz> {
     }
 }
 
-fn date_iter(column: &Column<Simple>) -> Result<(*const u8, usize, Tz, Option<u32>)> {
+fn date_iter(column: &Column<Simple>, props: u32) -> Result<(*const u8, usize, Tz, Option<u32>)> {
     let (ptr, size, tz, precision) = unsafe {
         let mut ptr: *const u8 = ptr::null();
         let mut tz: *const Tz = ptr::null();
@@ -891,6 +931,7 @@ fn date_iter(column: &Column<Simple>) -> Result<(*const u8, usize, Tz, Option<u3
                 &mut precision as *mut Option<u32> as *mut *const u8,
             ],
             0,
+            props,
         )?;
         assert_ne!(ptr, ptr::null());
         assert_ne!(tz, ptr::null());
@@ -906,7 +947,11 @@ where
 {
     type Iter = NullableIterator<'a, T::Iter>;
 
-    fn iter(column: &'a Column<Simple>, column_type: SqlType) -> Result<Self::Iter> {
+    fn iter_with_props(
+        column: &'a Column<Simple>,
+        column_type: SqlType,
+        props: u32,
+    ) -> Result<Self::Iter> {
         let inner = if let SqlType::Nullable(inner_type) = column_type {
             T::iter(column, inner_type.clone())?
         } else {
@@ -922,6 +967,7 @@ where
             column.get_internal(
                 &[&mut ptr, &mut size as *mut usize as *mut *const u8],
                 column_type.level(),
+                props,
             )?;
             assert_ne!(ptr, ptr::null());
             let end = ptr.add(size);
@@ -943,9 +989,13 @@ where
 {
     type Iter = ArrayIterator<'a, T::Iter>;
 
-    fn iter(column: &'a Column<Simple>, column_type: SqlType) -> Result<Self::Iter> {
+    fn iter_with_props(
+        column: &'a Column<Simple>,
+        column_type: SqlType,
+        props: u32,
+    ) -> Result<Self::Iter> {
         let inner = if let SqlType::Array(inner_type) = column_type {
-            T::iter(column, inner_type.clone())?
+            T::iter_with_props(column, inner_type.clone(), props)?
         } else {
             return Err(Error::FromSql(FromSqlError::InvalidType {
                 src: column_type.to_string(),
@@ -959,6 +1009,7 @@ where
             column.get_internal(
                 &[&mut ptr, &mut size as *mut usize as *mut *const u8],
                 column_type.level(),
+                0,
             )?;
             assert_ne!(ptr, ptr::null());
             slice::from_raw_parts(ptr as *const u64, size)
@@ -981,11 +1032,17 @@ where
 {
     type Iter = MapIterator<'a, K::Iter, V::Iter>;
 
-    fn iter(column: &'a Column<Simple>, column_type: SqlType) -> Result<Self::Iter> {
+    fn iter_with_props(
+        column: &'a Column<Simple>,
+        column_type: SqlType,
+        props: u32,
+    ) -> Result<Self::Iter> {
         let inner = if let SqlType::Map(k_type, v_type) = column_type {
+            let k_level = (column.sql_type().map_level() - column_type.map_level()) as u32;
+            let k_props = 1 | (k_level << 1);
             (
-                K::iter(column, k_type.clone())?,
-                V::iter(column, v_type.clone())?,
+                K::iter_with_props(column, k_type.clone(), k_props)?,
+                V::iter_with_props(column, v_type.clone(), 0)?,
             )
         } else {
             return Err(Error::FromSql(FromSqlError::InvalidType {
@@ -996,10 +1053,11 @@ where
 
         let mut size: usize = 0;
         let offsets = unsafe {
-            let mut ptr: *const u8 = ptr::null();
+            let mut ptr = ptr::null();
             column.get_internal(
                 &[&mut ptr, &mut size as *mut usize as *mut *const u8],
                 column_type.level(),
+                props,
             )?;
 
             assert!(!ptr.is_null());
@@ -1075,13 +1133,18 @@ where
 {
     type Iter = ComplexIterator<'a, T>;
 
-    fn iter(column: &Column<Complex>, column_type: SqlType) -> Result<Self::Iter> {
+    fn iter_with_props(
+        column: &Column<Complex>,
+        column_type: SqlType,
+        props: u32,
+    ) -> Result<Self::Iter> {
         let data: &Vec<ArcColumnData> = unsafe {
             let mut data: *const Vec<ArcColumnData> = ptr::null();
 
             column.get_internal(
                 &[&mut data as *mut *const Vec<ArcColumnData> as *mut *const u8],
                 0xff,
+                props,
             )?;
 
             &*data

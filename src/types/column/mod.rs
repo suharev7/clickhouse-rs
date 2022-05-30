@@ -454,8 +454,8 @@ impl<K: ColumnType> Column<K> {
         }
     }
 
-    pub(crate) unsafe fn get_internal(&self, pointers: &[*mut *const u8], level: u8) -> Result<()> {
-        self.data.get_internal(pointers, level)
+    pub(crate) unsafe fn get_internal(&self, pointers: &[*mut *const u8], level: u8, props: u32) -> Result<()> {
+        self.data.get_internal(pointers, level, props)
     }
 }
 

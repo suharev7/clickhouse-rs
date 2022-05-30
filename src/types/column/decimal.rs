@@ -188,9 +188,9 @@ impl ColumnData for DecimalColumnData {
         })
     }
 
-    unsafe fn get_internal(&self, pointers: &[*mut *const u8], level: u8) -> Result<()> {
+    unsafe fn get_internal(&self, pointers: &[*mut *const u8], level: u8, _props: u32) -> Result<()> {
         assert_eq!(level, 0);
-        self.inner.get_internal(pointers, 0)?;
+        self.inner.get_internal(pointers, 0, 0)?;
         *(pointers[2] as *mut NoBits) = self.nobits;
         Ok(())
     }

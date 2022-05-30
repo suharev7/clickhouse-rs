@@ -1,10 +1,3 @@
-use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
-
-use chrono_tz::Tz;
-
-use crate::types::column::{ColumnFrom, ColumnWrapper};
-use crate::types::{HasSqlType, Marshal, StatBuffer, Unmarshal};
 use crate::{
     binary::{Encoder, ReadEx},
     errors::Result,
@@ -12,20 +5,18 @@ use crate::{
         column::{
             column_data::{ArcColumnData, BoxColumnData},
             list::List,
-            ArcColumnWrapper, ColumnData,
+            ArcColumnWrapper, ColumnData, ColumnFrom, ColumnWrapper,
         },
-        SqlType, Value, ValueRef,
+        HasSqlType, Marshal, SqlType, StatBuffer, Unmarshal, Value, ValueRef,
     },
 };
+use chrono_tz::Tz;
+use std::{collections::HashMap, sync::Arc};
 
 pub(crate) struct MapColumnData {
     pub(crate) keys: ArcColumnData,
     pub(crate) values: ArcColumnData,
     pub(crate) offsets: List<u64>,
-    ///this is used in self.get_internal()
-    ///first the keys are read until counter is equal to size
-    ///then we switch to the values
-    pub(crate) counter: Arc<RwLock<usize>>,
     pub(crate) size: usize,
 }
 
@@ -52,7 +43,6 @@ impl MapColumnData {
             keys,
             values,
             offsets,
-            counter: Arc::new(RwLock::new(0)),
             size,
         })
     }
@@ -125,45 +115,44 @@ impl ColumnData for MapColumnData {
             keys: self.keys.clone(),
             values: self.values.clone(),
             offsets: self.offsets.clone(),
-            counter: self.counter.clone(),
             size: self.size,
         })
     }
 
-    unsafe fn get_internal(&self, pointers: &[*mut *const u8], level: u8) -> Result<()> {
-        let mut counter = self.counter.write().unwrap();
-
-        if level == self.sql_type().level() {
+    unsafe fn get_internal(
+        &self,
+        pointers: &[*mut *const u8],
+        level: u8,
+        props: u32,
+    ) -> Result<()> {
+        if props == 1 {
+            self.keys.get_internal(pointers, level, 0)
+        } else if level == self.sql_type().level() {
             *pointers[0] = self.offsets.as_ptr() as *const u8;
             *(pointers[1] as *mut usize) = self.offsets.len();
             Ok(())
-        } else if *counter >= self.size {
-            self.values.get_internal(pointers, level)
         } else {
-            *counter += 1;
-            self.keys.get_internal(pointers, level)
+            let new_props = match props {
+                0 => 0,
+                _ => 1 | (((props >> 1) - 1) << 1),
+            };
+            self.values.get_internal(pointers, level, new_props)
         }
     }
 
     fn cast_to(&self, _this: &ArcColumnData, target: &SqlType) -> Option<ArcColumnData> {
         if let SqlType::Map(key, value) = target {
-            if let Some(inner) = self.keys.cast_to(&self.keys, key) {
-                let keys = inner;
-
-                if let Some(inner_values) = self.values.cast_to(&self.values, value) {
-                    let values = inner_values;
-
-                    return Some(Arc::new(Self {
-                        keys,
-                        values,
-                        offsets: self.offsets.clone(),
-                        counter: self.counter.clone(),
-                        size: self.size,
-                    }));
-                }
-            }
+            let keys = self.keys.cast_to(&self.keys, key)?;
+            let values = self.values.cast_to(&self.values, value)?;
+            Some(Arc::new(Self {
+                keys,
+                values,
+                offsets: self.offsets.clone(),
+                size: self.size,
+            }))
+        } else {
+            None
         }
-        None
     }
 }
 
@@ -194,7 +183,6 @@ where
             keys,
             values,
             offsets: List::with_capacity(source.len()),
-            counter: Arc::new(RwLock::new(0)),
             size: source.len(),
         };
 
@@ -243,7 +231,6 @@ where
             keys,
             values,
             offsets: List::with_capacity(source.len()),
-            counter: Arc::new(RwLock::new(0)),
             size: source.len(),
         };
 
@@ -284,19 +271,15 @@ where
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashMap;
-    use std::io::Cursor;
-
     use super::*;
-    use crate::{types::Simple, Block};
+    use crate::{row, types::Simple, Block};
+    use std::{collections::HashMap, io::Cursor};
 
     #[test]
     fn test_write_and_read() {
-        let mut a = HashMap::new();
-        a.insert("test".to_string(), 4_u8);
-        a.insert("foo".to_string(), 5);
+        let source = HashMap::from([("test".to_string(), 4_u8), ("foo".to_string(), 5)]);
 
-        let block = Block::<Simple>::new().column("vals", vec![a]);
+        let block = Block::<Simple>::new().column("vals", vec![source]);
 
         let mut encoder = Encoder::new();
         block.write(&mut encoder, false);
@@ -305,5 +288,147 @@ mod test {
         let rblock = Block::load(&mut reader, Tz::Zulu, false).unwrap();
 
         assert_eq!(block, rblock);
+    }
+
+    #[test]
+    fn test_double_iteration() {
+        let value = Value::from(HashMap::from([(1_u8, 2_u8)]));
+
+        let expected = vec![HashMap::from([(&1_u8, &2_u8)])];
+
+        let mut block = Block::<Simple>::new();
+        block.push(row! {vals: value}).unwrap();
+
+        for _ in 0..2 {
+            let actual = block
+                .get_column("vals")
+                .unwrap()
+                .iter::<HashMap<u8, u8>>()
+                .unwrap()
+                .collect::<Vec<_>>();
+
+            assert_eq!(&actual, &expected);
+        }
+    }
+
+    #[test]
+    fn test_iteration_simple_map() {
+        let value = Value::from(HashMap::from([
+            ("A".to_string(), 1_u8),
+            ("B".to_string(), 2_u8),
+            ("C".to_string(), 3_u8),
+        ]));
+
+        let mut block = Block::<Simple>::new();
+        block.push(row! {vals: value}).unwrap();
+
+        let actual = block
+            .get_column("vals")
+            .unwrap()
+            .iter::<HashMap<&[u8], u8>>()
+            .unwrap()
+            .collect::<Vec<_>>();
+
+        let expected = vec![HashMap::from([
+            ("A".as_bytes(), &1_u8),
+            ("B".as_bytes(), &2_u8),
+            ("C".as_bytes(), &3_u8),
+        ])];
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_iteration_included_map() {
+        let value = Value::from(HashMap::from([
+            (10_u16, HashMap::from([(100_u16, 3000_u16)])),
+            (20_u16, HashMap::from([(800_u16, 5000_u16), (900, 6000)])),
+        ]));
+
+        let mut block = Block::<Simple>::new();
+        block.push(row! {vals: value}).unwrap();
+
+        let actual = block
+            .get_column("vals")
+            .unwrap()
+            .iter::<HashMap<u16, HashMap<u16, u16>>>()
+            .unwrap()
+            .collect::<Vec<_>>();
+
+        let expected = vec![HashMap::from([
+            (&10_u16, HashMap::from([(&100_u16, &3000_u16)])),
+            (
+                &20_u16,
+                HashMap::from([(&800_u16, &5000_u16), (&900, &6000)]),
+            ),
+        ])];
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_iteration_optional_maps() {
+        let first_value = Value::from(Some(HashMap::from([(1_u32, 2_u32)])));
+        let second_value = Value::from(None as Option<HashMap<u32, u32>>);
+
+        let mut block = Block::<Simple>::new();
+        block.push(row! {vals: first_value}).unwrap();
+        block.push(row! {vals: second_value}).unwrap();
+
+        let actual = block
+            .get_column("vals")
+            .unwrap()
+            .iter::<Option<HashMap<u32, u32>>>()
+            .unwrap()
+            .collect::<Vec<_>>();
+
+        let expected = vec![Some(HashMap::from([(&1_u8, &2_u8)])), None];
+
+        assert_eq!(format!("{:?}", expected), format!("{:?}", actual),);
+    }
+
+    #[test]
+    fn test_iterate_map_with_optioanl_value() {
+        let key = Value::UInt32(1);
+        let value = Value::from(Some(2_u32));
+
+        let source = Value::Map(
+            SqlType::from(key.clone()).into(),
+            SqlType::from(value.clone()).into(),
+            Arc::new(HashMap::from([(key, value)])),
+        );
+
+        let mut block = Block::<Simple>::new();
+        block.push(row! {vals: source}).unwrap();
+
+        let actual = block
+            .get_column("vals")
+            .unwrap()
+            .iter::<HashMap<u32, Option<u32>>>()
+            .unwrap()
+            .collect::<Vec<_>>();
+
+        let expected = vec![HashMap::from([(&1_u32, &Some(2_u32))])];
+
+        assert_eq!(format!("{:?}", actual), format!("{:?}", expected));
+    }
+
+    #[test]
+    fn test_get_optional_map_cells() {
+        let first_value = Value::from(Some(HashMap::from([(1_u32, 2_u32)])));
+        let second_value = Value::from(None::<HashMap<u32, u32>>);
+
+        let mut block = Block::<Simple>::new();
+        block.push(row! {vals: first_value}).unwrap();
+        block.push(row! {vals: second_value}).unwrap();
+
+        let mut actual = Vec::<Option<HashMap<u32, u32>>>::new();
+        for i in 0..block.row_count() {
+            actual.push(block.get(i, 0).unwrap());
+        }
+
+        let expected = vec![Some(HashMap::from([(&1_u8, &2_u8)])), None];
+
+        assert_eq!(format!("{:?}", actual), format!("{:?}", expected),);
     }
 }

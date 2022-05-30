@@ -3,30 +3,27 @@ extern crate chrono_tz;
 extern crate clickhouse_rs;
 extern crate tokio;
 
-use std::collections::HashMap;
+use chrono::prelude::*;
+use chrono_tz::Tz;
+use clickhouse_rs::{
+    errors::Error,
+    row,
+    types::{Decimal, Enum16, Enum8, FromSql, SqlType, Value},
+    Block, Pool,
+};
+use futures_util::{
+    future,
+    stream::{StreamExt, TryStreamExt},
+};
 use std::{
+    collections::HashMap,
     env,
-    f64::EPSILON,
     fmt,
     net::{Ipv4Addr, Ipv6Addr},
     sync::{
         atomic::{AtomicUsize, Ordering},
         Arc,
     },
-};
-
-use chrono::prelude::*;
-use chrono_tz::Tz;
-use futures_util::{
-    future,
-    stream::{StreamExt, TryStreamExt},
-};
-
-use clickhouse_rs::{
-    errors::Error,
-    row,
-    types::{Decimal, Enum16, Enum8, FromSql},
-    Block, Pool,
 };
 use uuid::Uuid;
 use Tz::UTC;
@@ -234,9 +231,6 @@ async fn test_insert() -> Result<(), Error> {
         .fetch_all()
         .await?;
 
-    println!("{expected:#?}");
-    println!("{actual:#?}");
-
     assert_eq!(format!("{:?}", expected.as_ref()), format!("{:?}", &actual));
     Ok(())
 }
@@ -396,7 +390,7 @@ async fn test_simple_selects() -> Result<(), Error> {
         )
         .fetch_all()
         .await?;
-    assert!((2_f64 - r.get::<f64, _>(0, 0)?).abs() < EPSILON);
+    assert!((2_f64 - r.get::<f64, _>(0, 0)?).abs() < f64::EPSILON);
 
     let expected = Block::new().column("a", vec![1_u8, 2, 3]);
     assert_eq!(expected, actual);
@@ -425,7 +419,7 @@ async fn test_simple_selects() -> Result<(), Error> {
         )
         .fetch_all()
         .await?;
-    assert!((2_f64 - r.get::<f64, _>(0, 0)?).abs() < EPSILON);
+    assert!((2_f64 - r.get::<f64, _>(0, 0)?).abs() < f64::EPSILON);
 
     Ok(())
 }
@@ -1503,13 +1497,13 @@ async fn test_map() -> Result<(), Error> {
     let mut client = pool.get_handle().await?;
 
     client
-        .execute("DROP TABLE IF EXISTS map_test")
+        .execute("DROP TABLE IF EXISTS clickhouse_test_map")
         .await
         .unwrap();
     client
         .execute(
             "
-        CREATE TABLE IF NOT EXISTS map_test (
+        CREATE TABLE IF NOT EXISTS clickhouse_test_map (
             id UInt32,
             map Map(String, UInt8)
         ) Engine=MergeTree ORDER BY id;
@@ -1518,10 +1512,10 @@ async fn test_map() -> Result<(), Error> {
         .await
         .unwrap();
 
-    client.insert("map_test", &block).await.unwrap();
+    client.insert("clickhouse_test_map", &block).await.unwrap();
 
     let result = client
-        .query("SELECT * FROM map_test")
+        .query("SELECT * FROM clickhouse_test_map")
         .fetch_all()
         .await
         .unwrap();
@@ -1535,6 +1529,68 @@ async fn test_map() -> Result<(), Error> {
         assert_eq!(id, 1);
         assert_eq!(map, b);
     }
+
+    Ok(())
+}
+
+#[cfg(feature = "tokio_io")]
+#[tokio::test]
+async fn test_iter_map() -> Result<(), Error> {
+    let mut block = Block::new();
+    block.push(row! {
+        map: Value::from(HashMap::from([
+            (1_u8, HashMap::from([(3_u8, 5_u8)])),
+            (2_u8, HashMap::from([(4_u8, 6_u8), (7, 8)])),
+        ])),
+        opt_map: Value::Map(
+            SqlType::from(Value::UInt8(3).clone()).into(),
+            SqlType::from(Value::from(Some(4_u8)).clone()).into(),
+            Arc::new(HashMap::from([
+                (
+                    Value::UInt8(3),
+                    Value::from(Some(4_u8))
+                ),
+                (
+                    Value::UInt8(5),
+                    Value::from(Some(6_u8))
+                ),
+            ])),
+        ),
+    })?;
+
+    let pool = Pool::new(database_url());
+    let mut client = pool.get_handle().await?;
+
+    client
+        .execute("DROP TABLE IF EXISTS clickhouse_test_iter_map")
+        .await
+        .unwrap();
+    client
+        .execute(
+            r"
+            create table clickhouse_test_iter_map
+            (
+                map Map(UInt8,Map(UInt8,UInt8)),
+                opt_map Map(UInt8,Nullable(UInt8))
+            )
+            engine = Memory;",
+        )
+        .await
+        .unwrap();
+
+    client
+        .insert("clickhouse_test_iter_map", &block)
+        .await
+        .unwrap();
+
+    let result = client
+        .query("SELECT * FROM clickhouse_test_iter_map")
+        .fetch_all()
+        .await
+        .unwrap();
+
+    assert_eq!(result.row_count(), 1);
+    dbg!(result);
 
     Ok(())
 }

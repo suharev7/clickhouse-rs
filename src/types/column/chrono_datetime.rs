@@ -113,7 +113,7 @@ impl ColumnData for ChronoDateTimeColumnData {
         })
     }
 
-    unsafe fn get_internal(&self, pointers: &[*mut *const u8], level: u8) -> Result<()> {
+    unsafe fn get_internal(&self, pointers: &[*mut *const u8], level: u8, _props: u32) -> Result<()> {
         assert_eq!(level, 0);
         *pointers[0] = self.data.as_ptr() as *const u8;
         *pointers[1] = &self.tz as *const Tz as *const u8;
@@ -149,6 +149,7 @@ pub(crate) fn get_date_slice<'a>(column: &dyn ColumnData) -> Result<&'a [DateTim
                 &mut len as *mut usize as *mut *const u8,
             ],
             0,
+            0
         )?;
         assert_ne!(data, ptr::null());
         assert_ne!(tz, ptr::null());
@@ -201,7 +202,7 @@ impl ColumnData for ChronoDateTimeAdapter {
         unimplemented!()
     }
 
-    unsafe fn get_internal(&self, _pointers: &[*mut *const u8], _level: u8) -> Result<()> {
+    unsafe fn get_internal(&self, _pointers: &[*mut *const u8], _level: u8, _props: u32) -> Result<()> {
         unimplemented!()
     }
 }

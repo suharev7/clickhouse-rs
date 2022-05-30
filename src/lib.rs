@@ -462,7 +462,6 @@ impl ClientHandle {
                     async move {
                         let transport = transport.clear().await?;
                         let stream = transport.call(Cmd::SendQuery(query, context.clone()));
-
                         let (transport, b) = stream.read_block().await?;
                         let dst_block = b.unwrap();
 

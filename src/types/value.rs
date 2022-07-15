@@ -376,6 +376,15 @@ impl From<&[u8]> for Value {
     }
 }
 
+impl From<Vec<String>> for Value {
+    fn from(v: Vec<String>) -> Self {
+        Value::Array(
+            SqlType::String.into(),
+            Arc::new(v.into_iter().map(|s| s.into()).collect())
+        )
+    }
+}
+
 impl From<Uuid> for Value {
     fn from(v: Uuid) -> Value {
         let mut buffer = *v.as_bytes();

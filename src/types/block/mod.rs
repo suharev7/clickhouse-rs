@@ -7,7 +7,6 @@ use std::{
 
 use byteorder::{LittleEndian, WriteBytesExt};
 use chrono_tz::Tz;
-use clickhouse_rs_cityhash_sys::city_hash_128;
 use lz4::liblz4::{LZ4_compressBound, LZ4_compress_default};
 
 use crate::{
@@ -303,9 +302,12 @@ impl Block {
                 cursor.write_u32::<LittleEndian>(tmp.len() as u32).unwrap();
             }
 
-            let hash = city_hash_128(&buf);
-            encoder.write(hash.lo);
-            encoder.write(hash.hi);
+            let hash = cityhash_rs::cityhash_102_128(&buf[..]);
+            let hash_high = (hash >> 64) as u64;
+            let hash_low = hash as u64;
+
+            encoder.write(hash_high);
+            encoder.write(hash_low);
             encoder.write_bytes(buf.as_ref());
         } else {
             self.info.write(encoder);

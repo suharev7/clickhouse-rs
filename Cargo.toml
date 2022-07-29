@@ -25,12 +25,12 @@ tokio-timer = "0.2.11"
 tokio-tls = { version = "0.2.1", optional = true }
 native-tls = { version = "0.2.3", optional = true }
 hostname = "^0.3"
+cityhash-rs = "1.0.1"
 
 chrono = "0.4"
 chrono-tz = "0.5"
 
 lz4 = "1.23.2"
-clickhouse-rs-cityhash-sys = { path = "clickhouse-rs-cityhash-sys", version = "0.1.2" }
 
 byteorder = "1.3.4"
 thiserror = "1.0.20"

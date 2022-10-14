@@ -194,6 +194,33 @@ where
     }
 }
 
+impl ColumnFrom for Vec<HashMap<String, String>>
+{
+    fn column_from<W: ColumnWrapper>(source: Self) -> W::Wrapper {
+        let fake_keys: Vec<String> = Vec::with_capacity(source.len());
+        let fake_values: Vec<String> = Vec::with_capacity(source.len());
+
+        let keys = Vec::column_from::<ArcColumnWrapper>(fake_keys);
+        let key_type = keys.sql_type();
+
+        let values = Vec::column_from::<ArcColumnWrapper>(fake_values);
+        let value_type = values.sql_type();
+
+        let mut data = MapColumnData {
+            keys,
+            values,
+            offsets: List::with_capacity(source.len()),
+            size: source.len(),
+        };
+
+        for array in source {
+            data.push(to_string_map(key_type.clone(), value_type.clone(), array));
+        }
+
+        W::wrap(data)
+    }
+}
+
 impl<K, V> ColumnFrom for Vec<HashMap<K, V>>
 where
     K: Copy

@@ -12,6 +12,8 @@ use crate::{
     },
 };
 
+use super::numeric::save_data;
+
 pub struct DateTime64ColumnData {
     data: List<i64>,
     params: (u32, Tz),
@@ -49,8 +51,9 @@ impl ColumnData for DateTime64ColumnData {
         SqlType::DateTime(DateTimeType::DateTime64(precision, tz))
     }
 
-    fn save(&self, _encoder: &mut Encoder, _start: usize, _end: usize) {
-        unimplemented!()
+    fn save(&self, encoder: &mut Encoder, start: usize, end: usize) {
+        // datetime64 is just a 8bytes number
+        save_data::<i64>(self.data.as_ref(), encoder, start, end)
     }
 
     fn len(&self) -> usize {

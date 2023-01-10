@@ -180,6 +180,7 @@ macro_rules! has_sql_type {
 }
 
 has_sql_type! {
+    bool: SqlType::Bool,
     u8: SqlType::UInt8,
     u16: SqlType::UInt16,
     u32: SqlType::UInt32,
@@ -196,17 +197,13 @@ has_sql_type! {
     DateTime<Tz>: SqlType::DateTime(DateTimeType::DateTime32)
 }
 
-
 impl<K, V> HasSqlType for HashMap<K, V>
 where
     K: HasSqlType,
     V: HasSqlType,
 {
     fn get_sql_type() -> SqlType {
-        SqlType::Map(
-            K::get_sql_type().into(),
-            V::get_sql_type().into(),
-        )
+        SqlType::Map(K::get_sql_type().into(), V::get_sql_type().into())
     }
 }
 
@@ -288,6 +285,7 @@ impl FromStr for SimpleAggFunc {
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum SqlType {
+    Bool,
     UInt8,
     UInt16,
     UInt32,
@@ -353,6 +351,7 @@ impl SqlType {
 
     pub fn to_string(&self) -> Cow<'static, str> {
         match self.clone() {
+            SqlType::Bool => "Bool".into(),
             SqlType::UInt8 => "UInt8".into(),
             SqlType::UInt16 => "UInt16".into(),
             SqlType::UInt32 => "UInt32".into(),

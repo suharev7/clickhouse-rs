@@ -134,6 +134,6 @@ impl StatBuffer for bool {
     }
 
     fn sql_type() -> SqlType {
-        unimplemented!()
+        SqlType::Bool
     }
 }

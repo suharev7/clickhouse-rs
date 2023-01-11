@@ -1,7 +1,7 @@
 use chrono_tz::Tz;
 
 use combine::{
-    any,
+    any, choice,
     error::StringStreamError,
     many, many1, none_of, optional,
     parser::char::{digit, spaces, string},
@@ -73,7 +73,6 @@ impl dyn ColumnData {
             "Float64" | "Double" => W::wrap(VectorColumnData::<f64>::load(reader, size)?),
             "String" | "Char" | "Varchar" | "Text" | "TinyText" | "MediumText" | "LongText" | "Blob" | "TinyBlob" | "MediumBlob" | "LongBlob" => W::wrap(StringColumnData::load(reader, size)?),
             "Date" => W::wrap(DateColumnData::<u16>::load(reader, size, tz)?),
-            "DateTime" | "Timestamp" => W::wrap(DateColumnData::<u32>::load(reader, size, tz)?),
             "IPv4" => W::wrap(IpColumnData::<Ipv4>::load(reader, size)?),
             "IPv6" => W::wrap(IpColumnData::<Ipv6>::load(reader, size)?),
             "UUID" => W::wrap(IpColumnData::<Uuid>::load(reader, size)?),
@@ -94,6 +93,9 @@ impl dyn ColumnData {
                     W::wrap(Enum8ColumnData::load(reader, items, size, tz)?)
                 } else if let Some(items) = parse_enum16(type_name) {
                     W::wrap(Enum16ColumnData::load(reader, items, size, tz)?)
+                } else if let Some(timezone) = parse_date_time(type_name) {
+                    let column_timezone = get_timezone(&timezone, tz)?;
+                    W::wrap(DateColumnData::<u32>::load(reader, size, column_timezone)?)
                 } else if let Some((precision, timezone)) = parse_date_time64(type_name) {
                     let column_timezone = get_timezone(&timezone, tz)?;
                     W::wrap(DateTime64ColumnData::load(reader, size, precision, column_timezone)?)
@@ -431,6 +433,30 @@ fn parse_enum(size: EnumSize, input: &str) -> Option<Vec<(String, i16)>> {
     }
 }
 
+fn parse_date_time(source: &str) -> Option<Option<String>> {
+    let word_syms = token('\\').with(any()).or(none_of("'".chars()));
+    let word = token('\'')
+        .with(many::<String, _, _>(word_syms))
+        .skip(token('\''));
+
+    let mut parser = spaces()
+        .with(choice((string("DateTime"), string("Timestamp"))))
+        .with(optional(
+            spaces()
+                .skip(token('('))
+                .skip(spaces())
+                .with(word)
+                .skip(spaces())
+                .skip(token(')'))
+                .skip(spaces()),
+        ));
+
+    match parser.parse(source) {
+        Ok((timezone, remain)) if remain.is_empty() => Some(timezone),
+        _ => None,
+    }
+}
+
 fn parse_date_time64(source: &str) -> Option<(u32, Option<String>)> {
     let integer = many1::<String, _, _>(digit()).and_then(|digits| {
         digits
@@ -651,6 +677,20 @@ mod test {
     }
 
     #[test]
+    fn test_parse_date_time() {
+        let source = " DateTime ( 'Europe/Moscow' )";
+        let res = parse_date_time(source).unwrap();
+        assert_eq!(res, Some("Europe/Moscow".to_string()))
+    }
+
+    #[test]
+    fn test_parse_date_time_without_timezone() {
+        let source = " DateTime";
+        let res = parse_date_time(source).unwrap();
+        assert_eq!(res, None)
+    }
+
+    #[test]
     fn test_parse_date_time64() {
         let source = " DateTime64 ( 3 , 'Europe/Moscow' )";
         let res = parse_date_time64(source).unwrap();
@@ -675,9 +715,7 @@ mod test {
     fn test_parse_map_type() {
         let s = "Map(UInt8, Map(UInt8,UInt8))";
         let actual = parse_map_type(s);
-        let expected = Some(
-            ("UInt8", "Map(UInt8,UInt8)")
-        );
+        let expected = Some(("UInt8", "Map(UInt8,UInt8)"));
         assert_eq!(actual, expected);
     }
 }

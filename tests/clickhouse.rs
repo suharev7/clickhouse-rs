@@ -3,12 +3,15 @@ extern crate chrono_tz;
 extern crate clickhouse_rs;
 extern crate tokio;
 
+#[macro_use]
+extern crate pretty_assertions;
+
 use chrono::prelude::*;
 use chrono_tz::Tz;
 use clickhouse_rs::{
     errors::Error,
     row,
-    types::{Decimal, Enum16, Enum8, FromSql, SqlType, Value},
+    types::{Complex, Decimal, Enum16, Enum8, FromSql, SqlType, Value},
     Block, Pool,
 };
 use futures_util::{
@@ -17,8 +20,7 @@ use futures_util::{
 };
 use std::{
     collections::HashMap,
-    env,
-    fmt,
+    env, fmt,
     net::{Ipv4Addr, Ipv6Addr},
     sync::{
         atomic::{AtomicUsize, Ordering},
@@ -26,7 +28,7 @@ use std::{
     },
 };
 use uuid::Uuid;
-use Tz::UTC;
+use Tz::{Asia__Istanbul as IST, UTC};
 
 #[cfg(not(feature = "tls"))]
 fn database_url() -> String {
@@ -40,6 +42,12 @@ fn database_url() -> String {
     env::var("DATABASE_URL").unwrap_or_else(|_| {
         "tcp://localhost:9440?compression=lz4&ping_timeout=2s&retry_timeout=3s&secure=true&skip_verify=true".into()
     })
+}
+
+fn collect_values<'b, T: FromSql<'b>>(block: &'b Block<Complex>, column: &str) -> Vec<T> {
+    (0..block.row_count())
+        .map(|i| block.get(i, column).unwrap())
+        .collect()
 }
 
 #[cfg(feature = "tokio_io")]
@@ -240,6 +248,432 @@ async fn test_insert() -> Result<(), Error> {
         .await?;
 
     assert_eq!(format!("{:?}", expected.as_ref()), format!("{:?}", &actual));
+    Ok(())
+}
+
+#[cfg(feature = "tokio_io")]
+#[tokio::test]
+async fn test_datetime_read_write() -> Result<(), Error> {
+    let db = "clickhouse_test_datetime_read_write";
+
+    let pool = Pool::new(database_url());
+    let mut c = pool.get_handle().await?;
+
+    c.execute(format!("DROP TABLE IF EXISTS {db}")).await?;
+    c.execute(format!(
+        "CREATE TABLE {db} (
+            datetime DateTime,
+            datetime_utc DateTime('UTC'),
+            datetime_ist DateTime('Asia/Istanbul'),
+            datetime_opt Nullable(DateTime),
+            datetime_opt_utc Nullable(DateTime('UTC')),
+            datetime_opt_ist Nullable(DateTime('Asia/Istanbul'))
+        ) Engine=Memory"
+    ))
+    .await?;
+
+    let block = Block::new()
+        .column(
+            "datetime",
+            vec![
+                UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
+                IST.ymd(2016, 10, 22).and_hms(15, 0, 0),
+                IST.ymd(2016, 10, 22).and_hms(15, 0, 0),
+            ],
+        )
+        .column(
+            "datetime_utc",
+            vec![
+                UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
+                IST.ymd(2016, 10, 22).and_hms(15, 0, 0),
+                IST.ymd(2016, 10, 22).and_hms(15, 0, 0),
+            ],
+        )
+        .column(
+            "datetime_ist",
+            vec![
+                UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
+                IST.ymd(2016, 10, 22).and_hms(15, 0, 0),
+                IST.ymd(2016, 10, 22).and_hms(15, 0, 0),
+            ],
+        )
+        .column(
+            "datetime_opt",
+            vec![
+                Some(UTC.ymd(2016, 10, 22).and_hms(12, 0, 0)),
+                Some(IST.ymd(2016, 10, 22).and_hms(15, 0, 0)),
+                None,
+            ],
+        )
+        .column(
+            "datetime_opt_utc",
+            vec![
+                Some(UTC.ymd(2016, 10, 22).and_hms(12, 0, 0)),
+                Some(IST.ymd(2016, 10, 22).and_hms(15, 0, 0)),
+                None,
+            ],
+        )
+        .column(
+            "datetime_opt_ist",
+            vec![
+                Some(UTC.ymd(2016, 10, 22).and_hms(12, 0, 0)),
+                Some(IST.ymd(2016, 10, 22).and_hms(15, 0, 0)),
+                None,
+            ],
+        );
+
+    c.insert(&db, block).await?;
+
+    let actual_strings_block = c
+        .query(format!(
+            "SELECT
+                toString(datetime) as datetime_s,
+                toString(datetime_utc) as datetime_utc_s,
+                toString(datetime_ist) as datetime_ist_s,
+                toString(datetime_opt) as datetime_opt_s,
+                toString(datetime_opt_utc) as datetime_opt_utc_s,
+                toString(datetime_opt_ist) as datetime_opt_ist_s
+            FROM {db}",
+        ))
+        .fetch_all()
+        .await?;
+
+    let expected_strings_block = Block::new()
+        .column(
+            "datetime_s",
+            vec![
+                "2016-10-22 12:00:00".to_string(),
+                "2016-10-22 12:00:00".to_string(),
+                "2016-10-22 12:00:00".to_string(),
+            ],
+        )
+        .column(
+            "datetime_utc_s",
+            vec![
+                "2016-10-22 12:00:00".to_string(),
+                "2016-10-22 12:00:00".to_string(),
+                "2016-10-22 12:00:00".to_string(),
+            ],
+        )
+        .column(
+            "datetime_ist_s",
+            vec![
+                "2016-10-22 15:00:00".to_string(),
+                "2016-10-22 15:00:00".to_string(),
+                "2016-10-22 15:00:00".to_string(),
+            ],
+        )
+        .column(
+            "datetime_opt_s",
+            vec![
+                "2016-10-22 12:00:00".to_string(),
+                "2016-10-22 12:00:00".to_string(),
+                "NULL".to_string(),
+            ],
+        )
+        .column(
+            "datetime_opt_utc_s",
+            vec![
+                "2016-10-22 12:00:00".to_string(),
+                "2016-10-22 12:00:00".to_string(),
+                "NULL".to_string(),
+            ],
+        )
+        .column(
+            "datetime_opt_ist_s",
+            vec![
+                "2016-10-22 15:00:00".to_string(),
+                "2016-10-22 15:00:00".to_string(),
+                "NULL".to_string(),
+            ],
+        );
+
+    assert_eq!(
+        format!("{:?}", expected_strings_block),
+        format!("{:?}", actual_strings_block)
+    );
+
+    let actual_dates_block = c
+        .query(format!(
+            "SELECT
+                datetime,
+                datetime_utc,
+                datetime_ist,
+                datetime_opt,
+                datetime_opt_utc,
+                datetime_opt_ist
+            FROM {db}"
+        ))
+        .fetch_all()
+        .await?;
+
+    assert_eq!(
+        vec![
+            UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
+            UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
+            UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
+        ],
+        collect_values(&actual_dates_block, "datetime")
+    );
+
+    assert_eq!(
+        vec![
+            UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
+            UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
+            UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
+        ],
+        collect_values(&actual_dates_block, "datetime_utc")
+    );
+
+    assert_eq!(
+        vec![
+            UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
+            UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
+            UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
+        ],
+        collect_values(&actual_dates_block, "datetime_ist")
+    );
+
+    assert_eq!(
+        vec![
+            Some(UTC.ymd(2016, 10, 22).and_hms(12, 0, 0)),
+            Some(UTC.ymd(2016, 10, 22).and_hms(12, 0, 0)),
+            None,
+        ],
+        collect_values(&actual_dates_block, "datetime_opt")
+    );
+
+    assert_eq!(
+        vec![
+            Some(UTC.ymd(2016, 10, 22).and_hms(12, 0, 0)),
+            Some(UTC.ymd(2016, 10, 22).and_hms(12, 0, 0)),
+            None,
+        ],
+        collect_values(&actual_dates_block, "datetime_opt_utc")
+    );
+
+    assert_eq!(
+        vec![
+            Some(UTC.ymd(2016, 10, 22).and_hms(12, 0, 0)),
+            Some(UTC.ymd(2016, 10, 22).and_hms(12, 0, 0)),
+            None,
+        ],
+        collect_values(&actual_dates_block, "datetime_opt_ist")
+    );
+
+    Ok(())
+}
+
+#[cfg(feature = "tokio_io")]
+#[tokio::test]
+async fn test_datetime64_read_write() -> Result<(), Error> {
+    let db = "clickhouse_test_datetime64_read_write";
+
+    let pool = Pool::new(database_url());
+    let mut c = pool.get_handle().await?;
+
+    c.execute(format!("DROP TABLE IF EXISTS {db}")).await?;
+    c.execute(format!(
+        "CREATE TABLE {db} (
+            datetime64 DateTime64(3),
+            datetime64_utc DateTime(3, 'UTC'),
+            datetime64_ist DateTime(3, 'Asia/Istanbul'),
+            datetime64_opt Nullable(DateTime64(3)),
+            datetime64_opt_utc Nullable(DateTime(3, 'UTC')),
+            datetime64_opt_ist Nullable(DateTime(3, 'Asia/Istanbul'))
+        ) Engine=Memory"
+    ))
+    .await?;
+
+    let block = Block::new()
+        .column(
+            "datetime64",
+            vec![
+                UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_456_678),
+                IST.ymd(2016, 10, 22).and_hms_nano(15, 0, 0, 123_456_678),
+                IST.ymd(2016, 10, 22).and_hms_nano(15, 0, 0, 123_456_678),
+            ],
+        )
+        .column(
+            "datetime64_utc",
+            vec![
+                UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_456_678),
+                IST.ymd(2016, 10, 22).and_hms_nano(15, 0, 0, 123_456_678),
+                IST.ymd(2016, 10, 22).and_hms_nano(15, 0, 0, 123_456_678),
+            ],
+        )
+        .column(
+            "datetime64_ist",
+            vec![
+                UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_456_678),
+                IST.ymd(2016, 10, 22).and_hms_nano(15, 0, 0, 123_456_678),
+                IST.ymd(2016, 10, 22).and_hms_nano(15, 0, 0, 123_456_678),
+            ],
+        )
+        .column(
+            "datetime64_opt",
+            vec![
+                Some(UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_456_678)),
+                Some(IST.ymd(2016, 10, 22).and_hms_nano(15, 0, 0, 123_456_678)),
+                None,
+            ],
+        )
+        .column(
+            "datetime64_opt_utc",
+            vec![
+                Some(UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_456_678)),
+                Some(IST.ymd(2016, 10, 22).and_hms_nano(15, 0, 0, 123_456_678)),
+                None,
+            ],
+        )
+        .column(
+            "datetime64_opt_ist",
+            vec![
+                Some(UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_456_678)),
+                Some(IST.ymd(2016, 10, 22).and_hms_nano(15, 0, 0, 123_456_678)),
+                None,
+            ],
+        );
+
+    c.insert(&db, block).await?;
+
+    let actual_strings_block = c
+        .query(format!(
+            "SELECT
+                toString(datetime64) as datetime64_s,
+                toString(datetime64_utc) as datetime64_utc_s,
+                toString(datetime64_ist) as datetime64_ist_s,
+                toString(datetime64_opt) as datetime64_opt_s,
+                toString(datetime64_opt_utc) as datetime64_opt_utc_s,
+                toString(datetime64_opt_ist) as datetime64_opt_ist_s
+            FROM {db}"
+        ))
+        .fetch_all()
+        .await?;
+
+    let expected_strings_block = Block::new()
+        .column(
+            "datetime64_s",
+            vec![
+                "2016-10-22 12:00:00.123".to_string(),
+                "2016-10-22 12:00:00.123".to_string(),
+                "2016-10-22 12:00:00.123".to_string(),
+            ],
+        )
+        .column(
+            "datetime64_utc_s",
+            vec![
+                "2016-10-22 12:00:00.123".to_string(),
+                "2016-10-22 12:00:00.123".to_string(),
+                "2016-10-22 12:00:00.123".to_string(),
+            ],
+        )
+        .column(
+            "datetime64_ist_s",
+            vec![
+                "2016-10-22 15:00:00.123".to_string(),
+                "2016-10-22 15:00:00.123".to_string(),
+                "2016-10-22 15:00:00.123".to_string(),
+            ],
+        )
+        .column(
+            "datetime64_opt_s",
+            vec![
+                "2016-10-22 12:00:00.123".to_string(),
+                "2016-10-22 12:00:00.123".to_string(),
+                "NULL".to_string(),
+            ],
+        )
+        .column(
+            "datetime64_opt_utc_s",
+            vec![
+                "2016-10-22 12:00:00.123".to_string(),
+                "2016-10-22 12:00:00.123".to_string(),
+                "NULL".to_string(),
+            ],
+        )
+        .column(
+            "datetime64_opt_ist_s",
+            vec![
+                "2016-10-22 15:00:00.123".to_string(),
+                "2016-10-22 15:00:00.123".to_string(),
+                "NULL".to_string(),
+            ],
+        );
+
+    assert_eq!(
+        format!("{:?}", expected_strings_block),
+        format!("{:?}", actual_strings_block)
+    );
+
+    let actual_dates_block = c
+        .query(format!(
+            "SELECT
+                datetime64,
+                datetime64_utc,
+                datetime64_ist,
+                datetime64_opt,
+                datetime64_opt_utc,
+                datetime64_opt_ist
+            FROM {db}"
+        ))
+        .fetch_all()
+        .await?;
+
+    assert_eq!(
+        vec![
+            UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_000_000),
+            UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_000_000),
+            UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_000_000),
+        ],
+        collect_values(&actual_dates_block, "datetime64")
+    );
+
+    assert_eq!(
+        vec![
+            UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_000_000),
+            UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_000_000),
+            UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_000_000),
+        ],
+        collect_values(&actual_dates_block, "datetime64_utc")
+    );
+
+    assert_eq!(
+        vec![
+            UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_000_000),
+            UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_000_000),
+            UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_000_000),
+        ],
+        collect_values(&actual_dates_block, "datetime64_ist")
+    );
+
+    assert_eq!(
+        vec![
+            Some(UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_000_000)),
+            Some(UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_000_000)),
+            None,
+        ],
+        collect_values(&actual_dates_block, "datetime64_opt")
+    );
+
+    assert_eq!(
+        vec![
+            Some(UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_000_000)),
+            Some(UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_000_000)),
+            None,
+        ],
+        collect_values(&actual_dates_block, "datetime64_opt_utc")
+    );
+
+    assert_eq!(
+        vec![
+            Some(UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_000_000)),
+            Some(UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_000_000)),
+            None,
+        ],
+        collect_values(&actual_dates_block, "datetime64_opt_ist")
+    );
+
     Ok(())
 }
 

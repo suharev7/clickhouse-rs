@@ -7,7 +7,7 @@ use crate::{
         column::{
             array::ArrayColumnData, nullable::NullableColumnData, ArcColumnWrapper, ColumnWrapper,
         },
-        Marshal, SqlType, StatBuffer, Unmarshal, Value, ValueRef, HasSqlType,
+        HasSqlType, Marshal, SqlType, StatBuffer, Unmarshal, Value, ValueRef,
     },
 };
 
@@ -199,6 +199,7 @@ where
     fn at(&self, index: usize) -> ValueRef {
         let v: Value = self.data.at(index).into();
         match v {
+            Value::Bool(x) => ValueRef::Bool(x),
             Value::UInt8(x) => ValueRef::UInt8(x),
             Value::UInt16(x) => ValueRef::UInt16(x),
             Value::UInt32(x) => ValueRef::UInt32(x),
@@ -222,7 +223,12 @@ where
         })
     }
 
-    unsafe fn get_internal(&self, pointers: &[*mut *const u8], level: u8, _props: u32) -> Result<()> {
+    unsafe fn get_internal(
+        &self,
+        pointers: &[*mut *const u8],
+        level: u8,
+        _props: u32,
+    ) -> Result<()> {
         assert_eq!(level, 0);
         *pointers[0] = self.data.as_ptr() as *const u8;
         *(pointers[1] as *mut usize) = self.len();

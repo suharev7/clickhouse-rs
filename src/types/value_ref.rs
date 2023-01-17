@@ -336,6 +336,8 @@ macro_rules! from_number {
 }
 
 from_number! {
+    bool: Bool,
+
     u8: UInt8,
     u16: UInt16,
     u32: UInt32,
@@ -448,6 +450,8 @@ impl<'a> From<ValueRef<'a>> for AppDateTime {
 }
 
 value_from! {
+    bool: Bool,
+
     u8: UInt8,
     u16: UInt16,
     u32: UInt32,

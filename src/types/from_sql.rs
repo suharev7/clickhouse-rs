@@ -253,6 +253,8 @@ macro_rules! from_sql_vec_impl {
 }
 
 from_sql_vec_impl! {
+    bool: Bool,
+
     i8: Int8,
     i16: Int16,
     i32: Int32,
@@ -331,6 +333,8 @@ impl<'a> FromSql<'a> for DateTime<Tz> {
 }
 
 from_sql_impl! {
+    bool: Bool,
+
     u8: UInt8,
     u16: UInt16,
     u32: UInt32,

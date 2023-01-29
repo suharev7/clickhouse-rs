@@ -328,6 +328,21 @@ macro_rules! value_from {
     };
 }
 
+macro_rules! value_array_from {
+    ( $( $t:ty : $k:ident ),* ) => {
+        $(
+            impl convert::From<Vec<$t>> for Value {
+                fn from(v: Vec<$t>) -> Self {
+                    Value::Array(
+                        SqlType::$k.into(),
+                        Arc::new(v.into_iter().map(|s| s.into()).collect())
+                    )
+                }
+            }
+        )*
+    };
+}
+
 impl From<AppDate> for Value {
     fn from(v: AppDate) -> Value {
         Value::Date(u16::get_days(v), v.timezone())
@@ -437,6 +452,20 @@ value_from! {
 
     [u8; 4]: Ipv4,
     [u8; 16]: Ipv6
+}
+
+value_array_from! {
+    u16: UInt16,
+    u32: UInt32,
+    u64: UInt64,
+
+    i8: Int8,
+    i16: Int16,
+    i32: Int32,
+    i64: Int64,
+
+    f32: Float32,
+    f64: Float64
 }
 
 impl<'a> From<&'a str> for Value {
@@ -550,6 +579,7 @@ mod test {
         distributions::{Distribution, Standard},
         random,
     };
+    use crate::{Block, row};
 
     fn test_into_t<T>(v: Value, x: &T)
     where
@@ -764,5 +794,24 @@ mod test {
             Value::from(Some(date_time_val)),
             Value::Nullable(Either::Right(Value::ChronoDateTime(date_time_val).into()))
         );
+    }
+
+    #[test]
+    fn test_value_array_from() {
+        let mut block = Block::with_capacity(5);
+        block.push(row! {
+            u16: vec![1_u16, 2, 3],
+            u32: vec![1_u32, 2, 3],
+            u64: vec![1_u64, 2, 3],
+            i8: vec![1_i8, 2, 3],
+            i16: vec![1_i16, 2, 3],
+            i32: vec![1_i32, 2, 3],
+            i64: vec![1_i64, 2, 3],
+            f32: vec![1_f32, 2.0, 3.0],
+            f64: vec![1_f64, 2.0, 3.0],
+        }).unwrap();
+
+        assert_eq!(block.row_count(), 1);
+        assert_eq!(block.column_count(), 9);
     }
 }

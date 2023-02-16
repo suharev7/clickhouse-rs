@@ -51,10 +51,24 @@ mod enums;
 mod options;
 
 #[derive(Copy, Clone, Debug, Default, PartialEq)]
-pub(crate) struct Progress {
+pub struct Progress {
     pub rows: u64,
     pub bytes: u64,
     pub total_rows: u64,
+}
+
+impl Progress {
+    pub(crate) fn update(&mut self, progress: Progress) {
+        self.rows += progress.rows;
+        self.bytes += progress.bytes;
+        self.total_rows += progress.total_rows;
+    }
+
+    pub(crate) fn reset(&mut self) {
+        self.rows = 0;
+        self.bytes = 0;
+        self.total_rows = 0;
+    }
 }
 
 #[derive(Copy, Clone, Default, Debug, PartialEq)]

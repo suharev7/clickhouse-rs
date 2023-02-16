@@ -114,6 +114,7 @@ use futures_util::{
     future, future::BoxFuture, future::FutureExt, stream, stream::BoxStream, StreamExt,
 };
 use log::{info, warn};
+use types::Progress;
 
 use crate::{
     connecting_stream::ConnectingStream,
@@ -238,6 +239,7 @@ pub struct ClientHandle {
     inner: Option<ClickhouseTransport>,
     context: Context,
     pool: PoolBinding,
+    progress: Progress,
 }
 
 impl fmt::Debug for ClientHandle {
@@ -288,6 +290,7 @@ impl Client {
                         None => PoolBinding::None,
                         Some(p) => PoolBinding::Detached(p),
                     },
+                    progress: Progress::default(),
                 };
 
                 handle.hello().await?;
@@ -551,6 +554,10 @@ impl ClientHandle {
         } else {
             unreachable!()
         }
+    }
+
+    pub fn progress(&self) -> &Progress {
+        &self.progress
     }
 }
 

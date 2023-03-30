@@ -1,4 +1,5 @@
 use crate::types::SqlType;
+use ethnum::I256;
 
 pub trait StatBuffer {
     type Buffer: AsMut<[u8]> + AsRef<[u8]> + Copy + Sync;
@@ -99,6 +100,18 @@ impl StatBuffer for i64 {
 
     fn sql_type() -> SqlType {
         SqlType::Int64
+    }
+}
+
+impl StatBuffer for I256 {
+    type Buffer = [u8; 32];
+
+    fn buffer() -> Self::Buffer {
+        [0; 32]
+    }
+
+    fn sql_type() -> SqlType {
+        SqlType::Int256
     }
 }
 

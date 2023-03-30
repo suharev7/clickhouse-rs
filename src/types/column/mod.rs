@@ -375,7 +375,7 @@ impl<K: ColumnType> Column<K> {
                     let mut buffer = [0_u8; 4];
                     buffer.copy_from_slice(&ip.octets());
                     buffer.reverse();
-                    inner.extend(&buffer);
+                    inner.extend(buffer);
                 }
 
                 let data = Arc::new(IpColumnData::<Ipv4> {
@@ -397,7 +397,7 @@ impl<K: ColumnType> Column<K> {
                 for i in 0..n {
                     let source = self.at(i).as_str().unwrap();
                     let ip: Ipv6Addr = source.parse().unwrap();
-                    inner.extend(&ip.octets());
+                    inner.extend(ip.octets());
                 }
 
                 let data = Arc::new(IpColumnData::<Ipv6> {
@@ -454,7 +454,12 @@ impl<K: ColumnType> Column<K> {
         }
     }
 
-    pub(crate) unsafe fn get_internal(&self, pointers: &[*mut *const u8], level: u8, props: u32) -> Result<()> {
+    pub(crate) unsafe fn get_internal(
+        &self,
+        pointers: &[*mut *const u8],
+        level: u8,
+        props: u32,
+    ) -> Result<()> {
         self.data.get_internal(pointers, level, props)
     }
 }

@@ -1,3 +1,4 @@
+#![allow(deprecated)]
 extern crate chrono;
 extern crate chrono_tz;
 extern crate clickhouse_rs;
@@ -1493,7 +1494,7 @@ async fn test_decimal() -> Result<(), Error> {
     let ox0: Option<Decimal> = block.get(0, "ox")?;
 
     assert_eq!(2, block.row_count());
-    assert_eq!(1.234, x.into());
+    assert_eq!(1.234, std::convert::Into::<f64>::into(x));
     assert_eq!(Some(1.23), ox.map(|v| v.into()));
     assert_eq!(None, ox0);
 
@@ -1986,7 +1987,7 @@ async fn test_iter_map() -> Result<(), Error> {
         ])),
         opt_map: Value::Map(
             SqlType::from(Value::UInt8(3).clone()).into(),
-            SqlType::from(Value::from(Some(4_u8)).clone()).into(),
+            SqlType::from(Value::from(Some(4_u8))).into(),
             Arc::new(HashMap::from([
                 (
                     Value::UInt8(3),

@@ -1,3 +1,5 @@
+use ethnum::I256;
+
 pub trait Unmarshal<T: Copy> {
     fn unmarshal(scratch: &[u8]) -> T;
 }
@@ -67,6 +69,16 @@ impl Unmarshal<i64> for i64 {
             | Self::from(scratch[5]) << 40
             | Self::from(scratch[6]) << 48
             | Self::from(scratch[7]) << 56
+    }
+}
+
+impl Unmarshal<I256> for I256 {
+    fn unmarshal(scratch: &[u8]) -> Self {
+        I256::from_be_bytes(
+            scratch
+                .try_into()
+                .unwrap_or_else(|e| panic!("Error `{e}` on Unmarshal I256 from `{scratch:?}`.")),
+        )
     }
 }
 

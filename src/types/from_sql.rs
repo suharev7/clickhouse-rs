@@ -174,6 +174,45 @@ impl<'a> FromSql<'a> for uuid::Uuid {
     }
 }
 
+impl<'a> FromSql<'a> for ethabi::Address {
+    fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
+        use std::str::FromStr;
+        match value {
+            ValueRef::String(row) => match std::str::from_utf8(row) {
+                Ok(s) => Ok(ethabi::Address::from_str(s).unwrap_or_else(|e| {
+                    panic!(
+                        "Unable to get `ethabi::Address` from FixedString({}) {e}",
+                        row.len()
+                    )
+                })),
+                Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
+            },
+            _ => {
+                let from = SqlType::from(value.clone()).to_string();
+                Err(Error::FromSql(FromSqlError::InvalidType {
+                    src: from,
+                    dst: "Uuid".into(),
+                }))
+            }
+        }
+    }
+}
+
+impl<'a> FromSql<'a> for ethabi::ethereum_types::U256 {
+    fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
+        match value {
+            ValueRef::Int256(row) => Ok(ethabi::ethereum_types::U256::from(&row.to_be_bytes())),
+            _ => {
+                let from = SqlType::from(value.clone()).to_string();
+                Err(Error::FromSql(FromSqlError::InvalidType {
+                    src: from,
+                    dst: "Uuid".into(),
+                }))
+            }
+        }
+    }
+}
+
 macro_rules! from_sql_vec_impl {
     ( $( $t:ty: $k:pat => $f:expr ),* ) => {
         $(

@@ -1,22 +1,22 @@
 use std::{
     io,
-    time::Duration,
     pin::Pin,
     task::{Context, Poll},
+    time::Duration,
 };
 
 #[cfg(feature = "tokio_io")]
-use tokio::{net::TcpStream, io::ReadBuf};
+use tokio::{io::ReadBuf, net::TcpStream};
 #[cfg(feature = "tls")]
 use tokio_native_tls::TlsStream;
 
-#[cfg(feature = "tokio_io")]
-use tokio::io::{AsyncRead, AsyncWrite};
-use pin_project::pin_project;
-#[cfg(feature = "async_std")]
-use async_std::net::TcpStream;
 #[cfg(feature = "async_std")]
 use async_std::io::prelude::*;
+#[cfg(feature = "async_std")]
+use async_std::net::TcpStream;
+use pin_project::pin_project;
+#[cfg(feature = "tokio_io")]
+use tokio::io::{AsyncRead, AsyncWrite};
 
 #[cfg(all(feature = "tls", feature = "tokio_io"))]
 type SecureTcpStream = TlsStream<TcpStream>;
@@ -69,12 +69,19 @@ impl Stream {
         match *self {
             Self::Plain(ref mut stream) => stream.set_nodelay(nodelay),
             #[cfg(feature = "tls")]
-            Self::Secure(ref mut stream) => stream.get_mut().get_mut().get_mut().set_nodelay(nodelay),
-        }.map_err(|err| io::Error::new(err.kind(), format!("set_nodelay error: {}", err)))
+            Self::Secure(ref mut stream) => {
+                stream.get_mut().get_mut().get_mut().set_nodelay(nodelay)
+            }
+        }
+        .map_err(|err| io::Error::new(err.kind(), format!("set_nodelay error: {}", err)))
     }
 
     #[cfg(feature = "async_std")]
-    pub(crate) fn poll_read(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<io::Result<usize>> {
+    pub(crate) fn poll_read(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut [u8],
+    ) -> Poll<io::Result<usize>> {
         match self.project() {
             StreamProj::Plain(stream) => stream.poll_read(cx, buf),
             #[cfg(feature = "tls")]
@@ -83,7 +90,11 @@ impl Stream {
     }
 
     #[cfg(not(feature = "async_std"))]
-    pub(crate) fn poll_read(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<io::Result<usize>> {
+    pub(crate) fn poll_read(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut [u8],
+    ) -> Poll<io::Result<usize>> {
         let mut read_buf = ReadBuf::new(buf);
 
         let result = match self.project() {
@@ -99,7 +110,11 @@ impl Stream {
         }
     }
 
-    pub(crate) fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
+    pub(crate) fn poll_write(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<io::Result<usize>> {
         match self.project() {
             StreamProj::Plain(stream) => stream.poll_write(cx, buf),
             #[cfg(feature = "tls")]

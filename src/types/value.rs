@@ -10,6 +10,7 @@ use std::{
 use chrono::prelude::*;
 use chrono_tz::Tz;
 use either::Either;
+use ethnum::I256;
 
 use crate::types::{
     column::datetime64::to_datetime,
@@ -33,6 +34,7 @@ pub enum Value {
     Int16(i16),
     Int32(i32),
     Int64(i64),
+    Int256(I256),
     String(Arc<Vec<u8>>),
     Float32(f32),
     Float64(f64),
@@ -152,6 +154,7 @@ impl Value {
             SqlType::Int16 => Value::Int16(0),
             SqlType::Int32 => Value::Int32(0),
             SqlType::Int64 => Value::Int64(0),
+            SqlType::Int256 => Value::Int256(Default::default()),
             SqlType::String => Value::String(Arc::new(Vec::default())),
             SqlType::FixedString(str_len) => Value::String(Arc::new(vec![0_u8; str_len])),
             SqlType::Float32 => Value::Float32(0.0),
@@ -191,6 +194,7 @@ impl fmt::Display for Value {
             Value::Int16(ref v) => fmt::Display::fmt(v, f),
             Value::Int32(ref v) => fmt::Display::fmt(v, f),
             Value::Int64(ref v) => fmt::Display::fmt(v, f),
+            Value::Int256(ref v) => fmt::Display::fmt(v, f),
             Value::String(ref v) => match str::from_utf8(v) {
                 Ok(s) => fmt::Display::fmt(s, f),
                 Err(_) => write!(f, "{:?}", v),
@@ -271,6 +275,7 @@ impl From<Value> for SqlType {
             Value::Int16(_) => SqlType::Int16,
             Value::Int32(_) => SqlType::Int32,
             Value::Int64(_) => SqlType::Int64,
+            Value::Int256(_) => SqlType::Int256,
             Value::String(_) => SqlType::String,
             Value::Float32(_) => SqlType::Float32,
             Value::Float64(_) => SqlType::Float64,
@@ -395,7 +400,7 @@ impl From<Vec<String>> for Value {
     fn from(v: Vec<String>) -> Self {
         Value::Array(
             SqlType::String.into(),
-            Arc::new(v.into_iter().map(|s| s.into()).collect())
+            Arc::new(v.into_iter().map(|s| s.into()).collect()),
         )
     }
 }
@@ -411,7 +416,7 @@ impl From<Uuid> for Value {
 
 impl From<bool> for Value {
     fn from(v: bool) -> Value {
-        Value::UInt8(if v { 1 } else { 0 })
+        Value::UInt8(u8::from(v))
     }
 }
 
@@ -427,8 +432,8 @@ where
             res.insert(k.into(), v.into());
         }
         Self::Map(
-            K::get_sql_type().clone().into(),
-            V::get_sql_type().clone().into(),
+            K::get_sql_type().into(),
+            V::get_sql_type().into(),
             Arc::new(res),
         )
     }
@@ -444,6 +449,7 @@ value_from! {
     i16: Int16,
     i32: Int32,
     i64: Int64,
+    I256: Int256,
 
     f32: Float32,
     f64: Float64,
@@ -463,6 +469,7 @@ value_array_from! {
     i16: Int16,
     i32: Int32,
     i64: Int64,
+    I256: Int256,
 
     f32: Float32,
     f64: Float64
@@ -554,6 +561,7 @@ from_value! {
     i16: Int16,
     i32: Int32,
     i64: Int64,
+    I256: Int256,
     f32: Float32,
     f64: Float64,
     [u8; 4]: Ipv4
@@ -575,11 +583,11 @@ mod test {
     use chrono_tz::Tz::{self, UTC};
     use std::fmt;
 
+    use crate::{row, Block};
     use rand::{
         distributions::{Distribution, Standard},
         random,
     };
-    use crate::{Block, row};
 
     fn test_into_t<T>(v: Value, x: &T)
     where
@@ -799,17 +807,19 @@ mod test {
     #[test]
     fn test_value_array_from() {
         let mut block = Block::with_capacity(5);
-        block.push(row! {
-            u16: vec![1_u16, 2, 3],
-            u32: vec![1_u32, 2, 3],
-            u64: vec![1_u64, 2, 3],
-            i8: vec![1_i8, 2, 3],
-            i16: vec![1_i16, 2, 3],
-            i32: vec![1_i32, 2, 3],
-            i64: vec![1_i64, 2, 3],
-            f32: vec![1_f32, 2.0, 3.0],
-            f64: vec![1_f64, 2.0, 3.0],
-        }).unwrap();
+        block
+            .push(row! {
+                u16: vec![1_u16, 2, 3],
+                u32: vec![1_u32, 2, 3],
+                u64: vec![1_u64, 2, 3],
+                i8: vec![1_i8, 2, 3],
+                i16: vec![1_i16, 2, 3],
+                i32: vec![1_i32, 2, 3],
+                i64: vec![1_i64, 2, 3],
+                f32: vec![1_f32, 2.0, 3.0],
+                f64: vec![1_f64, 2.0, 3.0],
+            })
+            .unwrap();
 
         assert_eq!(block.row_count(), 1);
         assert_eq!(block.column_count(), 9);

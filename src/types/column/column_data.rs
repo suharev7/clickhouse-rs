@@ -19,7 +19,12 @@ pub trait ColumnData {
 
     fn clone_instance(&self) -> BoxColumnData;
 
-    unsafe fn get_internal(&self, _pointers: &[*mut *const u8], _level: u8, _props: u32) -> Result<()> {
+    unsafe fn get_internal(
+        &self,
+        _pointers: &[*mut *const u8],
+        _level: u8,
+        _props: u32,
+    ) -> Result<()> {
         Err(Error::FromSql(FromSqlError::UnsupportedOperation))
     }
 

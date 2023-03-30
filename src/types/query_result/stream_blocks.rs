@@ -37,7 +37,11 @@ impl<'a> Drop for BlockStream<'a> {
 }
 
 impl<'a> BlockStream<'a> {
-    pub(crate) fn new(client: &mut ClientHandle, inner: PacketStream, skip_first_block: bool) -> BlockStream {
+    pub(crate) fn new(
+        client: &mut ClientHandle,
+        inner: PacketStream,
+        skip_first_block: bool,
+    ) -> BlockStream {
         BlockStream {
             client,
             inner,
@@ -78,7 +82,7 @@ impl<'a> Stream for BlockStream<'a> {
                 Packet::ProfileInfo(_) | Packet::Progress(_) => {}
                 Packet::Exception(exception) => {
                     self.eof = true;
-                    return Poll::Ready(Some(Err(Error::Server(exception))))
+                    return Poll::Ready(Some(Err(Error::Server(exception))));
                 }
                 Packet::Block(block) => {
                     self.block_index += 1;

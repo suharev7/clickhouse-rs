@@ -1,9 +1,11 @@
 use std::fmt;
 
 // TODO Using strings as a keys
+#[allow(clippy::derive_hash_xor_eq)]
 #[derive(Clone, Copy, Default, Hash)]
 pub struct Enum8(pub(crate) i8);
 
+#[allow(clippy::derive_hash_xor_eq)]
 #[derive(Clone, Copy, Default, Hash)]
 pub struct Enum16(pub(crate) i16);
 

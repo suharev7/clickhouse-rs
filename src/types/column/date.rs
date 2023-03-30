@@ -197,7 +197,12 @@ where
         })
     }
 
-    unsafe fn get_internal(&self, pointers: &[*mut *const u8], level: u8, _props: u32) -> Result<()> {
+    unsafe fn get_internal(
+        &self,
+        pointers: &[*mut *const u8],
+        level: u8,
+        _props: u32,
+    ) -> Result<()> {
         assert_eq!(level, 0);
         *pointers[0] = self.data.as_ptr() as *const u8;
         *pointers[1] = &self.tz as *const Tz as *const u8;

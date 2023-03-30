@@ -11,10 +11,10 @@ use std::{
 
 use crate::errors::{Error, Result, UrlError};
 #[cfg(feature = "tls")]
-use std::fmt::Formatter;
-#[cfg(feature = "tls")]
 use native_tls;
 use percent_encoding::percent_decode;
+#[cfg(feature = "tls")]
+use std::fmt::Formatter;
 use url::Url;
 
 const DEFAULT_MIN_CONNS: usize = 10;
@@ -138,6 +138,9 @@ impl PartialEq for Certificate {
 }
 
 #[cfg(feature = "tls")]
+impl Eq for Certificate {}
+
+#[cfg(feature = "tls")]
 impl convert::From<Certificate> for native_tls::Certificate {
     fn from(value: Certificate) -> Self {
         value.0.as_ref().clone()
@@ -145,7 +148,7 @@ impl convert::From<Certificate> for native_tls::Certificate {
 }
 
 /// Clickhouse connection options.
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Options {
     /// Address of clickhouse server (defaults to `127.0.0.1:9000`).
     pub(crate) addr: Url,
@@ -475,15 +478,13 @@ where
             "connection_timeout" => {
                 options.connection_timeout = parse_param(key, value, parse_duration)?
             }
-            "query_timeout" => {
-                options.query_timeout = parse_param(key, value, parse_duration)?
-            },
+            "query_timeout" => options.query_timeout = parse_param(key, value, parse_duration)?,
             "insert_timeout" => {
                 options.insert_timeout = parse_param(key, value, parse_opt_duration)?
             }
             "execute_timeout" => {
                 options.execute_timeout = parse_param(key, value, parse_opt_duration)?
-            },
+            }
             "compression" => options.compression = parse_param(key, value, parse_compression)?,
             #[cfg(feature = "tls")]
             "secure" => options.secure = parse_param(key, value, bool::from_str)?,
@@ -521,14 +522,12 @@ fn get_username_from_url(url: &Url) -> Option<Cow<'_, str>> {
     if user.is_empty() {
         return None;
     }
-    Some(percent_decode(user.as_bytes())
-        .decode_utf8_lossy())
+    Some(percent_decode(user.as_bytes()).decode_utf8_lossy())
 }
 
 fn get_password_from_url(url: &Url) -> Option<Cow<'_, str>> {
     let password = url.password()?;
-    Some(percent_decode(password.as_bytes())
-        .decode_utf8_lossy())
+    Some(percent_decode(password.as_bytes()).decode_utf8_lossy())
 }
 
 fn get_database_from_url(url: &Url) -> Result<Option<&str>> {
@@ -550,7 +549,7 @@ fn get_database_from_url(url: &Url) -> Result<Option<&str>> {
 }
 
 fn parse_duration(source: &str) -> std::result::Result<Duration, ()> {
-    let digits_count = source.chars().take_while(|c| c.is_digit(10)).count();
+    let digits_count = source.chars().take_while(|c| c.is_ascii_digit()).count();
 
     let left: String = source.chars().take(digits_count).collect();
     let right: String = source.chars().skip(digits_count).collect();
@@ -617,7 +616,8 @@ mod test {
         let source = "host2:9000,host3:9000";
         let expected = vec![
             Url::from_str("tcp://host2:9000").unwrap(),
-            Url::from_str("tcp://host3:9000").unwrap()];
+            Url::from_str("tcp://host3:9000").unwrap(),
+        ];
         let actual = parse_hosts(source).unwrap();
         assert_eq!(actual, expected)
     }

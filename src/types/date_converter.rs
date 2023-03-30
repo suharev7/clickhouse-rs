@@ -1,7 +1,7 @@
 use chrono::{prelude::*, Date};
 use chrono_tz::Tz;
 
-use crate::types::{SqlType, Value, ValueRef, DateTimeType};
+use crate::types::{DateTimeType, SqlType, Value, ValueRef};
 
 pub trait DateConverter {
     fn to_date(&self, tz: Tz) -> ValueRef<'static>;

@@ -1,9 +1,10 @@
+#![allow(deprecated)]
 use std::{borrow::Cow, collections::HashMap, fmt, mem, pin::Pin, str::FromStr, sync::Mutex};
 
 use chrono::prelude::*;
 use chrono_tz::Tz;
+use ethnum::I256;
 use hostname::get;
-
 use lazy_static::lazy_static;
 
 use crate::errors::ServerError;
@@ -44,6 +45,7 @@ mod cmd;
 
 mod date_converter;
 mod query;
+
 pub(crate) mod query_result;
 
 mod decimal;
@@ -188,6 +190,7 @@ has_sql_type! {
     i16: SqlType::Int16,
     i32: SqlType::Int32,
     i64: SqlType::Int64,
+    I256: SqlType::Int256,
     &str: SqlType::String,
     String: SqlType::String,
     f32: SqlType::Float32,
@@ -196,17 +199,13 @@ has_sql_type! {
     DateTime<Tz>: SqlType::DateTime(DateTimeType::DateTime32)
 }
 
-
 impl<K, V> HasSqlType for HashMap<K, V>
 where
     K: HasSqlType,
     V: HasSqlType,
 {
     fn get_sql_type() -> SqlType {
-        SqlType::Map(
-            K::get_sql_type().into(),
-            V::get_sql_type().into(),
-        )
+        SqlType::Map(K::get_sql_type().into(), V::get_sql_type().into())
     }
 }
 
@@ -296,6 +295,7 @@ pub enum SqlType {
     Int16,
     Int32,
     Int64,
+    Int256,
     String,
     FixedString(usize),
     Float32,
@@ -329,6 +329,7 @@ impl From<SqlType> for &'static SqlType {
             SqlType::Int16 => &SqlType::Int16,
             SqlType::Int32 => &SqlType::Int32,
             SqlType::Int64 => &SqlType::Int64,
+            SqlType::Int256 => &SqlType::Int256,
             SqlType::String => &SqlType::String,
             SqlType::Float32 => &SqlType::Float32,
             SqlType::Float64 => &SqlType::Float64,
@@ -361,6 +362,7 @@ impl SqlType {
             SqlType::Int16 => "Int16".into(),
             SqlType::Int32 => "Int32".into(),
             SqlType::Int64 => "Int64".into(),
+            SqlType::Int256 => "Int256".into(),
             SqlType::String => "String".into(),
             SqlType::FixedString(str_len) => format!("FixedString({})", str_len).into(),
             SqlType::Float32 => "Float32".into(),

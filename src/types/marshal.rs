@@ -1,3 +1,5 @@
+use ethnum::I256;
+
 pub trait Marshal {
     fn marshal(&self, scratch: &mut [u8]);
 }
@@ -71,6 +73,12 @@ impl Marshal for i64 {
         scratch[5] = (self >> 40) as u8;
         scratch[6] = (self >> 48) as u8;
         scratch[7] = (self >> 56) as u8;
+    }
+}
+
+impl Marshal for I256 {
+    fn marshal(&self, scratch: &mut [u8]) {
+        scratch[..].copy_from_slice(&self.to_be_bytes());
     }
 }
 

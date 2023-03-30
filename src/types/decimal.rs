@@ -37,6 +37,7 @@ pub(crate) enum NoBits {
 }
 
 /// Provides arbitrary-precision floating point decimal.
+#[allow(clippy::derive_hash_xor_eq)]
 #[derive(Clone, Hash)]
 pub struct Decimal {
     pub(crate) underlying: i64,

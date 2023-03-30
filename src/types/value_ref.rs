@@ -5,6 +5,7 @@ use std::{convert, fmt, str, sync::Arc};
 use chrono::prelude::*;
 use chrono_tz::Tz;
 use either::Either;
+use ethnum::I256;
 
 use crate::{
     errors::{Error, FromSqlError, Result},
@@ -28,6 +29,7 @@ pub enum ValueRef<'a> {
     Int16(i16),
     Int32(i32),
     Int64(i64),
+    Int256(I256),
     String(&'a [u8]),
     Float32(f32),
     Float64(f64),
@@ -128,6 +130,7 @@ impl<'a> fmt::Display for ValueRef<'a> {
             ValueRef::Int16(v) => fmt::Display::fmt(v, f),
             ValueRef::Int32(v) => fmt::Display::fmt(v, f),
             ValueRef::Int64(v) => fmt::Display::fmt(v, f),
+            ValueRef::Int256(v) => fmt::Display::fmt(v, f),
             ValueRef::String(v) => match str::from_utf8(v) {
                 Ok(s) => fmt::Display::fmt(s, f),
                 Err(_) => write!(f, "{:?}", *v),
@@ -202,6 +205,7 @@ impl<'a> convert::From<ValueRef<'a>> for SqlType {
             ValueRef::Int16(_) => SqlType::Int16,
             ValueRef::Int32(_) => SqlType::Int32,
             ValueRef::Int64(_) => SqlType::Int64,
+            ValueRef::Int256(_) => SqlType::Int256,
             ValueRef::String(_) => SqlType::String,
             ValueRef::Float32(_) => SqlType::Float32,
             ValueRef::Float64(_) => SqlType::Float64,
@@ -267,6 +271,7 @@ impl<'a> From<ValueRef<'a>> for Value {
             ValueRef::Int16(v) => Value::Int16(v),
             ValueRef::Int32(v) => Value::Int32(v),
             ValueRef::Int64(v) => Value::Int64(v),
+            ValueRef::Int256(v) => Value::Int256(v),
             ValueRef::String(v) => Value::String(Arc::new(v.into())),
             ValueRef::Float32(v) => Value::Float32(v),
             ValueRef::Float64(v) => Value::Float64(v),
@@ -357,6 +362,7 @@ impl<'a> From<&'a Value> for ValueRef<'a> {
             Value::Int16(v) => ValueRef::Int16(*v),
             Value::Int32(v) => ValueRef::Int32(*v),
             Value::Int64(v) => ValueRef::Int64(*v),
+            Value::Int256(v) => ValueRef::Int256(*v),
             Value::String(v) => ValueRef::String(v),
             Value::Float32(v) => ValueRef::Float32(*v),
             Value::Float64(v) => ValueRef::Float64(*v),
@@ -376,7 +382,7 @@ impl<'a> From<&'a Value> for ValueRef<'a> {
                     let value_ref: ValueRef<'a> = From::from(v);
                     ref_vec.push(value_ref)
                 }
-                ValueRef::Array(*t, Arc::new(ref_vec))
+                ValueRef::Array(t, Arc::new(ref_vec))
             }
             Value::Decimal(v) => ValueRef::Decimal(v.clone()),
             Value::Enum8(values, v) => ValueRef::Enum8(values.to_vec(), *v),
@@ -392,7 +398,7 @@ impl<'a> From<&'a Value> for ValueRef<'a> {
                     let value_ref: ValueRef<'a> = From::from(v);
                     ref_map.insert(key_ref, value_ref);
                 }
-                ValueRef::Map(*k, *v, Arc::new(ref_map))
+                ValueRef::Map(k, v, Arc::new(ref_map))
             }
         }
     }
@@ -452,6 +458,7 @@ value_from! {
     i16: Int16,
     i32: Int32,
     i64: Int64,
+    I256: Int256,
 
     f32: Float32,
     f64: Float64

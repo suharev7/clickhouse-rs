@@ -7,6 +7,7 @@ use combine::{
     parser::char::{digit, spaces, string},
     sep_by1, token, Parser,
 };
+use ethnum::I256;
 
 use crate::{
     binary::ReadEx,
@@ -71,6 +72,7 @@ impl dyn ColumnData {
             "Int64" | "BigInt" => W::wrap(VectorColumnData::<i64>::load(reader, size)?),
             "Float32" | "Float" => W::wrap(VectorColumnData::<f32>::load(reader, size)?),
             "Float64" | "Double" => W::wrap(VectorColumnData::<f64>::load(reader, size)?),
+            "Int256" => W::wrap(VectorColumnData::<I256>::load(reader, size)?),
             "String" | "Char" | "Varchar" | "Text" | "TinyText" | "MediumText" | "LongText" | "Blob" | "TinyBlob" | "MediumBlob" | "LongBlob" => W::wrap(StringColumnData::load(reader, size)?),
             "Date" => W::wrap(DateColumnData::<u16>::load(reader, size, tz)?),
             "IPv4" => W::wrap(IpColumnData::<Ipv4>::load(reader, size)?),
@@ -123,6 +125,7 @@ impl dyn ColumnData {
             SqlType::Int16 => W::wrap(VectorColumnData::<i16>::with_capacity(capacity)),
             SqlType::Int32 => W::wrap(VectorColumnData::<i32>::with_capacity(capacity)),
             SqlType::Int64 => W::wrap(VectorColumnData::<i64>::with_capacity(capacity)),
+            SqlType::Int256 => W::wrap(VectorColumnData::<I256>::with_capacity(capacity)),
             SqlType::String => W::wrap(StringColumnData::with_capacity(capacity)),
             SqlType::FixedString(len) => {
                 W::wrap(FixedStringColumnData::with_capacity(capacity, len))
@@ -202,13 +205,13 @@ impl dyn ColumnData {
             }),
             SqlType::Map(k, v) => W::wrap(MapColumnData {
                 keys: <dyn ColumnData>::from_type::<ArcColumnWrapper>(
-                    k.clone().into(),
+                    k.clone(),
                     timezone,
                     capacity,
                 )?,
                 offsets: List::with_capacity(capacity),
                 values: <dyn ColumnData>::from_type::<ArcColumnWrapper>(
-                    v.clone().into(),
+                    v.clone(),
                     timezone,
                     capacity,
                 )?,

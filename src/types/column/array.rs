@@ -86,7 +86,7 @@ impl ColumnData for ArrayColumnData {
             0_usize
         };
         let end = self.offsets.at(index) as usize;
-        let mut vs = Vec::with_capacity(end);
+        let mut vs = Vec::with_capacity(end - start);
         for i in start..end {
             let v = self.inner.at(i);
             vs.push(v);

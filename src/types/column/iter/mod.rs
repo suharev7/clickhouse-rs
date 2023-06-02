@@ -1191,8 +1191,8 @@ mod test {
         let actual: Vec<_> = columns.collect();
         let mut aa = HashMap::new();
 
-        for a in &actual[0] {
-            aa.insert(a.0.clone(), *a.1.clone());
+        for a in actual[0].iter() {
+            aa.insert(*a.0, **a.1);
         }
 
         let mut expected = HashMap::new();

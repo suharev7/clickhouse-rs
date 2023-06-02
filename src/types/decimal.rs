@@ -1,4 +1,8 @@
-use std::{cmp::Ordering, fmt};
+use std::{
+    cmp::Ordering,
+    fmt,
+    hash::{Hash, Hasher},
+};
 
 static FACTORS10: &[i64] = &[
     1,
@@ -37,7 +41,7 @@ pub(crate) enum NoBits {
 }
 
 /// Provides arbitrary-precision floating point decimal.
-#[derive(Clone, Hash)]
+#[derive(Clone)]
 pub struct Decimal {
     pub(crate) underlying: i64,
     pub(crate) nobits: NoBits, // its domain is {32, 64}
@@ -53,6 +57,15 @@ impl Default for Decimal {
             scale: 4,
             nobits: NoBits::N32,
         }
+    }
+}
+
+impl Hash for Decimal {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.underlying.hash(state);
+        self.nobits.hash(state);
+        self.precision.hash(state);
+        self.scale.hash(state);
     }
 }
 
@@ -185,7 +198,7 @@ impl Decimal {
         }
 
         let underlying = source.scale(FACTORS10[scale as usize]);
-        if underlying > FACTORS10[precision as usize] as i64 {
+        if underlying > FACTORS10[precision as usize] {
             panic!("{} > {}", underlying, FACTORS10[precision as usize]);
         }
 

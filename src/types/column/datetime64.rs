@@ -5,10 +5,11 @@ use crate::{
     binary::{Encoder, ReadEx},
     errors::Result,
     types::{
-        SqlType, DateTimeType, Value, ValueRef,
         column::{
-            column_data::{BoxColumnData, ColumnData}, list::List,
-        }
+            column_data::{BoxColumnData, ColumnData},
+            list::List,
+        },
+        DateTimeType, SqlType, Value, ValueRef,
     },
 };
 
@@ -76,7 +77,12 @@ impl ColumnData for DateTime64ColumnData {
         })
     }
 
-    unsafe fn get_internal(&self, pointers: &[*mut *const u8], level: u8, _props: u32) -> Result<()> {
+    unsafe fn get_internal(
+        &self,
+        pointers: &[*mut *const u8],
+        level: u8,
+        _props: u32,
+    ) -> Result<()> {
         assert_eq!(level, 0);
         let (precision, tz) = &self.params;
         *pointers[0] = self.data.as_ptr() as *const u8;
@@ -106,7 +112,7 @@ pub(crate) fn to_datetime(value: i64, precision: u32, tz: Tz) -> DateTime<Tz> {
     let sec = nano / 1_000_000_000;
     let nsec = nano - sec * 1_000_000_000;
 
-    tz.timestamp(sec, nsec as u32)
+    tz.timestamp_opt(sec, nsec as u32).unwrap()
 }
 
 #[cfg(test)]

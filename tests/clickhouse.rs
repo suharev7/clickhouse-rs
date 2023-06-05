@@ -141,37 +141,37 @@ async fn test_insert() -> Result<(), Error> {
         .column(
             "date",
             vec![
-                UTC.ymd(2016, 10, 22),
-                UTC.ymd(2016, 10, 22),
-                UTC.ymd(2016, 10, 22),
-                UTC.ymd(2016, 10, 22),
-                UTC.ymd(2016, 10, 22),
-                UTC.ymd(2016, 10, 22),
-                UTC.ymd(2016, 10, 22),
+                NaiveDate::from_ymd_opt(2016, 10, 22).unwrap(),
+                NaiveDate::from_ymd_opt(2016, 10, 22).unwrap(),
+                NaiveDate::from_ymd_opt(2016, 10, 22).unwrap(),
+                NaiveDate::from_ymd_opt(2016, 10, 22).unwrap(),
+                NaiveDate::from_ymd_opt(2016, 10, 22).unwrap(),
+                NaiveDate::from_ymd_opt(2016, 10, 22).unwrap(),
+                NaiveDate::from_ymd_opt(2016, 10, 22).unwrap(),
             ],
         )
         .column(
             "datetime",
             vec![
-                UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
-                UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
-                UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
-                UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
-                UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
-                UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
-                UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
+                UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0).unwrap(),
+                UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0).unwrap(),
+                UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0).unwrap(),
+                UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0).unwrap(),
+                UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0).unwrap(),
+                UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0).unwrap(),
+                UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0).unwrap(),
             ],
         )
         .column(
             "datetime64",
             vec![
-                UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
-                UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
-                UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
-                UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
-                UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
-                UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
-                UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
+                UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0).unwrap(),
+                UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0).unwrap(),
+                UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0).unwrap(),
+                UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0).unwrap(),
+                UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0).unwrap(),
+                UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0).unwrap(),
+                UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0).unwrap(),
             ],
         )
         .column(
@@ -276,48 +276,48 @@ async fn test_datetime_read_write() -> Result<(), Error> {
         .column(
             "datetime",
             vec![
-                UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
-                IST.ymd(2016, 10, 22).and_hms(15, 0, 0),
-                IST.ymd(2016, 10, 22).and_hms(15, 0, 0),
+                UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0).unwrap(),
+                IST.with_ymd_and_hms(2016, 10, 22, 15, 0, 0).unwrap(),
+                IST.with_ymd_and_hms(2016, 10, 22, 15, 0, 0).unwrap(),
             ],
         )
         .column(
             "datetime_utc",
             vec![
-                UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
-                IST.ymd(2016, 10, 22).and_hms(15, 0, 0),
-                IST.ymd(2016, 10, 22).and_hms(15, 0, 0),
+                UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0).unwrap(),
+                IST.with_ymd_and_hms(2016, 10, 22, 15, 0, 0).unwrap(),
+                IST.with_ymd_and_hms(2016, 10, 22, 15, 0, 0).unwrap(),
             ],
         )
         .column(
             "datetime_ist",
             vec![
-                UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
-                IST.ymd(2016, 10, 22).and_hms(15, 0, 0),
-                IST.ymd(2016, 10, 22).and_hms(15, 0, 0),
+                UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0).unwrap(),
+                IST.with_ymd_and_hms(2016, 10, 22, 15, 0, 0).unwrap(),
+                IST.with_ymd_and_hms(2016, 10, 22, 15, 0, 0).unwrap(),
             ],
         )
         .column(
             "datetime_opt",
             vec![
-                Some(UTC.ymd(2016, 10, 22).and_hms(12, 0, 0)),
-                Some(IST.ymd(2016, 10, 22).and_hms(15, 0, 0)),
+                Some(UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0).unwrap()),
+                Some(IST.with_ymd_and_hms(2016, 10, 22, 15, 0, 0).unwrap()),
                 None,
             ],
         )
         .column(
             "datetime_opt_utc",
             vec![
-                Some(UTC.ymd(2016, 10, 22).and_hms(12, 0, 0)),
-                Some(IST.ymd(2016, 10, 22).and_hms(15, 0, 0)),
+                Some(UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0).unwrap()),
+                Some(IST.with_ymd_and_hms(2016, 10, 22, 15, 0, 0).unwrap()),
                 None,
             ],
         )
         .column(
             "datetime_opt_ist",
             vec![
-                Some(UTC.ymd(2016, 10, 22).and_hms(12, 0, 0)),
-                Some(IST.ymd(2016, 10, 22).and_hms(15, 0, 0)),
+                Some(UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0).unwrap()),
+                Some(IST.with_ymd_and_hms(2016, 10, 22, 15, 0, 0).unwrap()),
                 None,
             ],
         );
@@ -409,35 +409,35 @@ async fn test_datetime_read_write() -> Result<(), Error> {
 
     assert_eq!(
         vec![
-            UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
-            UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
-            UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
+            UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0).unwrap(),
+            UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0).unwrap(),
+            UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0).unwrap(),
         ],
         collect_values(&actual_dates_block, "datetime")
     );
 
     assert_eq!(
         vec![
-            UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
-            UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
-            UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
+            UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0).unwrap(),
+            UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0).unwrap(),
+            UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0).unwrap(),
         ],
         collect_values(&actual_dates_block, "datetime_utc")
     );
 
     assert_eq!(
         vec![
-            UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
-            UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
-            UTC.ymd(2016, 10, 22).and_hms(12, 0, 0),
+            UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0).unwrap(),
+            UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0).unwrap(),
+            UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0).unwrap(),
         ],
         collect_values(&actual_dates_block, "datetime_ist")
     );
 
     assert_eq!(
         vec![
-            Some(UTC.ymd(2016, 10, 22).and_hms(12, 0, 0)),
-            Some(UTC.ymd(2016, 10, 22).and_hms(12, 0, 0)),
+            Some(UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0).unwrap()),
+            Some(UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0).unwrap()),
             None,
         ],
         collect_values(&actual_dates_block, "datetime_opt")
@@ -445,8 +445,8 @@ async fn test_datetime_read_write() -> Result<(), Error> {
 
     assert_eq!(
         vec![
-            Some(UTC.ymd(2016, 10, 22).and_hms(12, 0, 0)),
-            Some(UTC.ymd(2016, 10, 22).and_hms(12, 0, 0)),
+            Some(UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0).unwrap()),
+            Some(UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0).unwrap()),
             None,
         ],
         collect_values(&actual_dates_block, "datetime_opt_utc")
@@ -454,8 +454,8 @@ async fn test_datetime_read_write() -> Result<(), Error> {
 
     assert_eq!(
         vec![
-            Some(UTC.ymd(2016, 10, 22).and_hms(12, 0, 0)),
-            Some(UTC.ymd(2016, 10, 22).and_hms(12, 0, 0)),
+            Some(UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0).unwrap()),
+            Some(UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0).unwrap()),
             None,
         ],
         collect_values(&actual_dates_block, "datetime_opt_ist")
@@ -489,48 +489,105 @@ async fn test_datetime64_read_write() -> Result<(), Error> {
         .column(
             "datetime64",
             vec![
-                UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_456_678),
-                IST.ymd(2016, 10, 22).and_hms_nano(15, 0, 0, 123_456_678),
-                IST.ymd(2016, 10, 22).and_hms_nano(15, 0, 0, 123_456_678),
+                UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0)
+                    .unwrap()
+                    .with_nanosecond(123_456_678)
+                    .unwrap(),
+                IST.with_ymd_and_hms(2016, 10, 22, 15, 0, 0)
+                    .unwrap()
+                    .with_nanosecond(123_456_678)
+                    .unwrap(),
+                IST.with_ymd_and_hms(2016, 10, 22, 15, 0, 0)
+                    .unwrap()
+                    .with_nanosecond(123_456_678)
+                    .unwrap(),
             ],
         )
         .column(
             "datetime64_utc",
             vec![
-                UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_456_678),
-                IST.ymd(2016, 10, 22).and_hms_nano(15, 0, 0, 123_456_678),
-                IST.ymd(2016, 10, 22).and_hms_nano(15, 0, 0, 123_456_678),
+                UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0)
+                    .unwrap()
+                    .with_nanosecond(123_456_678)
+                    .unwrap(),
+                IST.with_ymd_and_hms(2016, 10, 22, 15, 0, 0)
+                    .unwrap()
+                    .with_nanosecond(123_456_678)
+                    .unwrap(),
+                IST.with_ymd_and_hms(2016, 10, 22, 15, 0, 0)
+                    .unwrap()
+                    .with_nanosecond(123_456_678)
+                    .unwrap(),
             ],
         )
         .column(
             "datetime64_ist",
             vec![
-                UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_456_678),
-                IST.ymd(2016, 10, 22).and_hms_nano(15, 0, 0, 123_456_678),
-                IST.ymd(2016, 10, 22).and_hms_nano(15, 0, 0, 123_456_678),
+                UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0)
+                    .unwrap()
+                    .with_nanosecond(123_456_678)
+                    .unwrap(),
+                IST.with_ymd_and_hms(2016, 10, 22, 15, 0, 0)
+                    .unwrap()
+                    .with_nanosecond(123_456_678)
+                    .unwrap(),
+                IST.with_ymd_and_hms(2016, 10, 22, 15, 0, 0)
+                    .unwrap()
+                    .with_nanosecond(123_456_678)
+                    .unwrap(),
             ],
         )
         .column(
             "datetime64_opt",
             vec![
-                Some(UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_456_678)),
-                Some(IST.ymd(2016, 10, 22).and_hms_nano(15, 0, 0, 123_456_678)),
+                Some(
+                    UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0)
+                        .unwrap()
+                        .with_nanosecond(123_456_678)
+                        .unwrap(),
+                ),
+                Some(
+                    IST.with_ymd_and_hms(2016, 10, 22, 15, 0, 0)
+                        .unwrap()
+                        .with_nanosecond(123_456_678)
+                        .unwrap(),
+                ),
                 None,
             ],
         )
         .column(
             "datetime64_opt_utc",
             vec![
-                Some(UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_456_678)),
-                Some(IST.ymd(2016, 10, 22).and_hms_nano(15, 0, 0, 123_456_678)),
+                Some(
+                    UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0)
+                        .unwrap()
+                        .with_nanosecond(123_456_678)
+                        .unwrap(),
+                ),
+                Some(
+                    IST.with_ymd_and_hms(2016, 10, 22, 15, 0, 0)
+                        .unwrap()
+                        .with_nanosecond(123_456_678)
+                        .unwrap(),
+                ),
                 None,
             ],
         )
         .column(
             "datetime64_opt_ist",
             vec![
-                Some(UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_456_678)),
-                Some(IST.ymd(2016, 10, 22).and_hms_nano(15, 0, 0, 123_456_678)),
+                Some(
+                    UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0)
+                        .unwrap()
+                        .with_nanosecond(123_456_678)
+                        .unwrap(),
+                ),
+                Some(
+                    IST.with_ymd_and_hms(2016, 10, 22, 15, 0, 0)
+                        .unwrap()
+                        .with_nanosecond(123_456_678)
+                        .unwrap(),
+                ),
                 None,
             ],
         );
@@ -622,35 +679,72 @@ async fn test_datetime64_read_write() -> Result<(), Error> {
 
     assert_eq!(
         vec![
-            UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_000_000),
-            UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_000_000),
-            UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_000_000),
+            UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0)
+                .unwrap()
+                .with_nanosecond(123_000_000)
+                .unwrap(),
+            UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0)
+                .unwrap()
+                .with_nanosecond(123_000_000)
+                .unwrap(),
+            UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0)
+                .unwrap()
+                .with_nanosecond(123_000_000)
+                .unwrap(),
         ],
         collect_values(&actual_dates_block, "datetime64")
     );
 
     assert_eq!(
         vec![
-            UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_000_000),
-            UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_000_000),
-            UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_000_000),
+            UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0)
+                .unwrap()
+                .with_nanosecond(123_000_000)
+                .unwrap(),
+            UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0)
+                .unwrap()
+                .with_nanosecond(123_000_000)
+                .unwrap(),
+            UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0)
+                .unwrap()
+                .with_nanosecond(123_000_000)
+                .unwrap(),
         ],
         collect_values(&actual_dates_block, "datetime64_utc")
     );
 
     assert_eq!(
         vec![
-            UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_000_000),
-            UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_000_000),
-            UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_000_000),
+            UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0)
+                .unwrap()
+                .with_nanosecond(123_000_000)
+                .unwrap(),
+            UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0)
+                .unwrap()
+                .with_nanosecond(123_000_000)
+                .unwrap(),
+            UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0)
+                .unwrap()
+                .with_nanosecond(123_000_000)
+                .unwrap(),
         ],
         collect_values(&actual_dates_block, "datetime64_ist")
     );
 
     assert_eq!(
         vec![
-            Some(UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_000_000)),
-            Some(UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_000_000)),
+            Some(
+                UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0)
+                    .unwrap()
+                    .with_nanosecond(123_000_000)
+                    .unwrap(),
+            ),
+            Some(
+                UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0)
+                    .unwrap()
+                    .with_nanosecond(123_000_000)
+                    .unwrap(),
+            ),
             None,
         ],
         collect_values(&actual_dates_block, "datetime64_opt")
@@ -658,8 +752,18 @@ async fn test_datetime64_read_write() -> Result<(), Error> {
 
     assert_eq!(
         vec![
-            Some(UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_000_000)),
-            Some(UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_000_000)),
+            Some(
+                UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0)
+                    .unwrap()
+                    .with_nanosecond(123_000_000)
+                    .unwrap(),
+            ),
+            Some(
+                UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0)
+                    .unwrap()
+                    .with_nanosecond(123_000_000)
+                    .unwrap(),
+            ),
             None,
         ],
         collect_values(&actual_dates_block, "datetime64_opt_utc")
@@ -667,8 +771,18 @@ async fn test_datetime64_read_write() -> Result<(), Error> {
 
     assert_eq!(
         vec![
-            Some(UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_000_000)),
-            Some(UTC.ymd(2016, 10, 22).and_hms_nano(12, 0, 0, 123_000_000)),
+            Some(
+                UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0)
+                    .unwrap()
+                    .with_nanosecond(123_000_000)
+                    .unwrap(),
+            ),
+            Some(
+                UTC.with_ymd_and_hms(2016, 10, 22, 12, 0, 0)
+                    .unwrap()
+                    .with_nanosecond(123_000_000)
+                    .unwrap(),
+            ),
             None,
         ],
         collect_values(&actual_dates_block, "datetime64_opt_ist")
@@ -708,19 +822,21 @@ async fn test_select() -> Result<(), Error> {
         .column(
             "date",
             vec![
-                UTC.ymd(2014, 7, 8),
-                UTC.ymd(2014, 7, 8),
-                UTC.ymd(2014, 7, 8),
-                UTC.ymd(2014, 7, 9),
+                NaiveDate::from_ymd_opt(2014, 7, 8).unwrap(),
+                NaiveDate::from_ymd_opt(2014, 7, 8).unwrap(),
+                NaiveDate::from_ymd_opt(2014, 7, 8).unwrap(),
+                NaiveDate::from_ymd_opt(2014, 7, 9).unwrap(),
             ],
         )
         .column(
             "datetime",
             vec![
-                Tz::Singapore.ymd(2014, 7, 8).and_hms(14, 0, 0),
-                UTC.ymd(2014, 7, 8).and_hms(14, 0, 0),
-                UTC.ymd(2014, 7, 8).and_hms(14, 0, 0),
-                UTC.ymd(2014, 7, 8).and_hms(13, 0, 0),
+                Tz::Singapore
+                    .with_ymd_and_hms(2014, 7, 8, 14, 0, 0)
+                    .unwrap(),
+                UTC.with_ymd_and_hms(2014, 7, 8, 14, 0, 0).unwrap(),
+                UTC.with_ymd_and_hms(2014, 7, 8, 14, 0, 0).unwrap(),
+                UTC.with_ymd_and_hms(2014, 7, 8, 13, 0, 0).unwrap(),
             ],
         );
 
@@ -1046,8 +1162,8 @@ async fn test_nullable() -> Result<(), Error> {
             uuid
         FROM clickhouse_test_nullable";
 
-    let date_value: Date<Tz> = UTC.ymd(2016, 10, 22);
-    let date_time_value: DateTime<Tz> = UTC.ymd(2014, 7, 8).and_hms(14, 0, 0);
+    let date_value: NaiveDate = NaiveDate::from_ymd_opt(2016, 10, 22).unwrap();
+    let date_time_value: DateTime<Tz> = UTC.with_ymd_and_hms(2014, 7, 8, 14, 0, 0).unwrap();
 
     let block = Block::new()
         .column("int8", vec![Some(1_i8)])
@@ -1095,7 +1211,7 @@ async fn test_nullable() -> Result<(), Error> {
     let float32: Option<f32> = block.get(0, "float32")?;
     let float64: Option<f64> = block.get(0, "float64")?;
     let string: Option<&str> = block.get(0, "string")?;
-    let date: Option<Date<Tz>> = block.get(0, "date")?;
+    let date: Option<NaiveDate> = block.get(0, "date")?;
     let datetime: Option<DateTime<Tz>> = block.get(0, "datetime")?;
     let datetime64: Option<DateTime<Tz>> = block.get(0, "datetime64")?;
     let ipv4: Option<Ipv4Addr> = block.get(0, "ipv4")?;
@@ -1421,8 +1537,8 @@ async fn test_array() -> Result<(), Error> {
 
     let query = "SELECT u8, u32, f64, text1, text2, date, time, time64  FROM clickhouse_array";
 
-    let date_value: Date<Tz> = UTC.ymd(2016, 10, 22);
-    let date_time_value: DateTime<Tz> = UTC.ymd(2014, 7, 8).and_hms(14, 0, 0);
+    let date_value: NaiveDate = NaiveDate::from_ymd_opt(2016, 10, 22).unwrap();
+    let date_time_value: DateTime<Tz> = UTC.with_ymd_and_hms(2014, 7, 8, 14, 0, 0).unwrap();
 
     let block = Block::new()
         .column("u8", vec![vec![41_u8]])
@@ -1447,7 +1563,7 @@ async fn test_array() -> Result<(), Error> {
     let f64_vec: Vec<f64> = block.get(0, "f64")?;
     let text1_vec: Vec<&str> = block.get(0, "text1")?;
     let text2_vec: Vec<String> = block.get(0, "text2")?;
-    let date_vec: Vec<Date<Tz>> = block.get(0, "date")?;
+    let date_vec: Vec<NaiveDate> = block.get(0, "date")?;
     let time_vec: Vec<DateTime<Tz>> = block.get(0, "time")?;
     let time64_vec: Vec<DateTime<Tz>> = block.get(0, "time64")?;
 
@@ -1521,8 +1637,8 @@ async fn test_column_iter() -> Result<(), Error> {
 
     let query = r"SELECT * FROM clickhouse_test_column_iter";
 
-    let date_value: Date<Tz> = UTC.ymd(2016, 10, 22);
-    let date_time_value: DateTime<Tz> = UTC.ymd(2014, 7, 8).and_hms(14, 0, 0);
+    let date_value: NaiveDate = NaiveDate::from_ymd_opt(2016, 10, 22).unwrap();
+    let date_time_value: DateTime<Tz> = UTC.with_ymd_and_hms(2014, 7, 8, 14, 0, 0).unwrap();
 
     let block = Block::new()
         .column("uint64", vec![1_u64, 2, 3])
@@ -1582,7 +1698,7 @@ async fn test_column_iter() -> Result<(), Error> {
         let expected: Vec<Option<&[u8]>> = vec![Some(&[65_u8]), None, None];
         assert_eq!(opt_str_iter, expected);
 
-        let date_iter: Vec<_> = block.get_column("date")?.iter::<Date<Tz>>()?.collect();
+        let date_iter: Vec<_> = block.get_column("date")?.iter::<NaiveDate>()?.collect();
         assert_eq!(date_iter, vec![date_value, date_value, date_value]);
 
         let datetime_iter: Vec<_> = block
@@ -1854,8 +1970,10 @@ async fn test_insert_date64() -> Result<(), Error> {
     ";
 
     let date = chrono_tz::UTC
-        .ymd(2020, 2, 3)
-        .and_hms_nano(13, 45, 50, 8927265);
+        .with_ymd_and_hms(2020, 2, 3, 13, 45, 50)
+        .unwrap()
+        .with_nanosecond(8927265)
+        .unwrap();
     let mut block = Block::new();
     block.push(row! {
         id: 1u32,
@@ -1986,7 +2104,7 @@ async fn test_iter_map() -> Result<(), Error> {
         ])),
         opt_map: Value::Map(
             SqlType::from(Value::UInt8(3).clone()).into(),
-            SqlType::from(Value::from(Some(4_u8)).clone()).into(),
+            SqlType::from(Value::from(Some(4_u8))).into(),
             Arc::new(HashMap::from([
                 (
                     Value::UInt8(3),

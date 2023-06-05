@@ -1,4 +1,4 @@
-use chrono::prelude::*;
+use chrono::{prelude::*, Duration};
 use chrono_tz::Tz;
 use either::Either;
 use std::collections::HashMap;
@@ -208,7 +208,7 @@ from_sql_vec_impl! {
     String: SqlType::String => |v| v.as_string(),
     &'a [u8]: SqlType::String => |v| v.as_bytes(),
     Vec<u8>: SqlType::String => |v| v.as_bytes().map(<[u8]>::to_vec),
-    Date<Tz>: SqlType::Date => |z| Ok(z.into()),
+    NaiveDate: SqlType::Date => |z| Ok(z.into()),
     DateTime<Tz>: SqlType::DateTime(_) => |z| Ok(z.into())
 }
 
@@ -290,18 +290,17 @@ where
     }
 }
 
-impl<'a> FromSql<'a> for Date<Tz> {
+impl<'a> FromSql<'a> for NaiveDate {
     fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
         match value {
-            ValueRef::Date(v, tz) => {
-                let time = tz.timestamp(i64::from(v) * 24 * 3600, 0);
-                Ok(time.date())
-            }
+            ValueRef::Date(v) => NaiveDate::from_ymd_opt(1970, 1, 1)
+                .map(|unix_epoch| unix_epoch + Duration::days(v.into()))
+                .ok_or(Error::FromSql(FromSqlError::OutOfRange)),
             _ => {
                 let from = SqlType::from(value).to_string();
                 Err(Error::FromSql(FromSqlError::InvalidType {
                     src: from,
-                    dst: "Date<Tz>".into(),
+                    dst: "NaiveDate".into(),
                 }))
             }
         }
@@ -312,7 +311,7 @@ impl<'a> FromSql<'a> for DateTime<Tz> {
     fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
         match value {
             ValueRef::DateTime(v, tz) => {
-                let time = tz.timestamp(i64::from(v), 0);
+                let time = tz.timestamp_opt(i64::from(v), 0).unwrap();
                 Ok(time)
             }
             ValueRef::DateTime64(v, params) => {

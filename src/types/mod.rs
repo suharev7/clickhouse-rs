@@ -192,10 +192,9 @@ has_sql_type! {
     String: SqlType::String,
     f32: SqlType::Float32,
     f64: SqlType::Float64,
-    Date<Tz>: SqlType::Date,
+    NaiveDate: SqlType::Date,
     DateTime<Tz>: SqlType::DateTime(DateTimeType::DateTime32)
 }
-
 
 impl<K, V> HasSqlType for HashMap<K, V>
 where
@@ -203,10 +202,7 @@ where
     V: HasSqlType,
 {
     fn get_sql_type() -> SqlType {
-        SqlType::Map(
-            K::get_sql_type().into(),
-            V::get_sql_type().into(),
-        )
+        SqlType::Map(K::get_sql_type().into(), V::get_sql_type().into())
     }
 }
 

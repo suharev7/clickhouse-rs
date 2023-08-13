@@ -78,6 +78,7 @@ fn encode_cancel() -> Vec<u8> {
 fn encode_query(query: &Query, context: &Context) -> Result<Vec<u8>> {
     trace!("[send query] {}", query.get_sql());
 
+    // DBMS_MIN_REVISION_WITH_CLIENT_INFO
     let mut encoder = Encoder::new();
     encoder.uvarint(protocol::CLIENT_QUERY);
     encoder.string("");
@@ -96,6 +97,10 @@ fn encode_query(query: &Query, context: &Context) -> Result<Vec<u8>> {
 
     if context.server_info.revision >= protocol::DBMS_MIN_REVISION_WITH_QUOTA_KEY_IN_CLIENT_INFO {
         encoder.string("");
+    }
+
+    if context.server_info.revision >= protocol::DBMS_MIN_REVISION_WITH_VERSION_PATCH {
+        encoder.uvarint(0);
     }
 
     let options = context.options.get()?;

@@ -7,6 +7,7 @@ use std::{
     str::FromStr,
     sync::{Arc, Mutex},
     time::Duration,
+    collections::HashMap,
 };
 
 use crate::errors::{Error, Result, UrlError};
@@ -144,6 +145,65 @@ impl convert::From<Certificate> for native_tls::Certificate {
     }
 }
 
+#[derive(Clone, PartialEq, Debug)]
+pub enum SettingType {
+    String(String),
+    Bool(bool),
+    UInt64(u64),
+    Float64(f64),
+}
+impl fmt::Display for SettingType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self {
+            SettingType::Bool(val)   => write!(f, "{}", val),
+            SettingType::UInt64(val) => write!(f, "{}", val),
+            SettingType::Float64(val)  => write!(f, "{}", val),
+            SettingType::String(val) => write!(f, "{}", val),
+        }
+    }
+}
+impl Into<SettingType> for &str {
+    fn into(self) -> SettingType {
+        SettingType::String(self.into())
+    }
+}
+impl Into<SettingType> for bool {
+    fn into(self) -> SettingType {
+        SettingType::Bool(self)
+    }
+}
+impl Into<SettingType> for u64 {
+    fn into(self) -> SettingType {
+        SettingType::UInt64(self.into())
+    }
+}
+impl Into<SettingType> for i32 {
+    fn into(self) -> SettingType {
+        SettingType::UInt64((self as u64).into())
+    }
+}
+impl Into<SettingType> for i64 {
+    fn into(self) -> SettingType {
+        SettingType::UInt64((self as u64).into())
+    }
+}
+impl Into<SettingType> for f64 {
+    fn into(self) -> SettingType {
+        SettingType::Float64(self)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct SettingValue {
+    pub(crate) value: SettingType,
+    pub(crate) is_important: bool,
+}
+impl fmt::Display for SettingValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.value.fmt(f)
+    }
+}
+
 /// Clickhouse connection options.
 #[derive(Clone, PartialEq)]
 pub struct Options {
@@ -203,8 +263,8 @@ pub struct Options {
     #[cfg(feature = "tls")]
     pub(crate) certificate: Option<Certificate>,
 
-    /// Restricts permissions for read data, write data and change settings queries.
-    pub(crate) readonly: Option<u8>,
+    /// Query settings
+    pub(crate) settings: HashMap<String, SettingValue>,
 
     /// Comma separated list of single address host for load-balancing.
     pub(crate) alt_hosts: Vec<Url>,
@@ -225,7 +285,7 @@ impl fmt::Debug for Options {
             .field("retry_timeout", &self.retry_timeout)
             .field("ping_timeout", &self.ping_timeout)
             .field("connection_timeout", &self.connection_timeout)
-            .field("readonly", &self.readonly)
+            .field("settings", &self.settings)
             .field("alt_hosts", &self.alt_hosts)
             .finish()
     }
@@ -257,7 +317,7 @@ impl Default for Options {
             skip_verify: false,
             #[cfg(feature = "tls")]
             certificate: None,
-            readonly: None,
+            settings: HashMap::new(),
             alt_hosts: Vec::new(),
         }
     }
@@ -293,6 +353,18 @@ impl Options {
             addr: addr.into(),
             ..Self::default()
         }
+    }
+
+    pub fn with_setting<V>(mut self, name: &str, value: V, is_important: bool) -> Self
+    where
+        V: Into<SettingType>,
+    {
+        let value: SettingType = value.into();
+        self.settings.insert(name.into(), SettingValue {
+            value,
+            is_important,
+        });
+        self
     }
 
     property! {
@@ -397,8 +469,8 @@ impl Options {
     }
 
     property! {
-        /// Restricts permissions for read data, write data and change settings queries.
-        => readonly: Option<u8>
+        /// Query settings
+        => settings: HashMap<String, SettingValue>
     }
 
     property! {
@@ -489,9 +561,14 @@ where
             "secure" => options.secure = parse_param(key, value, bool::from_str)?,
             #[cfg(feature = "tls")]
             "skip_verify" => options.skip_verify = parse_param(key, value, bool::from_str)?,
-            "readonly" => options.readonly = parse_param(key, value, parse_opt_u8)?,
             "alt_hosts" => options.alt_hosts = parse_param(key, value, parse_hosts)?,
-            _ => return Err(UrlError::UnknownParameter { param: key.into() }),
+            _ => {
+                let value = SettingType::String(value.to_string());
+                options.settings.insert(key.to_string(), SettingValue{
+                    value,
+                    is_important: true,
+                });
+            },
         };
     }
 
@@ -699,10 +776,84 @@ mod test {
     }
 
     #[test]
-    #[should_panic]
-    fn test_parse_with_unknown_url() {
+    fn test_parse_with_unknown_setting() {
         let url = "tcp://localhost:9000/foo?bar=baz";
-        from_url(url).unwrap();
+        assert_eq!(
+            Options {
+                addr: Url::parse("tcp://localhost:9000").unwrap(),
+                database: "foo".into(),
+                settings: HashMap::from([
+                    (
+                        "bar".into(),
+                        SettingValue {
+                            value: SettingType::String("baz".into()),
+                            is_important: true,
+                        }
+                    ),
+                ]),
+                ..Options::default()
+            },
+            from_url(url).unwrap(),
+        );
+        // TODO: try to run "SELECT 1" with it and got a failure
+    }
+
+    #[test]
+    fn test_with_setting() {
+        {
+            let opts = Options::from_str("tcp://localhost:9000").unwrap().with_setting("foo", "bar", true);
+            assert_eq!(opts.settings, HashMap::from([(
+                "foo".into(),
+                SettingValue {
+                    value: SettingType::String("bar".into()),
+                    is_important: true,
+                }
+            )]));
+        }
+
+        {
+            let opts = Options::from_str("tcp://localhost:9000").unwrap().with_setting("foo", "bar", false);
+            assert_eq!(opts.settings, HashMap::from([(
+                "foo".into(),
+                SettingValue {
+                    value: SettingType::String("bar".into()),
+                    is_important: false,
+                }
+            )]));
+        }
+
+        {
+            let opts = Options::from_str("tcp://localhost:9000").unwrap().with_setting("foo", 1, true);
+            assert_eq!(opts.settings, HashMap::from([(
+                "foo".into(),
+                SettingValue {
+                    value: SettingType::UInt64(1u64),
+                    is_important: true,
+                }
+            )]));
+        }
+
+        {
+            let opts = Options::from_str("tcp://localhost:9000").unwrap().with_setting("foo", true, true);
+            assert_eq!(opts.settings, HashMap::from([(
+                "foo".into(),
+                SettingValue {
+                    value: SettingType::Bool(true),
+                    is_important: true,
+                }
+            )]));
+        }
+
+        {
+            let opts = Options::from_str("tcp://localhost:9000").unwrap().with_setting("foo", 1., true);
+            assert_eq!(opts.settings, HashMap::from([(
+                "foo".into(),
+                SettingValue {
+                    value: SettingType::Float64(1.),
+                    is_important: true,
+                }
+            )]));
+        }
     }
 
     #[test]

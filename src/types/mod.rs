@@ -15,6 +15,7 @@ pub use self::{
     enums::{Enum16, Enum8},
     from_sql::{FromSql, FromSqlResult},
     options::Options,
+    options::{SettingType, SettingValue},
     query::Query,
     query_result::QueryResult,
     value::Value,

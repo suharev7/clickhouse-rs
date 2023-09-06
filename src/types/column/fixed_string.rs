@@ -4,8 +4,8 @@ use crate::{
     binary::{Encoder, ReadEx},
     errors::Result,
     types::{
-        column::column_data::BoxColumnData, from_sql::*, Column, SqlType, Value,
-        ValueRef, ColumnType
+        column::column_data::BoxColumnData, from_sql::*, Column, ColumnType, SqlType, Value,
+        ValueRef,
     },
 };
 
@@ -83,7 +83,12 @@ impl ColumnData for FixedStringColumnData {
         })
     }
 
-    unsafe fn get_internal(&self, pointers: &[*mut *const u8], level: u8, _props: u32) -> Result<()> {
+    unsafe fn get_internal(
+        &self,
+        pointers: &[*mut *const u8],
+        level: u8,
+        _props: u32,
+    ) -> Result<()> {
         assert_eq!(level, 0);
         *pointers[0] = self.buffer.as_ptr() as *const u8;
         *(pointers[1] as *mut usize) = self.len();

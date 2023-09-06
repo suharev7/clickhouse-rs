@@ -100,7 +100,7 @@
 //!         let id: u32             = row.get("customer_id")?;
 //!         let amount: u32         = row.get("amount")?;
 //!         let name: Option<&str>  = row.get("account_name")?;
-//!         println!("Found payment {}: {} {:?}", id, amount, name);
+//!         println!("Found payment {id}: {amount} {name:?}");
 //!     }
 //!     Ok(())
 //! }
@@ -448,8 +448,8 @@ impl ClientHandle {
         }
         let fields = names.join(", ");
 
-        let query = Query::from(table)
-            .map_sql(|table| format!("INSERT INTO {} ({}) VALUES", table, fields));
+        let query =
+            Query::from(table).map_sql(|table| format!("INSERT INTO {table} ({fields}) VALUES"));
 
         let context = self.context.clone();
 
@@ -560,11 +560,11 @@ fn column_name_to_string(name: &str) -> Result<String> {
     }
 
     if name.chars().any(|ch| ch == '`') {
-        let err = format!("Column name {:?} shouldn't contains backticks.", name);
+        let err = format!("Column name {name:?} shouldn't contains backticks.");
         return Err(Error::Other(err.into()));
     }
 
-    Ok(format!("`{}`", name))
+    Ok(format!("`{name}`"))
 }
 
 #[cfg(feature = "async_std")]

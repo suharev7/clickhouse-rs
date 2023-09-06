@@ -428,15 +428,15 @@ fn print_line(
     center: char,
     right: &str,
 ) -> fmt::Result {
-    write!(f, "{}", left)?;
+    write!(f, "{left}")?;
     for (i, len) in lens.iter().enumerate() {
         if i != 0 {
-            write!(f, "{}", center)?;
+            write!(f, "{center}")?;
         }
 
         write!(f, "{:\u{2500}>width$}", "", width = len + 2)?;
     }
-    write!(f, "{}", right)
+    write!(f, "{right}")
 }
 
 fn text_cells<K: ColumnType>(data: &Column<K>) -> Vec<String> {
@@ -445,8 +445,8 @@ fn text_cells<K: ColumnType>(data: &Column<K>) -> Vec<String> {
 
 #[cfg(test)]
 mod test {
-    use crate::row;
     use super::*;
+    use crate::{row, types::column::datetime64::DEFAULT_TZ};
 
     #[test]
     fn test_write_default() {
@@ -493,7 +493,7 @@ mod test {
     fn test_read_empty_block() {
         let source = [1, 0, 2, 255, 255, 255, 255, 0, 0, 0];
         let mut cursor = Cursor::new(&source[..]);
-        match Block::<Simple>::load(&mut cursor, Tz::Zulu, false) {
+        match Block::<Simple>::load(&mut cursor, DEFAULT_TZ.clone(), false) {
             Ok(block) => assert!(block.is_empty()),
             Err(_) => unreachable!(),
         }
@@ -589,7 +589,7 @@ mod test {
         block.write(&mut encoder, false);
 
         let mut reader = Cursor::new(encoder.get_buffer_ref());
-        let rblock = Block::load(&mut reader, Tz::Zulu, false).unwrap();
+        let rblock = Block::load(&mut reader, DEFAULT_TZ.clone(), false).unwrap();
 
         assert_eq!(block, rblock);
     }
@@ -598,9 +598,11 @@ mod test {
     fn test_insert_str_array() {
         let expected: Vec<String> = vec!["A".into(), "B".into()];
         let mut block = Block::new();
-        block.push(row! {
-              tags: expected.clone(),
-        }).unwrap();
+        block
+            .push(row! {
+                  tags: expected.clone(),
+            })
+            .unwrap();
 
         let actual: Vec<String> = block.get(0, 0).unwrap();
         assert_eq!(actual, expected);

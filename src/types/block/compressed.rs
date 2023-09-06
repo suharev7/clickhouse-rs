@@ -1,4 +1,9 @@
-use std::{io, io::Read, mem, os::raw::{c_int, c_char}};
+use std::{
+    io,
+    io::Read,
+    mem,
+    os::raw::{c_char, c_int},
+};
 
 use byteorder::{LittleEndian, WriteBytesExt};
 use clickhouse_rs_cityhash_sys::{city_hash_128, UInt128};
@@ -67,7 +72,7 @@ where
 
     let method: u8 = reader.read_scalar()?;
     if method != 0x82 {
-        let message: String = format!("unsupported compression method {}", method);
+        let message: String = format!("unsupported compression method {method}");
         return Err(raise_error(message));
     }
 

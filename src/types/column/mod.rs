@@ -42,7 +42,7 @@ mod enums;
 mod factory;
 pub(crate) mod fixed_string;
 mod ip;
-pub(crate) mod iter;
+pub mod iter;
 mod list;
 mod map;
 mod nullable;
@@ -454,7 +454,12 @@ impl<K: ColumnType> Column<K> {
         }
     }
 
-    pub(crate) unsafe fn get_internal(&self, pointers: &[*mut *const u8], level: u8, props: u32) -> Result<()> {
+    pub(crate) unsafe fn get_internal(
+        &self,
+        pointers: &[*mut *const u8],
+        level: u8,
+        props: u32,
+    ) -> Result<()> {
         self.data.get_internal(pointers, level, props)
     }
 }

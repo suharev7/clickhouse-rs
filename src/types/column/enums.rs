@@ -67,7 +67,7 @@ impl ColumnData for Enum16ColumnData {
         if let Value::Enum16(_values, enum_value) = value {
             self.inner.push(Value::Int16(enum_value.internal()))
         } else {
-            panic!("value should be Enum ({:?})", value);
+            panic!("value should be Enum ({value:?})");
         }
     }
 
@@ -297,7 +297,7 @@ impl ColumnData for Enum8ColumnData {
         if let Value::Enum8(_values, enum_value) = value {
             self.inner.push(Value::Int8(enum_value.internal()))
         } else {
-            panic!("value should be Enum ({:?})", value);
+            panic!("value should be Enum ({value:?})");
         }
     }
 

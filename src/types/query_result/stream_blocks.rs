@@ -45,9 +45,8 @@ impl<'a> Drop for BlockStream<'a> {
                     transport.inconsistent = true;
                     self.client.inner = Some(transport);
                 }
-            },
-            BlockStreamState::Finished => {
-            },
+            }
+            BlockStreamState::Finished => {}
             BlockStreamState::Error => {
                 // drop broken transport; don't return it to pool to prevent pool poisoning
             }
@@ -56,7 +55,11 @@ impl<'a> Drop for BlockStream<'a> {
 }
 
 impl<'a> BlockStream<'a> {
-    pub(crate) fn new(client: &mut ClientHandle, inner: PacketStream, skip_first_block: bool) -> BlockStream {
+    pub(crate) fn new(
+        client: &mut ClientHandle,
+        inner: PacketStream,
+        skip_first_block: bool,
+    ) -> BlockStream {
         BlockStream {
             client,
             inner,
@@ -75,7 +78,11 @@ impl<'a> Stream for BlockStream<'a> {
             match self.state {
                 BlockStreamState::Reading => {}
                 BlockStreamState::Finished => return Poll::Ready(None),
-                BlockStreamState::Error => return Poll::Ready(Some(Err(Error::Other(Cow::Borrowed("Attempt to read from broken transport"))))),
+                BlockStreamState::Error => {
+                    return Poll::Ready(Some(Err(Error::Other(Cow::Borrowed(
+                        "Attempt to read from broken transport",
+                    )))))
+                }
             };
 
             let packet = match self.inner.poll_next_unpin(cx) {
@@ -83,7 +90,9 @@ impl<'a> Stream for BlockStream<'a> {
                 Poll::Pending => return Poll::Pending,
                 Poll::Ready(None) => {
                     self.state = BlockStreamState::Error;
-                    return Poll::Ready(Some(Err(Error::Io(std::io::Error::from(ErrorKind::UnexpectedEof)))));
+                    return Poll::Ready(Some(Err(Error::Io(std::io::Error::from(
+                        ErrorKind::UnexpectedEof,
+                    )))));
                 }
                 Poll::Ready(Some(Ok(packet))) => packet,
             };
@@ -99,7 +108,7 @@ impl<'a> Stream for BlockStream<'a> {
                 Packet::ProfileInfo(_) | Packet::Progress(_) => {}
                 Packet::Exception(exception) => {
                     self.state = BlockStreamState::Finished;
-                    return Poll::Ready(Some(Err(Error::Server(exception))))
+                    return Poll::Ready(Some(Err(Error::Server(exception))));
                 }
                 Packet::Block(block) => {
                     self.block_index += 1;

@@ -1,7 +1,8 @@
-use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
 use std::{
-    convert, fmt, mem,
+    collections::HashMap,
+    convert, fmt,
+    hash::{Hash, Hasher},
+    mem,
     net::{Ipv4Addr, Ipv6Addr},
     str,
     sync::Arc,
@@ -10,14 +11,13 @@ use std::{
 use chrono::{prelude::*, Duration};
 use chrono_tz::Tz;
 use either::Either;
+use uuid::Uuid;
 
 use crate::types::{
-    column::datetime64::to_datetime,
+    column::datetime64::{to_datetime, DEFAULT_TZ},
     decimal::{Decimal, NoBits},
     DateConverter, DateTimeType, Enum16, Enum8, HasSqlType, SqlType,
 };
-
-use uuid::Uuid;
 
 pub(crate) type AppDateTime = DateTime<Tz>;
 pub(crate) type AppDate = NaiveDate;
@@ -155,12 +155,12 @@ impl Value {
             SqlType::FixedString(str_len) => Value::String(Arc::new(vec![0_u8; str_len])),
             SqlType::Float32 => Value::Float32(0.0),
             SqlType::Float64 => Value::Float64(0.0),
-            SqlType::Date => 0_u16.to_date(Tz::Zulu).into(),
+            SqlType::Date => 0_u16.to_date(DEFAULT_TZ.clone()).into(),
             SqlType::DateTime(DateTimeType::DateTime64(_, _)) => {
-                Value::DateTime64(0, (1, Tz::Zulu))
+                Value::DateTime64(0, (1, DEFAULT_TZ.clone()))
             }
             SqlType::SimpleAggregateFunction(_, nested) => Value::default(nested.clone()),
-            SqlType::DateTime(_) => 0_u32.to_date(Tz::Zulu).into(),
+            SqlType::DateTime(_) => 0_u32.to_date(DEFAULT_TZ.clone()).into(),
             SqlType::Nullable(inner) => Value::Nullable(Either::Left(inner)),
             SqlType::Array(inner) => Value::Array(inner, Arc::new(Vec::default())),
             SqlType::Decimal(precision, scale) => Value::Decimal(Decimal {
@@ -193,7 +193,7 @@ impl fmt::Display for Value {
             Value::Int64(ref v) => fmt::Display::fmt(v, f),
             Value::String(ref v) => match str::from_utf8(v) {
                 Ok(s) => fmt::Display::fmt(s, f),
-                Err(_) => write!(f, "{:?}", v),
+                Err(_) => write!(f, "{v:?}"),
             },
             Value::Float32(ref v) => fmt::Display::fmt(v, f),
             Value::Float64(ref v) => fmt::Display::fmt(v, f),
@@ -230,7 +230,7 @@ impl fmt::Display for Value {
                 Either::Right(data) => data.fmt(f),
             },
             Value::Array(_, vs) => {
-                let cells: Vec<String> = vs.iter().map(|v| format!("{}", v)).collect();
+                let cells: Vec<String> = vs.iter().map(|v| format!("{v}")).collect();
                 write!(f, "[{}]", cells.join(", "))
             }
             Value::Decimal(v) => fmt::Display::fmt(v, f),
@@ -245,16 +245,16 @@ impl fmt::Display for Value {
                 buffer[..8].reverse();
                 buffer[8..].reverse();
                 match Uuid::from_slice(&buffer) {
-                    Ok(uuid) => write!(f, "{}", uuid),
-                    Err(e) => write!(f, "{}", e),
+                    Ok(uuid) => write!(f, "{uuid}"),
+                    Err(e) => write!(f, "{e}"),
                 }
             }
-            Value::Enum8(ref _v1, ref v2) => write!(f, "Enum8, {}", v2),
-            Value::Enum16(ref _v1, ref v2) => write!(f, "Enum16, {}", v2),
+            Value::Enum8(ref _v1, ref v2) => write!(f, "Enum8, {v2}"),
+            Value::Enum16(ref _v1, ref v2) => write!(f, "Enum16, {v2}"),
             Value::Map(_, _, hm) => {
                 let cells: Vec<String> = hm
                     .iter()
-                    .map(|(k, v)| format!("key=>{} value=>{}", k, v))
+                    .map(|(k, v)| format!("key=>{k} value=>{v}"))
                     .collect();
                 write!(f, "[{}]", cells.join(", "))
             }
@@ -483,7 +483,7 @@ impl From<Value> for String {
             }
         }
         let from = SqlType::from(v);
-        panic!("Can't convert Value::{} into String.", from);
+        panic!("Can't convert Value::{from} into String.");
     }
 }
 
@@ -493,7 +493,7 @@ impl From<Value> for Vec<u8> {
             Value::String(bs) => bs.to_vec(),
             _ => {
                 let from = SqlType::from(v);
-                panic!("Can't convert Value::{} into Vec<u8>.", from)
+                panic!("Can't convert Value::{from} into Vec<u8>.")
             }
         }
     }
@@ -583,7 +583,7 @@ mod test {
 
     fn test_into_t<T>(v: Value, x: &T)
     where
-        Value: convert::Into<T>,
+        Value: Into<T>,
         T: PartialEq + fmt::Debug,
     {
         let a: T = v.into();
@@ -592,7 +592,7 @@ mod test {
 
     fn test_from_rnd<T>()
     where
-        Value: convert::Into<T> + convert::From<T>,
+        Value: Into<T> + From<T>,
         T: PartialEq + fmt::Debug + Clone,
         Standard: Distribution<T>,
     {
@@ -604,7 +604,7 @@ mod test {
 
     fn test_from_t<T>(value: &T)
     where
-        Value: convert::Into<T> + convert::From<T>,
+        Value: Into<T> + From<T>,
         T: PartialEq + fmt::Debug + Clone,
     {
         test_into_t::<T>(Value::from(value.clone()), value);
@@ -664,10 +664,7 @@ mod test {
             .unwrap()
             .with_timezone(&Utc);
         let v = Value::from(date_time_value);
-        assert_eq!(
-            v,
-            Value::DateTime(date_time_value.timestamp() as u32, Tz::UTC)
-        );
+        assert_eq!(v, Value::DateTime(date_time_value.timestamp() as u32, UTC));
     }
 
     #[test]

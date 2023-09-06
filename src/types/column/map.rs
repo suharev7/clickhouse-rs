@@ -272,7 +272,11 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{row, types::Simple, Block};
+    use crate::{
+        row,
+        types::{column::datetime64::DEFAULT_TZ, Simple},
+        Block,
+    };
     use std::{collections::HashMap, io::Cursor};
 
     #[test]
@@ -285,7 +289,7 @@ mod test {
         block.write(&mut encoder, false);
 
         let mut reader = Cursor::new(encoder.get_buffer_ref());
-        let rblock = Block::load(&mut reader, Tz::Zulu, false).unwrap();
+        let rblock = Block::load(&mut reader, *DEFAULT_TZ, false).unwrap();
 
         assert_eq!(block, rblock);
     }
@@ -384,7 +388,7 @@ mod test {
 
         let expected = vec![Some(HashMap::from([(&1_u8, &2_u8)])), None];
 
-        assert_eq!(format!("{:?}", expected), format!("{:?}", actual),);
+        assert_eq!(format!("{expected:?}"), format!("{actual:?}"));
     }
 
     #[test]
@@ -410,7 +414,7 @@ mod test {
 
         let expected = vec![HashMap::from([(&1_u32, &Some(2_u32))])];
 
-        assert_eq!(format!("{:?}", actual), format!("{:?}", expected));
+        assert_eq!(format!("{actual:?}"), format!("{expected:?}"));
     }
 
     #[test]
@@ -429,6 +433,6 @@ mod test {
 
         let expected = vec![Some(HashMap::from([(&1_u8, &2_u8)])), None];
 
-        assert_eq!(format!("{:?}", actual), format!("{:?}", expected),);
+        assert_eq!(format!("{actual:?}"), format!("{expected:?}"),);
     }
 }

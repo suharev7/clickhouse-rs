@@ -103,7 +103,7 @@ impl dyn ColumnData {
                 } else if let Some((func, inner_type)) = parse_simple_agg_fun(type_name) {
                     W::wrap(SimpleAggregateFunctionColumnData::load(reader, func, inner_type, size, tz)?)
                 } else {
-                    let message = format!("Unsupported column type \"{}\".", type_name);
+                    let message = format!("Unsupported column type \"{type_name}\".");
                     return Err(message.into());
                 }
             }

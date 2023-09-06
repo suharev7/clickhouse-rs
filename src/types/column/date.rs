@@ -7,15 +7,18 @@ use either::Either;
 use crate::{
     binary::{Encoder, ReadEx},
     errors::Result,
-    types::column::{
-        array::ArrayColumnData,
-        column_data::{BoxColumnData, ColumnData},
-        list::List,
-        nullable::NullableColumnData,
-        numeric::save_data,
-        ArcColumnWrapper, ColumnFrom, ColumnWrapper,
+    types::{
+        column::{
+            array::ArrayColumnData,
+            column_data::{BoxColumnData, ColumnData},
+            datetime64::DEFAULT_TZ,
+            list::List,
+            nullable::NullableColumnData,
+            numeric::save_data,
+            ArcColumnWrapper, ColumnFrom, ColumnWrapper,
+        },
+        DateConverter, Marshal, SqlType, StatBuffer, Unmarshal, Value, ValueRef,
     },
-    types::{DateConverter, Marshal, SqlType, StatBuffer, Unmarshal, Value, ValueRef},
 };
 
 pub struct DateColumnData<T>
@@ -76,7 +79,10 @@ impl ColumnFrom for Vec<NaiveDate> {
             data.push(u16::get_days(s));
         }
 
-        let column: DateColumnData<u16> = DateColumnData { data, tz: Tz::Zulu };
+        let column: DateColumnData<u16> = DateColumnData {
+            data,
+            tz: *DEFAULT_TZ,
+        };
         W::wrap(column)
     }
 }
@@ -214,9 +220,8 @@ where
 #[cfg(test)]
 mod test {
     use chrono::TimeZone;
-    use chrono_tz::Tz;
 
-    use crate::types::column::ArcColumnWrapper;
+    use crate::types::column::{datetime64::DEFAULT_TZ, ArcColumnWrapper};
 
     use super::*;
 
@@ -232,7 +237,7 @@ mod test {
 
     #[test]
     fn test_create_date_time() {
-        let tz = Tz::Zulu;
+        let tz = *DEFAULT_TZ;
         let column = Vec::column_from::<ArcColumnWrapper>(vec![tz
             .with_ymd_and_hms(2016, 10, 22, 12, 0, 0)
             .unwrap()]);

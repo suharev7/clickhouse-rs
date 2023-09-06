@@ -6,7 +6,7 @@ use hostname::get;
 
 use lazy_static::lazy_static;
 
-use crate::errors::ServerError;
+use crate::{errors::ServerError, types::column::datetime64::DEFAULT_TZ};
 
 pub use self::{
     block::{Block, RCons, RNil, Row, RowBuilder, Rows},
@@ -31,7 +31,7 @@ pub(crate) use self::{
     unmarshal::Unmarshal,
 };
 
-pub(crate) mod column;
+pub mod column;
 mod marshal;
 mod stat_buffer;
 mod unmarshal;
@@ -92,7 +92,12 @@ impl fmt::Debug for ServerInfo {
         write!(
             f,
             "{} {}.{}.{}.{} ({:?})",
-            self.name, self.major_version, self.minor_version, self.revision, self.patch_version, self.timezone
+            self.name,
+            self.major_version,
+            self.minor_version,
+            self.revision,
+            self.patch_version,
+            self.timezone
         )
     }
 }
@@ -111,7 +116,7 @@ impl Default for ServerInfo {
             revision: 0,
             minor_version: 0,
             major_version: 0,
-            timezone: Tz::Zulu,
+            timezone: *DEFAULT_TZ,
             display_name: "".into(),
             patch_version: 0,
         }
@@ -152,13 +157,13 @@ pub(crate) enum Packet<S> {
 impl<S> fmt::Debug for Packet<S> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Packet::Hello(_, info) => write!(f, "Hello({:?})", info),
+            Packet::Hello(_, info) => write!(f, "Hello({info:?})"),
             Packet::Pong(_) => write!(f, "Pong"),
-            Packet::Progress(p) => write!(f, "Progress({:?})", p),
-            Packet::ProfileInfo(info) => write!(f, "ProfileInfo({:?})", info),
-            Packet::TableColumns(info) => write!(f, "TableColumns({:?})", info),
-            Packet::Exception(e) => write!(f, "Exception({:?})", e),
-            Packet::Block(b) => write!(f, "Block({:?})", b),
+            Packet::Progress(p) => write!(f, "Progress({p:?})"),
+            Packet::ProfileInfo(info) => write!(f, "ProfileInfo({info:?})"),
+            Packet::TableColumns(info) => write!(f, "TableColumns({info:?})"),
+            Packet::Exception(e) => write!(f, "Exception({e:?})"),
+            Packet::Block(b) => write!(f, "Block({b:?})"),
             Packet::Eof(_) => write!(f, "Eof"),
         }
     }
@@ -377,12 +382,12 @@ impl SqlType {
             SqlType::Int32 => "Int32".into(),
             SqlType::Int64 => "Int64".into(),
             SqlType::String => "String".into(),
-            SqlType::FixedString(str_len) => format!("FixedString({})", str_len).into(),
+            SqlType::FixedString(str_len) => format!("FixedString({str_len})").into(),
             SqlType::Float32 => "Float32".into(),
             SqlType::Float64 => "Float64".into(),
             SqlType::Date => "Date".into(),
             SqlType::DateTime(DateTimeType::DateTime64(precision, tz)) => {
-                format!("DateTime64({}, '{:?}')", precision, tz).into()
+                format!("DateTime64({precision}, '{tz:?}')").into()
             }
             SqlType::DateTime(_) => "DateTime".into(),
             SqlType::Ipv4 => "IPv4".into(),
@@ -394,20 +399,18 @@ impl SqlType {
                 format!("SimpleAggregateFunction({}, {})", func_str, &nested).into()
             }
             SqlType::Array(nested) => format!("Array({})", &nested).into(),
-            SqlType::Decimal(precision, scale) => {
-                format!("Decimal({}, {})", precision, scale).into()
-            }
+            SqlType::Decimal(precision, scale) => format!("Decimal({precision}, {scale})").into(),
             SqlType::Enum8(values) => {
                 let a: Vec<String> = values
                     .iter()
-                    .map(|(name, value)| format!("'{}' = {}", name, value))
+                    .map(|(name, value)| format!("'{name}' = {value}"))
                     .collect();
                 format!("Enum8({})", a.join(",")).into()
             }
             SqlType::Enum16(values) => {
                 let a: Vec<String> = values
                     .iter()
-                    .map(|(name, value)| format!("'{}' = {}", name, value))
+                    .map(|(name, value)| format!("'{name}' = {value}"))
                     .collect();
                 format!("Enum16({})", a.join(",")).into()
             }

@@ -1,13 +1,5 @@
 #![allow(clippy::cast_ptr_alignment)]
 
-use crate::{
-    errors::{Error, FromSqlError, Result},
-    types::{
-        column::{column_data::ArcColumnData, datetime64::to_datetime, StringPool},
-        decimal::NoBits,
-        Column, ColumnType, Complex, Decimal, Simple, SqlType,
-    },
-};
 use chrono::prelude::*;
 use chrono_tz::Tz;
 use std::{
@@ -17,6 +9,19 @@ use std::{
     marker, mem,
     net::{Ipv4Addr, Ipv6Addr},
     ptr, slice,
+};
+
+use crate::{
+    errors::{Error, FromSqlError, Result},
+    types::{
+        column::{
+            column_data::ArcColumnData,
+            datetime64::{to_datetime, to_native_datetime_opt},
+            StringPool,
+        },
+        decimal::NoBits,
+        Column, ColumnType, Complex, Decimal, Simple, SqlType,
+    },
 };
 
 fn check_type(src: &SqlType, dst: &SqlType) -> bool {
@@ -195,6 +200,11 @@ enum DateTimeInnerIterator {
 pub struct DateTimeIterator<'a> {
     inner: DateTimeInnerIterator,
     tz: Tz,
+    _marker: marker::PhantomData<&'a ()>,
+}
+
+pub struct NativeDateTimeIterator<'a> {
+    inner: DateTimeInnerIterator,
     _marker: marker::PhantomData<&'a ()>,
 }
 
@@ -441,6 +451,32 @@ impl<'a> DateIterator<'a> {
     }
 }
 
+impl<'a> NativeDateTimeIterator<'a> {
+    #[inline(always)]
+    unsafe fn next_unchecked(&mut self) -> NaiveDateTime {
+        match &mut self.inner {
+            DateTimeInnerIterator::DateTime32(ptr, _) => {
+                let current_value = **ptr;
+                *ptr = ptr.offset(1);
+                NaiveDateTime::from_timestamp_opt(i64::from(current_value), 0).unwrap()
+            }
+            DateTimeInnerIterator::DateTime64(ptr, _, precision) => {
+                let current_value = **ptr;
+                *ptr = ptr.offset(1);
+                to_native_datetime_opt(current_value, *precision).unwrap()
+            }
+        }
+    }
+
+    #[inline(always)]
+    fn post_inc_start(&mut self, n: usize) {
+        match &mut self.inner {
+            DateTimeInnerIterator::DateTime32(ptr, _) => unsafe { *ptr = ptr.add(n) },
+            DateTimeInnerIterator::DateTime64(ptr, _, _) => unsafe { *ptr = ptr.add(n) },
+        }
+    }
+}
+
 impl<'a> DateTimeIterator<'a> {
     #[inline(always)]
     unsafe fn next_unchecked(&mut self) -> DateTime<Tz> {
@@ -483,7 +519,60 @@ impl ExactSizeIterator for DateTimeIterator<'_> {
     }
 }
 
+impl ExactSizeIterator for NativeDateTimeIterator<'_> {
+    #[inline(always)]
+    fn len(&self) -> usize {
+        match self.inner {
+            DateTimeInnerIterator::DateTime32(ptr, end) => {
+                (end as usize - ptr as usize) / mem::size_of::<u32>()
+            }
+            DateTimeInnerIterator::DateTime64(ptr, end, _) => {
+                (end as usize - ptr as usize) / mem::size_of::<i64>()
+            }
+        }
+    }
+}
+
 iterator! { DateIterator: NaiveDate }
+
+impl<'a> Iterator for NativeDateTimeIterator<'a> {
+    type Item = NaiveDateTime;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.len() == 0 {
+            None
+        } else {
+            Some(unsafe { self.next_unchecked() })
+        }
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let exact = self.len();
+        (exact, Some(exact))
+    }
+
+    #[inline]
+    fn count(self) -> usize {
+        self.len()
+    }
+
+    #[inline]
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
+        if n >= self.len() {
+            // This iterator is now empty.
+            match &mut self.inner {
+                DateTimeInnerIterator::DateTime32(ptr, end) => *ptr = *end,
+                DateTimeInnerIterator::DateTime64(ptr, end, _) => *ptr = *end,
+            }
+            return None;
+        }
+        // We are in bounds. `post_inc_start` does the right thing even for ZSTs.
+        self.post_inc_start(n);
+        self.next()
+    }
+}
 
 impl<'a> Iterator for DateTimeIterator<'a> {
     type Item = DateTime<Tz>;
@@ -854,7 +943,11 @@ impl<'a> Iterable<'a, Simple> for Decimal {
 impl<'a> Iterable<'a, Simple> for bool {
     type Iter = slice::Iter<'a, bool>;
 
-    fn iter_with_props(column: &'a Column<Simple>, column_type: SqlType, props: u32) -> Result<Self::Iter> {
+    fn iter_with_props(
+        column: &'a Column<Simple>,
+        column_type: SqlType,
+        props: u32,
+    ) -> Result<Self::Iter> {
         if !check_type(&column_type, &SqlType::Bool) {
             return Err(Error::FromSql(FromSqlError::InvalidType {
                 src: column.sql_type().to_string(),
@@ -912,6 +1005,46 @@ impl<'a> Iterable<'a, Simple> for DateTime<Tz> {
         Ok(DateTimeIterator {
             inner,
             tz,
+            _marker: marker::PhantomData,
+        })
+    }
+}
+
+impl<'a> Iterable<'a, Simple> for NaiveDateTime {
+    type Iter = NativeDateTimeIterator<'a>;
+
+    fn iter_with_props(
+        column: &'a Column<Simple>,
+        column_type: SqlType,
+        props: u32,
+    ) -> Result<Self::Iter> {
+        match column_type {
+            SqlType::DateTime(_) => (),
+            _ => {
+                return Err(Error::FromSql(FromSqlError::InvalidType {
+                    src: column.sql_type().to_string(),
+                    dst: "NativeDateTime".into(),
+                }));
+            }
+        }
+
+        let (byte_ptr, size, _, precision) = date_iter(column, props)?;
+
+        let inner = match precision {
+            None => {
+                let ptr = byte_ptr as *const u32;
+                let end = unsafe { ptr.add(size) };
+                DateTimeInnerIterator::DateTime32(ptr, end)
+            }
+            Some(precision) => {
+                let ptr = byte_ptr as *const i64;
+                let end = unsafe { ptr.add(size) };
+                DateTimeInnerIterator::DateTime64(ptr, end, precision)
+            }
+        };
+
+        Ok(NativeDateTimeIterator {
+            inner,
             _marker: marker::PhantomData,
         })
     }

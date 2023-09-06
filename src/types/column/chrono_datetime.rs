@@ -8,7 +8,7 @@ use crate::{
     types::{
         column::{
             column_data::{ArcColumnData, BoxColumnData, ColumnData},
-            datetime64::from_datetime,
+            datetime64::{from_datetime, DEFAULT_TZ},
             nullable::NullableColumnData,
             ArcColumnWrapper, ColumnFrom, ColumnWrapper, Value, ValueRef,
         },
@@ -42,7 +42,7 @@ impl ChronoDateTimeAdapter {
 impl ColumnFrom for Vec<DateTime<Tz>> {
     fn column_from<W: ColumnWrapper>(data: Self) -> W::Wrapper {
         let tz = if data.is_empty() {
-            Tz::Zulu
+            *DEFAULT_TZ
         } else {
             data[0].timezone()
         };
@@ -57,7 +57,7 @@ impl ColumnFrom for Vec<Option<DateTime<Tz>>> {
         let tz = source
             .iter()
             .find_map(|u| u.map(|v| v.timezone()))
-            .unwrap_or(Tz::Zulu);
+            .unwrap_or(*DEFAULT_TZ);
 
         let mut values: Vec<DateTime<Tz>> = Vec::with_capacity(n);
         let mut nulls = Vec::with_capacity(n);

@@ -115,11 +115,12 @@ impl<T: Read> Parser<T> {
             0
         };
 
-        let (written_rows, written_bytes) = if revision >= protocol::DBMS_MIN_REVISION_WITH_CLIENT_WRITE_INFO {
-            (self.reader.read_uvarint()?, self.reader.read_uvarint()?)
-        } else {
-            (0, 0)
-        };
+        let (written_rows, written_bytes) =
+            if revision >= protocol::DBMS_MIN_REVISION_WITH_CLIENT_WRITE_INFO {
+                (self.reader.read_uvarint()?, self.reader.read_uvarint()?)
+            } else {
+                (0, 0)
+            };
 
         let progress = Progress {
             rows,

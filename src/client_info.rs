@@ -15,15 +15,11 @@ pub fn write(encoder: &mut Encoder) {
 
 pub fn description() -> String {
     format!(
-        "{} {}.{}.{}",
-        CLIENT_NAME,
-        CLICK_HOUSE_DBMSVERSION_MAJOR,
-        CLICK_HOUSE_DBMSVERSION_MINOR,
-        CLICK_HOUSE_REVISION
+        "{CLIENT_NAME} {CLICK_HOUSE_DBMSVERSION_MAJOR}.{CLICK_HOUSE_DBMSVERSION_MINOR}.{CLICK_HOUSE_REVISION}",
     )
 }
 
 #[test]
 fn test_description() {
-    assert_eq!(description(), format!("Rust SQLDriver {}.{}.{}", CLICK_HOUSE_DBMSVERSION_MAJOR, CLICK_HOUSE_DBMSVERSION_MINOR, CLICK_HOUSE_REVISION))
+    assert_eq!(description(), format!("Rust SQLDriver {CLICK_HOUSE_DBMSVERSION_MAJOR}.{CLICK_HOUSE_DBMSVERSION_MINOR}.{CLICK_HOUSE_REVISION}"))
 }

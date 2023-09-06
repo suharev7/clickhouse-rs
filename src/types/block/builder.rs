@@ -7,7 +7,7 @@ use crate::{
     errors::{Error, FromSqlError, Result},
     types::{
         block::ColumnIdx,
-        column::{ArcColumnWrapper, ColumnData},
+        column::{datetime64::DEFAULT_TZ, ArcColumnWrapper, ColumnData},
         Column, ColumnType, Value,
     },
     Block,
@@ -116,17 +116,17 @@ fn put_param<K: ColumnType>(
 
 fn extract_timezone(value: &Value) -> Tz {
     match value {
-        Value::Date(_) => Tz::Zulu,
+        Value::Date(_) => *DEFAULT_TZ,
         Value::DateTime(_, tz) => *tz,
         Value::Nullable(Either::Right(d)) => extract_timezone(d),
         Value::Array(_, data) => {
             if let Some(v) = data.first() {
                 extract_timezone(v)
             } else {
-                Tz::Zulu
+                *DEFAULT_TZ
             }
         }
-        _ => Tz::Zulu,
+        _ => *DEFAULT_TZ,
     }
 }
 

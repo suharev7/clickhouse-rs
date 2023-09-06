@@ -1,5 +1,6 @@
-use chrono::prelude::*;
+use chrono::{prelude::*, LocalResult};
 use chrono_tz::Tz;
+use lazy_static::lazy_static;
 
 use crate::{
     binary::{Encoder, ReadEx},
@@ -12,6 +13,10 @@ use crate::{
         DateTimeType, SqlType, Value, ValueRef,
     },
 };
+
+lazy_static! {
+    pub(crate) static ref DEFAULT_TZ: Tz = Tz::Zulu;
+}
 
 pub struct DateTime64ColumnData {
     data: List<i64>,
@@ -93,7 +98,7 @@ impl ColumnData for DateTime64ColumnData {
     }
 }
 
-pub(crate) fn from_datetime<T: chrono::offset::TimeZone>(time: DateTime<T>, precision: u32) -> i64 {
+pub(crate) fn from_datetime<T: TimeZone>(time: DateTime<T>, precision: u32) -> i64 {
     let base10: i64 = 10;
     let timestamp = time.timestamp_nanos();
     timestamp / base10.pow(9 - precision)
@@ -101,6 +106,11 @@ pub(crate) fn from_datetime<T: chrono::offset::TimeZone>(time: DateTime<T>, prec
 
 #[inline(always)]
 pub(crate) fn to_datetime(value: i64, precision: u32, tz: Tz) -> DateTime<Tz> {
+    to_datetime_opt(value, precision, tz).unwrap()
+}
+
+#[inline(always)]
+pub(crate) fn to_datetime_opt(value: i64, precision: u32, tz: Tz) -> LocalResult<DateTime<Tz>> {
     let base10: i64 = 10;
 
     let nano = if precision < 19 {
@@ -112,7 +122,23 @@ pub(crate) fn to_datetime(value: i64, precision: u32, tz: Tz) -> DateTime<Tz> {
     let sec = nano / 1_000_000_000;
     let nsec = nano - sec * 1_000_000_000;
 
-    tz.timestamp_opt(sec, nsec as u32).unwrap()
+    tz.timestamp_opt(sec, nsec as u32)
+}
+
+#[inline(always)]
+pub(crate) fn to_native_datetime_opt(value: i64, precision: u32) -> Option<NaiveDateTime> {
+    let base10: i64 = 10;
+
+    let nano = if precision < 19 {
+        value * base10.pow(9 - precision)
+    } else {
+        0_i64
+    };
+
+    let sec = nano / 1_000_000_000;
+    let nsec = nano - sec * 1_000_000_000;
+
+    NaiveDateTime::from_timestamp_opt(sec, nsec as u32)
 }
 
 #[cfg(test)]

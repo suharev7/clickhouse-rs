@@ -1,10 +1,15 @@
-use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
-use std::{convert, fmt, str, sync::Arc};
+use std::{
+    collections::HashMap,
+    fmt,
+    hash::{Hash, Hasher},
+    str,
+    sync::Arc,
+};
 
 use chrono::{prelude::*, Duration};
 use chrono_tz::Tz;
 use either::Either;
+use uuid::Uuid;
 
 use crate::{
     errors::{Error, FromSqlError, Result},
@@ -15,8 +20,6 @@ use crate::{
         DateTimeType, Enum16, Enum8, SqlType, Value,
     },
 };
-
-use uuid::Uuid;
 
 #[derive(Clone, Debug)]
 pub enum ValueRef<'a> {
@@ -159,10 +162,10 @@ impl<'a> fmt::Display for ValueRef<'a> {
             }
             ValueRef::Nullable(v) => match v {
                 Either::Left(_) => write!(f, "NULL"),
-                Either::Right(inner) => write!(f, "{}", inner),
+                Either::Right(inner) => write!(f, "{inner}"),
             },
             ValueRef::Array(_, vs) => {
-                let cells: Vec<String> = vs.iter().map(|v| format!("{}", v)).collect();
+                let cells: Vec<String> = vs.iter().map(|v| format!("{v}")).collect();
                 write!(f, "[{}]", cells.join(", "))
             }
             ValueRef::Decimal(v) => fmt::Display::fmt(v, f),
@@ -177,8 +180,8 @@ impl<'a> fmt::Display for ValueRef<'a> {
                 buffer[..8].reverse();
                 buffer[8..].reverse();
                 match Uuid::from_slice(&buffer) {
-                    Ok(uuid) => write!(f, "{}", uuid),
-                    Err(e) => write!(f, "{}", e),
+                    Ok(uuid) => write!(f, "{uuid}"),
+                    Err(e) => write!(f, "{e}"),
                 }
             }
             ValueRef::Enum8(_, v) => fmt::Display::fmt(v, f),
@@ -191,7 +194,7 @@ impl<'a> fmt::Display for ValueRef<'a> {
     }
 }
 
-impl<'a> convert::From<ValueRef<'a>> for SqlType {
+impl<'a> From<ValueRef<'a>> for SqlType {
     fn from(source: ValueRef<'a>) -> Self {
         match source {
             ValueRef::Bool(_) => SqlType::Bool,
@@ -435,7 +438,7 @@ impl<'a> From<ValueRef<'a>> for AppDate {
 impl<'a> From<ValueRef<'a>> for Enum8 {
     fn from(value: ValueRef<'a>) -> Self {
         if let ValueRef::Enum8(_, b) = value {
-            return b
+            return b;
         }
         let from = format!("{}", SqlType::from(value.clone()));
         panic!("Can't convert ValueRef::{} into {}.", from, stringify!($t))
@@ -445,7 +448,7 @@ impl<'a> From<ValueRef<'a>> for Enum8 {
 impl<'a> From<ValueRef<'a>> for Enum16 {
     fn from(value: ValueRef<'a>) -> Self {
         if let ValueRef::Enum16(_, b) = value {
-            return b
+            return b;
         }
         let from = format!("{}", SqlType::from(value.clone()));
         panic!("Can't convert ValueRef::{} into {}.", from, stringify!($t))
@@ -487,6 +490,7 @@ value_from! {
 
 #[cfg(test)]
 mod test {
+    use crate::types::column::datetime64::DEFAULT_TZ;
     use super::*;
 
     #[test]
@@ -548,12 +552,12 @@ mod test {
 
         assert_eq!(
             "1970-01-01 00:00:00".to_string(),
-            format!("{}", ValueRef::DateTime(0, Tz::Zulu))
+            format!("{}", ValueRef::DateTime(0, *DEFAULT_TZ))
         );
 
         assert_eq!(
             "Thu, 01 Jan 1970 00:00:00 +0000".to_string(),
-            format!("{:#}", ValueRef::DateTime(0, Tz::Zulu))
+            format!("{:#}", ValueRef::DateTime(0, *DEFAULT_TZ))
         );
 
         assert_eq!(
@@ -585,8 +589,8 @@ mod test {
 
         assert_eq!(Value::from(ValueRef::Date(42)), Value::Date(42));
         assert_eq!(
-            Value::from(ValueRef::DateTime(42, Tz::Zulu)),
-            Value::DateTime(42, Tz::Zulu)
+            Value::from(ValueRef::DateTime(42, *DEFAULT_TZ)),
+            Value::DateTime(42, *DEFAULT_TZ)
         );
 
         assert_eq!(
@@ -639,7 +643,7 @@ mod test {
 
         assert_eq!(SqlType::from(ValueRef::Date(42)), SqlType::Date);
         assert_eq!(
-            SqlType::from(ValueRef::DateTime(42, Tz::Zulu)),
+            SqlType::from(ValueRef::DateTime(42, *DEFAULT_TZ)),
             SqlType::DateTime(DateTimeType::DateTime32)
         );
 

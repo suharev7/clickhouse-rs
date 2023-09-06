@@ -101,7 +101,7 @@ impl ColumnData for MapColumnData {
             0_usize
         };
         let end = self.offsets.at(index) as usize;
-        let mut vs = HashMap::with_capacity(end);
+        let mut vs = HashMap::with_capacity(end - start);
         for i in start..end {
             let key = self.keys.at(i);
             let value = self.values.at(i);

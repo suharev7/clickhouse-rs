@@ -1,10 +1,13 @@
-use std::fmt;
+use std::{
+    fmt,
+    hash::{Hash, Hasher},
+};
 
 // TODO Using strings as a keys
-#[derive(Clone, Copy, Default, Hash)]
+#[derive(Clone, Copy, Default)]
 pub struct Enum8(pub(crate) i8);
 
-#[derive(Clone, Copy, Default, Hash)]
+#[derive(Clone, Copy, Default)]
 pub struct Enum16(pub(crate) i16);
 
 impl PartialEq for Enum16 {
@@ -34,9 +37,22 @@ impl Enum16 {
         self.0
     }
 }
+
+impl Hash for Enum16 {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
 impl PartialEq for Enum8 {
     fn eq(&self, other: &Self) -> bool {
         self.0 == other.0
+    }
+}
+
+impl Hash for Enum8 {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
     }
 }
 

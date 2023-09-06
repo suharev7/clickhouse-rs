@@ -1,6 +1,6 @@
 use std::{convert, fmt, sync::Arc};
 
-use chrono::{prelude::*, Date};
+use chrono::prelude::*;
 use chrono_tz::Tz;
 use either::Either;
 
@@ -69,7 +69,7 @@ where
     }
 }
 
-impl ColumnFrom for Vec<Date<Tz>> {
+impl ColumnFrom for Vec<NaiveDate> {
     fn column_from<W: ColumnWrapper>(source: Self) -> W::Wrapper {
         let mut data = List::<u16>::with_capacity(source.len());
         for s in source {
@@ -81,9 +81,9 @@ impl ColumnFrom for Vec<Date<Tz>> {
     }
 }
 
-impl ColumnFrom for Vec<Vec<Date<Tz>>> {
+impl ColumnFrom for Vec<Vec<NaiveDate>> {
     fn column_from<W: ColumnWrapper>(source: Self) -> W::Wrapper {
-        let fake: Vec<Date<Tz>> = Vec::with_capacity(source.len());
+        let fake: Vec<NaiveDate> = Vec::with_capacity(source.len());
         let inner = Vec::column_from::<ArcColumnWrapper>(fake);
         let sql_type = inner.sql_type();
 
@@ -96,7 +96,7 @@ impl ColumnFrom for Vec<Vec<Date<Tz>>> {
             let mut inner = Vec::with_capacity(vs.len());
             for v in vs {
                 let days = u16::get_days(v);
-                let value: Value = Value::Date(days, v.timezone());
+                let value: Value = Value::Date(days);
                 inner.push(value);
             }
             data.push(Value::Array(sql_type.clone().into(), Arc::new(inner)));
@@ -130,9 +130,9 @@ impl ColumnFrom for Vec<Vec<DateTime<Tz>>> {
     }
 }
 
-impl ColumnFrom for Vec<Option<Date<Tz>>> {
+impl ColumnFrom for Vec<Option<NaiveDate>> {
     fn column_from<W: ColumnWrapper>(source: Self) -> <W as ColumnWrapper>::Wrapper {
-        let fake: Vec<Date<Tz>> = Vec::with_capacity(source.len());
+        let fake: Vec<NaiveDate> = Vec::with_capacity(source.len());
         let inner = Vec::column_from::<ArcColumnWrapper>(fake);
 
         let mut data = NullableColumnData {
@@ -145,7 +145,7 @@ impl ColumnFrom for Vec<Option<Date<Tz>>> {
                 None => data.push(Value::Nullable(Either::Left(SqlType::Date.into()))),
                 Some(d) => {
                     let days = u16::get_days(d);
-                    let value = Value::Date(days, d.timezone());
+                    let value = Value::Date(days);
                     data.push(Value::Nullable(Either::Right(Box::new(value))))
                 }
             }
@@ -197,7 +197,12 @@ where
         })
     }
 
-    unsafe fn get_internal(&self, pointers: &[*mut *const u8], level: u8, _props: u32) -> Result<()> {
+    unsafe fn get_internal(
+        &self,
+        pointers: &[*mut *const u8],
+        level: u8,
+        _props: u32,
+    ) -> Result<()> {
         assert_eq!(level, 0);
         *pointers[0] = self.data.as_ptr() as *const u8;
         *pointers[1] = &self.tz as *const Tz as *const u8;
@@ -217,17 +222,20 @@ mod test {
 
     #[test]
     fn test_create_date() {
-        let tz = Tz::Zulu;
-        let column = Vec::column_from::<ArcColumnWrapper>(vec![tz.ymd(2016, 10, 22)]);
-        assert_eq!("2016-10-22UTC", format!("{:#}", column.at(0)));
+        let column =
+            Vec::column_from::<ArcColumnWrapper>(vec![
+                NaiveDate::from_ymd_opt(2016, 10, 22).unwrap()
+            ]);
+        assert_eq!("2016-10-22", format!("{:#}", column.at(0)));
         assert_eq!(SqlType::Date, column.sql_type());
     }
 
     #[test]
     fn test_create_date_time() {
         let tz = Tz::Zulu;
-        let column =
-            Vec::column_from::<ArcColumnWrapper>(vec![tz.ymd(2016, 10, 22).and_hms(12, 0, 0)]);
+        let column = Vec::column_from::<ArcColumnWrapper>(vec![tz
+            .with_ymd_and_hms(2016, 10, 22, 12, 0, 0)
+            .unwrap()]);
         assert_eq!(format!("{}", column.at(0)), "2016-10-22 12:00:00");
     }
 }

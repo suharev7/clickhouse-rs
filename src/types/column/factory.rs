@@ -202,13 +202,13 @@ impl dyn ColumnData {
             }),
             SqlType::Map(k, v) => W::wrap(MapColumnData {
                 keys: <dyn ColumnData>::from_type::<ArcColumnWrapper>(
-                    k.clone().into(),
+                    k.clone(),
                     timezone,
                     capacity,
                 )?,
                 offsets: List::with_capacity(capacity),
                 values: <dyn ColumnData>::from_type::<ArcColumnWrapper>(
-                    v.clone().into(),
+                    v.clone(),
                     timezone,
                     capacity,
                 )?,

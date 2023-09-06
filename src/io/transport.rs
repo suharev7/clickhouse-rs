@@ -40,6 +40,7 @@ pub(crate) struct ClickhouseTransport {
     cmds: VecDeque<Cmd>,
     // Server time zone
     timezone: Option<Tz>,
+    revision: u64,
     compress: bool,
     // Whether there are unread packets
     pub(crate) inconsistent: bool,
@@ -74,6 +75,7 @@ impl ClickhouseTransport {
             wr: io::Cursor::new(vec![]),
             cmds: VecDeque::new(),
             timezone: None,
+            revision: 0,
             compress,
             inconsistent: false,
             status: Arc::new(TransportStatus::new(pool)),
@@ -145,12 +147,13 @@ impl<'p> ClickhouseTransportProj<'p> {
             let mut cursor = Cursor::new(&self.rd);
             let res = {
                 let mut parser = Parser::new(&mut cursor, *self.timezone, *self.compress);
-                parser.parse_packet()
+                parser.parse_packet(*self.revision)
             };
             pos = cursor.position() as usize;
 
             if let Ok(Packet::Hello(_, ref packet)) = res {
                 *self.timezone = Some(packet.timezone);
+                *self.revision = packet.revision;
             }
 
             match res {
@@ -294,6 +297,7 @@ impl PacketStream {
                 Ok(Packet::Eof(inner)) => h = Some(inner),
                 Ok(Packet::Block(block)) => b = Some(block),
                 Ok(Packet::Exception(e)) => return Err(Error::Server(e)),
+                Ok(Packet::TableColumns(_)) => (),
                 Err(e) => return Err(Error::Io(e)),
                 _ => return Err(Error::Driver(DriverError::UnexpectedPacket)),
             }

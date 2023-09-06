@@ -2,7 +2,7 @@ use crate::binary::Encoder;
 
 pub static CLIENT_NAME: &str = "Rust SQLDriver";
 
-pub const CLICK_HOUSE_REVISION: u64 = 54213;
+pub const CLICK_HOUSE_REVISION: u64 = 54429; // DBMS_MIN_REVISION_WITH_SETTINGS_SERIALIZED_AS_STRINGS
 pub const CLICK_HOUSE_DBMSVERSION_MAJOR: u64 = 1;
 pub const CLICK_HOUSE_DBMSVERSION_MINOR: u64 = 1;
 
@@ -25,5 +25,5 @@ pub fn description() -> String {
 
 #[test]
 fn test_description() {
-    assert_eq!(description(), "Rust SQLDriver 1.1.54213")
+    assert_eq!(description(), format!("Rust SQLDriver {}.{}.{}", CLICK_HOUSE_DBMSVERSION_MAJOR, CLICK_HOUSE_DBMSVERSION_MINOR, CLICK_HOUSE_REVISION))
 }

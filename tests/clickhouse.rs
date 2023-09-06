@@ -12,7 +12,7 @@ use clickhouse_rs::{
     errors::Error,
     row,
     types::{Complex, Decimal, Enum16, Enum8, FromSql, SqlType, Value},
-    Block, Pool,
+    Block, Pool, Options,
 };
 use futures_util::{
     future,
@@ -26,6 +26,7 @@ use std::{
         atomic::{AtomicUsize, Ordering},
         Arc,
     },
+    str::FromStr,
 };
 use uuid::Uuid;
 use Tz::{Asia__Istanbul as IST, UTC};
@@ -803,6 +804,31 @@ async fn test_empty_select() -> Result<(), Error> {
     assert_eq!(r.column_count(), 1);
 
     Ok(())
+}
+
+#[cfg(feature = "tokio_io")]
+#[tokio::test]
+async fn test_select_settings() -> Result<(), Error> {
+    let options = Options::from_str(&database_url())?.with_setting("max_threads", 1, /* is_important= */ true);
+    let pool = Pool::new(options);
+    let mut c = pool.get_handle().await?;
+
+    let r = c.query("SELECT 1 WHERE 1 <> 1").fetch_all().await?;
+
+    assert_eq!(r.row_count(), 0);
+    assert_eq!(r.column_count(), 1);
+
+    Ok(())
+}
+
+#[cfg(feature = "tokio_io")]
+#[tokio::test]
+#[should_panic]
+async fn test_select_unknown_settings() -> () {
+    let options = Options::from_str(&database_url()).unwrap().with_setting("foo", 1, /* is_important= */ true);
+    let pool = Pool::new(options);
+    let mut c = pool.get_handle().await.unwrap();
+    c.query("SELECT 1 WHERE 1 <> 1").fetch_all().await.unwrap();
 }
 
 #[cfg(feature = "tokio_io")]

@@ -15,6 +15,7 @@ pub use self::{
     enums::{Enum16, Enum8},
     from_sql::{FromSql, FromSqlResult},
     options::Options,
+    options::{SettingType, SettingValue},
     query::Query,
     query_result::QueryResult,
     value::Value,
@@ -55,6 +56,8 @@ pub(crate) struct Progress {
     pub rows: u64,
     pub bytes: u64,
     pub total_rows: u64,
+    pub written_rows: u64,
+    pub written_bytes: u64,
 }
 
 #[derive(Copy, Clone, Default, Debug, PartialEq)]
@@ -67,6 +70,12 @@ pub(crate) struct ProfileInfo {
     pub calculated_rows_before_limit: bool,
 }
 
+#[derive(Clone, Default, Debug, PartialEq)]
+pub(crate) struct TableColumns {
+    pub table_name: String,
+    pub columns: String,
+}
+
 #[derive(Clone, PartialEq)]
 pub(crate) struct ServerInfo {
     pub name: String,
@@ -74,14 +83,16 @@ pub(crate) struct ServerInfo {
     pub minor_version: u64,
     pub major_version: u64,
     pub timezone: Tz,
+    pub display_name: String,
+    pub patch_version: u64,
 }
 
 impl fmt::Debug for ServerInfo {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "{} {}.{}.{} ({:?})",
-            self.name, self.major_version, self.minor_version, self.revision, self.timezone
+            "{} {}.{}.{}.{} ({:?})",
+            self.name, self.major_version, self.minor_version, self.revision, self.patch_version, self.timezone
         )
     }
 }
@@ -101,6 +112,8 @@ impl Default for ServerInfo {
             minor_version: 0,
             major_version: 0,
             timezone: Tz::Zulu,
+            display_name: "".into(),
+            patch_version: 0,
         }
     }
 }
@@ -130,6 +143,7 @@ pub(crate) enum Packet<S> {
     Pong(S),
     Progress(Progress),
     ProfileInfo(ProfileInfo),
+    TableColumns(TableColumns),
     Exception(ServerError),
     Block(Block),
     Eof(S),
@@ -142,6 +156,7 @@ impl<S> fmt::Debug for Packet<S> {
             Packet::Pong(_) => write!(f, "Pong"),
             Packet::Progress(p) => write!(f, "Progress({:?})", p),
             Packet::ProfileInfo(info) => write!(f, "ProfileInfo({:?})", info),
+            Packet::TableColumns(info) => write!(f, "TableColumns({:?})", info),
             Packet::Exception(e) => write!(f, "Exception({:?})", e),
             Packet::Block(b) => write!(f, "Block({:?})", b),
             Packet::Eof(_) => write!(f, "Eof"),
@@ -156,6 +171,7 @@ impl<S> Packet<S> {
             Packet::Pong(_) => Packet::Pong(transport.take().unwrap()),
             Packet::Progress(progress) => Packet::Progress(progress),
             Packet::ProfileInfo(profile_info) => Packet::ProfileInfo(profile_info),
+            Packet::TableColumns(table_columns) => Packet::TableColumns(table_columns),
             Packet::Exception(exception) => Packet::Exception(exception),
             Packet::Block(block) => Packet::Block(block),
             Packet::Eof(_) => Packet::Eof(transport.take().unwrap()),

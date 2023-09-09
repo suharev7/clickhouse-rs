@@ -25,6 +25,7 @@ pub(crate) type AppDate = NaiveDate;
 /// Client side representation of a value of Clickhouse column.
 #[derive(Clone, Debug)]
 pub enum Value {
+    Bool(bool),
     UInt8(u8),
     UInt16(u16),
     UInt32(u32),
@@ -140,6 +141,7 @@ impl PartialEq for Value {
 impl Value {
     pub(crate) fn default(sql_type: SqlType) -> Value {
         match sql_type {
+            SqlType::Bool => Value::Bool(false),
             SqlType::UInt8 => Value::UInt8(0),
             SqlType::UInt16 => Value::UInt16(0),
             SqlType::UInt32 => Value::UInt32(0),
@@ -179,6 +181,7 @@ impl Value {
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Value::Bool(ref v) => fmt::Display::fmt(v, f),
             Value::UInt8(ref v) => fmt::Display::fmt(v, f),
             Value::UInt16(ref v) => fmt::Display::fmt(v, f),
             Value::UInt32(ref v) => fmt::Display::fmt(v, f),
@@ -261,6 +264,7 @@ impl fmt::Display for Value {
 impl From<Value> for SqlType {
     fn from(source: Value) -> Self {
         match source {
+            Value::Bool(_) => SqlType::Bool,
             Value::UInt8(_) => SqlType::UInt8,
             Value::UInt16(_) => SqlType::UInt16,
             Value::UInt32(_) => SqlType::UInt32,
@@ -407,12 +411,6 @@ impl From<Uuid> for Value {
     }
 }
 
-impl From<bool> for Value {
-    fn from(v: bool) -> Value {
-        Value::UInt8(if v { 1 } else { 0 })
-    }
-}
-
 impl<K, V> From<HashMap<K, V>> for Value
 where
     K: Into<Value> + HasSqlType,
@@ -433,6 +431,7 @@ where
 }
 
 value_from! {
+    bool: Bool,
     u8: UInt8,
     u16: UInt16,
     u32: UInt32,
@@ -545,6 +544,7 @@ impl From<Value> for AppDateTime {
 }
 
 from_value! {
+    bool: Bool,
     u8: UInt8,
     u16: UInt16,
     u32: UInt32,

@@ -196,6 +196,7 @@ macro_rules! has_sql_type {
 }
 
 has_sql_type! {
+    bool: SqlType::Bool,
     u8: SqlType::UInt8,
     u16: SqlType::UInt16,
     u32: SqlType::UInt32,
@@ -300,6 +301,7 @@ impl FromStr for SimpleAggFunc {
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum SqlType {
+    Bool,
     UInt8,
     UInt16,
     UInt32,
@@ -365,6 +367,7 @@ impl SqlType {
 
     pub fn to_string(&self) -> Cow<'static, str> {
         match self.clone() {
+            SqlType::Bool => "Bool".into(),
             SqlType::UInt8 => "UInt8".into(),
             SqlType::UInt16 => "UInt16".into(),
             SqlType::UInt32 => "UInt32".into(),

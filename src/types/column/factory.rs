@@ -61,6 +61,7 @@ impl dyn ColumnData {
         tz: Tz,
     ) -> Result<W::Wrapper> {
         Ok(match_str!(type_name, {
+            "Bool" => W::wrap(VectorColumnData::<bool>::load(reader, size)?),
             "UInt8" => W::wrap(VectorColumnData::<u8>::load(reader, size)?),
             "UInt16" => W::wrap(VectorColumnData::<u16>::load(reader, size)?),
             "UInt32" => W::wrap(VectorColumnData::<u32>::load(reader, size)?),
@@ -115,6 +116,7 @@ impl dyn ColumnData {
         capacity: usize,
     ) -> Result<W::Wrapper> {
         Ok(match sql_type {
+            SqlType::Bool => W::wrap(VectorColumnData::<bool>::with_capacity(capacity)),
             SqlType::UInt8 => W::wrap(VectorColumnData::<u8>::with_capacity(capacity)),
             SqlType::UInt16 => W::wrap(VectorColumnData::<u16>::with_capacity(capacity)),
             SqlType::UInt32 => W::wrap(VectorColumnData::<u32>::with_capacity(capacity)),

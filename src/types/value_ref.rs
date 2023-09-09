@@ -20,6 +20,7 @@ use uuid::Uuid;
 
 #[derive(Clone, Debug)]
 pub enum ValueRef<'a> {
+    Bool(bool),
     UInt8(u8),
     UInt16(u16),
     UInt32(u32),
@@ -116,6 +117,7 @@ impl<'a> PartialEq for ValueRef<'a> {
 impl<'a> fmt::Display for ValueRef<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            ValueRef::Bool(v) => fmt::Display::fmt(v, f),
             ValueRef::UInt8(v) => fmt::Display::fmt(v, f),
             ValueRef::UInt16(v) => fmt::Display::fmt(v, f),
             ValueRef::UInt32(v) => fmt::Display::fmt(v, f),
@@ -192,6 +194,7 @@ impl<'a> fmt::Display for ValueRef<'a> {
 impl<'a> convert::From<ValueRef<'a>> for SqlType {
     fn from(source: ValueRef<'a>) -> Self {
         match source {
+            ValueRef::Bool(_) => SqlType::Bool,
             ValueRef::UInt8(_) => SqlType::UInt8,
             ValueRef::UInt16(_) => SqlType::UInt16,
             ValueRef::UInt32(_) => SqlType::UInt32,
@@ -257,6 +260,7 @@ impl<'a> ValueRef<'a> {
 impl<'a> From<ValueRef<'a>> for Value {
     fn from(borrowed: ValueRef<'a>) -> Self {
         match borrowed {
+            ValueRef::Bool(v) => Value::Bool(v),
             ValueRef::UInt8(v) => Value::UInt8(v),
             ValueRef::UInt16(v) => Value::UInt16(v),
             ValueRef::UInt32(v) => Value::UInt32(v),
@@ -330,6 +334,8 @@ macro_rules! from_number {
 }
 
 from_number! {
+    bool: Bool,
+
     u8: UInt8,
     u16: UInt16,
     u32: UInt32,
@@ -347,6 +353,7 @@ from_number! {
 impl<'a> From<&'a Value> for ValueRef<'a> {
     fn from(value: &'a Value) -> ValueRef<'a> {
         match value {
+            Value::Bool(v) => ValueRef::Bool(*v),
             Value::UInt8(v) => ValueRef::UInt8(*v),
             Value::UInt16(v) => ValueRef::UInt16(*v),
             Value::UInt32(v) => ValueRef::UInt32(*v),
@@ -442,6 +449,8 @@ impl<'a> From<ValueRef<'a>> for AppDateTime {
 }
 
 value_from! {
+    bool: Bool,
+
     u8: UInt8,
     u16: UInt16,
     u32: UInt32,

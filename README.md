@@ -42,11 +42,6 @@ parameters:
     * `none`
     * `lz4`
 
-- `readonly` - Restricts permissions for read data, write data and change settings queries. (defaults to `none`). Possible choices:
-    * `0` - All queries are allowed.
-    * `1` - Only read data queries are allowed.
-    * `2` - Read data and change settings queries are allowed.
-
 - `connection_timeout` - Timeout for connection (defaults to `500 ms`)
 - `query_timeout` - Timeout for queries (defaults to `180 sec`).
 - `insert_timeout` - Timeout for inserts (defaults to `180 sec`).

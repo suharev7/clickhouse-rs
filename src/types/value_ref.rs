@@ -432,6 +432,26 @@ impl<'a> From<ValueRef<'a>> for AppDate {
     }
 }
 
+impl<'a> From<ValueRef<'a>> for Enum8 {
+    fn from(value: ValueRef<'a>) -> Self {
+        if let ValueRef::Enum8(_, b) = value {
+            return b
+        }
+        let from = format!("{}", SqlType::from(value.clone()));
+        panic!("Can't convert ValueRef::{} into {}.", from, stringify!($t))
+    }
+}
+
+impl<'a> From<ValueRef<'a>> for Enum16 {
+    fn from(value: ValueRef<'a>) -> Self {
+        if let ValueRef::Enum16(_, b) = value {
+            return b
+        }
+        let from = format!("{}", SqlType::from(value.clone()));
+        panic!("Can't convert ValueRef::{} into {}.", from, stringify!($t))
+    }
+}
+
 impl<'a> From<ValueRef<'a>> for AppDateTime {
     fn from(value: ValueRef<'a>) -> Self {
         match value {

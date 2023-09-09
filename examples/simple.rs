@@ -32,7 +32,7 @@ async fn execute(database_url: String) -> Result<(), Box<dyn Error>> {
         let id: u32 = row.get("customer_id")?;
         let amount: u32 = row.get("amount")?;
         let name: Option<&str> = row.get("account_name")?;
-        println!("Found payment {}: {} {:?}", id, amount, name);
+        println!("Found payment {id}: {amount} {name:?}");
     }
 
     Ok(())

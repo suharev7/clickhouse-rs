@@ -151,7 +151,7 @@ impl<K: ColumnType> Column<K> {
     /// #     let pool = Pool::new(database_url);
     /// #     let mut client = pool.get_handle().await?;
     ///       let mut stream = client
-    ///             .query("SELECT number as n1, number as n2, number as n3 FROM numbers(100000000)")
+    ///             .query("SELECT number as n1, number as n2, number as n3 FROM numbers(1000)")
     ///             .stream_blocks();
     ///
     ///       let mut sum = 0;

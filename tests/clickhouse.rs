@@ -93,7 +93,7 @@ async fn test_create_table() -> Result<(), Error> {
     c.execute(ddl).await?;
 
     if let Err(err) = c.execute(ddl).await {
-        assert_eq!("Server error", &format!("{}", err)[..12]);
+        assert_eq!("Server error", &format!("{err}")[..12]);
     } else {
         panic!("should fail")
     }
@@ -395,8 +395,8 @@ async fn test_datetime_read_write() -> Result<(), Error> {
         );
 
     assert_eq!(
-        format!("{:?}", expected_strings_block),
-        format!("{:?}", actual_strings_block)
+        format!("{expected_strings_block:?}"),
+        format!("{actual_strings_block:?}")
     );
 
     let actual_dates_block = c
@@ -665,8 +665,8 @@ async fn test_datetime64_read_write() -> Result<(), Error> {
         );
 
     assert_eq!(
-        format!("{:?}", expected_strings_block),
-        format!("{:?}", actual_strings_block)
+        format!("{expected_strings_block:?}"),
+        format!("{actual_strings_block:?}")
     );
 
     let actual_dates_block = c
@@ -829,7 +829,7 @@ async fn test_select_settings() -> Result<(), Error> {
 #[cfg(feature = "tokio_io")]
 #[tokio::test]
 #[should_panic]
-async fn test_select_unknown_settings() -> () {
+async fn test_select_unknown_settings() {
     let options = Options::from_str(&database_url()).unwrap().with_setting("foo", 1, /* is_important= */ true);
     let pool = Pool::new(options);
     let mut c = pool.get_handle().await.unwrap();
@@ -1094,7 +1094,7 @@ async fn test_stream_rows() -> Result<(), Error> {
 #[tokio::test]
 async fn test_concurrent_queries() -> Result<(), Error> {
     async fn query_sum(n: u64) -> Result<u64, Error> {
-        let sql = format!("SELECT number FROM system.numbers LIMIT {}", n);
+        let sql = format!("SELECT number FROM system.numbers LIMIT {n}");
 
         let pool = Pool::new(database_url());
         let mut c = pool.get_handle().await?;
@@ -1526,13 +1526,56 @@ async fn test_enum_16_nullable() -> Result<(), Error> {
 
 #[cfg(feature = "tokio_io")]
 #[tokio::test]
+async fn test_enum_16_array() -> Result<(), Error> {
+    let ddl = "
+        CREATE TABLE IF NOT EXISTS clickhouse_enum_arr (
+            enum_16_arr_row Array(Enum16(
+                               'zero' = 5,
+                               'first' = 6
+                            ))
+        ) Engine=Memory";
+
+    let query = "
+        SELECT
+            enum_16_arr_row
+        FROM clickhouse_enum_arr";
+
+    let block = Block::new().column(
+        "enum_16_arr_row",
+        vec![
+            vec![Enum16::of(5)],
+            vec![Enum16::of(6)],
+        ],
+    );
+
+    let pool = Pool::new(database_url());
+    let mut c = pool.get_handle().await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_enum_arr").await?;
+    c.execute(ddl).await?;
+    c.insert("clickhouse_enum_arr", block).await?;
+    let block = c.query(query).fetch_all().await?;
+
+    let enum_16_a: Vec<Enum16> = block.get(0, "enum_16_arr_row")?;
+    let enum_16_b: Vec<Enum16> = block.get(1, "enum_16_arr_row")?;
+
+    assert_eq!(2, block.row_count());
+    assert_eq!(
+        vec![vec![Enum16::of(5)], vec![Enum16::of(6)]],
+        vec![enum_16_a, enum_16_b]
+    );
+
+    Ok(())
+}
+
+#[cfg(feature = "tokio_io")]
+#[tokio::test]
 async fn test_enum_8() -> Result<(), Error> {
     let ddl = "
         CREATE TABLE IF NOT EXISTS clickhouse_Enum (
-            enum_8_row        Enum8(
-                                'zero' = 1,
-                                'first' = 2
-                          )
+            enum_8_row  Enum8(
+                            'zero' = 1,
+                            'first' = 2
+                        )
         ) Engine=Memory";
 
     let query = "
@@ -1556,6 +1599,49 @@ async fn test_enum_8() -> Result<(), Error> {
     assert_eq!(
         vec!([Enum8::of(1), Enum8::of(2)]),
         vec!([enum_8_a, enum_8_b])
+    );
+
+    Ok(())
+}
+
+#[cfg(feature = "tokio_io")]
+#[tokio::test]
+async fn test_enum_8_array() -> Result<(), Error> {
+    let ddl = "
+        CREATE TABLE IF NOT EXISTS clickhouse_enum8_arr (
+            enum_8_arr_row Array(Enum8(
+                               'zero' = 5,
+                               'first' = 6
+                            ))
+        ) Engine=Memory";
+
+    let query = "
+        SELECT
+            enum_8_arr_row
+        FROM clickhouse_enum8_arr";
+
+    let block = Block::new().column(
+        "enum_8_arr_row",
+        vec![
+            vec![Enum8::of(5)],
+            vec![Enum8::of(6)],
+        ],
+    );
+
+    let pool = Pool::new(database_url());
+    let mut c = pool.get_handle().await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_enum8_arr").await?;
+    c.execute(ddl).await?;
+    c.insert("clickhouse_enum8_arr", block).await?;
+    let block = c.query(query).fetch_all().await?;
+
+    let enum_16_a: Vec<Enum8> = block.get(0, "enum_8_arr_row")?;
+    let enum_16_b: Vec<Enum8> = block.get(1, "enum_8_arr_row")?;
+
+    assert_eq!(2, block.row_count());
+    assert_eq!(
+        vec![vec![Enum8::of(5)], vec![Enum8::of(6)]],
+        vec![enum_16_a, enum_16_b]
     );
 
     Ok(())

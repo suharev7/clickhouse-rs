@@ -552,12 +552,12 @@ mod test {
 
         assert_eq!(
             "1970-01-01 00:00:00".to_string(),
-            format!("{}", ValueRef::DateTime(0, DEFAULT_TZ.clone()))
+            format!("{}", ValueRef::DateTime(0, *DEFAULT_TZ))
         );
 
         assert_eq!(
             "Thu, 01 Jan 1970 00:00:00 +0000".to_string(),
-            format!("{:#}", ValueRef::DateTime(0, DEFAULT_TZ.clone()))
+            format!("{:#}", ValueRef::DateTime(0, *DEFAULT_TZ))
         );
 
         assert_eq!(
@@ -589,8 +589,8 @@ mod test {
 
         assert_eq!(Value::from(ValueRef::Date(42)), Value::Date(42));
         assert_eq!(
-            Value::from(ValueRef::DateTime(42, DEFAULT_TZ.clone())),
-            Value::DateTime(42, DEFAULT_TZ.clone())
+            Value::from(ValueRef::DateTime(42, *DEFAULT_TZ)),
+            Value::DateTime(42, *DEFAULT_TZ)
         );
 
         assert_eq!(
@@ -643,7 +643,7 @@ mod test {
 
         assert_eq!(SqlType::from(ValueRef::Date(42)), SqlType::Date);
         assert_eq!(
-            SqlType::from(ValueRef::DateTime(42, DEFAULT_TZ.clone())),
+            SqlType::from(ValueRef::DateTime(42, *DEFAULT_TZ)),
             SqlType::DateTime(DateTimeType::DateTime32)
         );
 

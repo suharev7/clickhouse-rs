@@ -42,7 +42,7 @@ impl ChronoDateTimeAdapter {
 impl ColumnFrom for Vec<DateTime<Tz>> {
     fn column_from<W: ColumnWrapper>(data: Self) -> W::Wrapper {
         let tz = if data.is_empty() {
-            DEFAULT_TZ.clone()
+            *DEFAULT_TZ
         } else {
             data[0].timezone()
         };
@@ -57,7 +57,7 @@ impl ColumnFrom for Vec<Option<DateTime<Tz>>> {
         let tz = source
             .iter()
             .find_map(|u| u.map(|v| v.timezone()))
-            .unwrap_or(DEFAULT_TZ.clone());
+            .unwrap_or(*DEFAULT_TZ);
 
         let mut values: Vec<DateTime<Tz>> = Vec::with_capacity(n);
         let mut nulls = Vec::with_capacity(n);

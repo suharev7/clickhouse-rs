@@ -116,7 +116,7 @@ impl Default for ServerInfo {
             revision: 0,
             minor_version: 0,
             major_version: 0,
-            timezone: DEFAULT_TZ.clone(),
+            timezone: *DEFAULT_TZ,
             display_name: "".into(),
             patch_version: 0,
         }

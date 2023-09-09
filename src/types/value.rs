@@ -155,12 +155,12 @@ impl Value {
             SqlType::FixedString(str_len) => Value::String(Arc::new(vec![0_u8; str_len])),
             SqlType::Float32 => Value::Float32(0.0),
             SqlType::Float64 => Value::Float64(0.0),
-            SqlType::Date => 0_u16.to_date(DEFAULT_TZ.clone()).into(),
+            SqlType::Date => 0_u16.to_date(*DEFAULT_TZ).into(),
             SqlType::DateTime(DateTimeType::DateTime64(_, _)) => {
-                Value::DateTime64(0, (1, DEFAULT_TZ.clone()))
+                Value::DateTime64(0, (1, *DEFAULT_TZ))
             }
             SqlType::SimpleAggregateFunction(_, nested) => Value::default(nested.clone()),
-            SqlType::DateTime(_) => 0_u32.to_date(DEFAULT_TZ.clone()).into(),
+            SqlType::DateTime(_) => 0_u32.to_date(*DEFAULT_TZ).into(),
             SqlType::Nullable(inner) => Value::Nullable(Either::Left(inner)),
             SqlType::Array(inner) => Value::Array(inner, Arc::new(Vec::default())),
             SqlType::Decimal(precision, scale) => Value::Decimal(Decimal {

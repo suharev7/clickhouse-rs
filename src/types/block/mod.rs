@@ -493,7 +493,7 @@ mod test {
     fn test_read_empty_block() {
         let source = [1, 0, 2, 255, 255, 255, 255, 0, 0, 0];
         let mut cursor = Cursor::new(&source[..]);
-        match Block::<Simple>::load(&mut cursor, DEFAULT_TZ.clone(), false) {
+        match Block::<Simple>::load(&mut cursor, *DEFAULT_TZ, false) {
             Ok(block) => assert!(block.is_empty()),
             Err(_) => unreachable!(),
         }
@@ -589,7 +589,7 @@ mod test {
         block.write(&mut encoder, false);
 
         let mut reader = Cursor::new(encoder.get_buffer_ref());
-        let rblock = Block::load(&mut reader, DEFAULT_TZ.clone(), false).unwrap();
+        let rblock = Block::load(&mut reader, *DEFAULT_TZ, false).unwrap();
 
         assert_eq!(block, rblock);
     }

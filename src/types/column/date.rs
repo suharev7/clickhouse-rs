@@ -81,7 +81,7 @@ impl ColumnFrom for Vec<NaiveDate> {
 
         let column: DateColumnData<u16> = DateColumnData {
             data,
-            tz: DEFAULT_TZ.clone(),
+            tz: *DEFAULT_TZ,
         };
         W::wrap(column)
     }
@@ -237,7 +237,7 @@ mod test {
 
     #[test]
     fn test_create_date_time() {
-        let tz = DEFAULT_TZ.clone();
+        let tz = *DEFAULT_TZ;
         let column = Vec::column_from::<ArcColumnWrapper>(vec![tz
             .with_ymd_and_hms(2016, 10, 22, 12, 0, 0)
             .unwrap()]);

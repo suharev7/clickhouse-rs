@@ -649,19 +649,6 @@ fn parse_opt_duration(source: &str) -> std::result::Result<Option<Duration>, ()>
     Ok(Some(duration))
 }
 
-fn parse_opt_u8(source: &str) -> std::result::Result<Option<u8>, ()> {
-    if source == "none" {
-        return Ok(None);
-    }
-
-    let duration: u8 = match source.parse() {
-        Ok(value) => value,
-        Err(_) => return Err(()),
-    };
-
-    Ok(Some(duration))
-}
-
 fn parse_compression(source: &str) -> std::result::Result<bool, ()> {
     match source {
         "none" => Ok(false),

@@ -78,6 +78,7 @@ impl Eq for Value {}
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
+            (Value::Bool(a), Value::Bool(b)) => *a == *b,
             (Value::UInt8(a), Value::UInt8(b)) => *a == *b,
             (Value::UInt16(a), Value::UInt16(b)) => *a == *b,
             (Value::UInt32(a), Value::UInt32(b)) => *a == *b,
@@ -688,8 +689,8 @@ mod test {
     fn test_boolean() {
         let v = Value::from(false);
         let w = Value::from(true);
-        assert_eq!(v, Value::UInt8(0));
-        assert_eq!(w, Value::UInt8(1));
+        assert_eq!(v, Value::Bool(false));
+        assert_eq!(w, Value::Bool(true));
     }
 
     #[test]

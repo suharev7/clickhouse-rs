@@ -28,6 +28,7 @@ clickhouse-rs = "*"
 * SimpleAggregateFunction(F, T)
 * IPv4/IPv6
 * UUID
+* Bool
 
 ## DNS
 

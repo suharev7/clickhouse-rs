@@ -124,7 +124,8 @@ async fn test_insert() -> Result<(), Error> {
                ipv6 IPv6,
                ipv4str IPv4,
                ipv6str IPv6,
-               uuid UUID
+               uuid UUID,
+               bln Bool
                ) Engine=Memory";
 
     let block = Block::new()
@@ -234,6 +235,10 @@ async fn test_insert() -> Result<(), Error> {
                 Uuid::nil(),
                 Uuid::nil(),
             ],
+        )
+        .column(
+            "bln",
+            vec![true, false, true, false, true, false, true],
         );
 
     let expected = block.clone();
@@ -1164,7 +1169,8 @@ async fn test_nullable() -> Result<(), Error> {
             datetime64 Nullable(DateTime64(3, 'UTC')),
             ipv4       Nullable(IPv4),
             ipv6       Nullable(IPv6),
-            uuid       Nullable(UUID)
+            uuid       Nullable(UUID),
+            bln        Nullable(Bool)
         ) Engine=Memory";
 
     let query = "
@@ -1185,7 +1191,8 @@ async fn test_nullable() -> Result<(), Error> {
             datetime64,
             ipv4,
             ipv6,
-            uuid
+            uuid,
+            bln
         FROM clickhouse_test_nullable";
 
     let date_value: NaiveDate = NaiveDate::from_ymd_opt(2016, 10, 22).unwrap();
@@ -1216,6 +1223,9 @@ async fn test_nullable() -> Result<(), Error> {
             vec![Some(
                 Uuid::parse_str("936da01f-9abd-4d9d-80c7-02af85c822a8").unwrap(),
             )],
+        ).column(
+        "bln",
+            vec![Some(true)],
         );
 
     let pool = Pool::new(database_url());
@@ -1243,6 +1253,7 @@ async fn test_nullable() -> Result<(), Error> {
     let ipv4: Option<Ipv4Addr> = block.get(0, "ipv4")?;
     let ipv6: Option<Ipv6Addr> = block.get(0, "ipv6")?;
     let uuid: Option<Uuid> = block.get(0, "uuid")?;
+    let bln: Option<bool> = block.get(0, "bln")?;
 
     assert_eq!(int8, Some(1_i8));
     assert_eq!(int16, Some(1_i16));
@@ -1268,6 +1279,10 @@ async fn test_nullable() -> Result<(), Error> {
     assert_eq!(
         uuid,
         Some(Uuid::parse_str("936da01f-9abd-4d9d-80c7-02af85c822a8").unwrap())
+    );
+    assert_eq!(
+        bln,
+        Some(true),
     );
 
     Ok(())
@@ -1551,17 +1566,18 @@ async fn test_enum_8() -> Result<(), Error> {
 async fn test_array() -> Result<(), Error> {
     let ddl = "
         CREATE TABLE clickhouse_array (
-            u8    Array(UInt8),
-            u32   Array(UInt32),
-            f64   Array(Float64),
-            text1 Array(String),
-            text2 Array(String),
-            date  Array(Date),
-            time  Array(DateTime),
-            time64  Array(DateTime64(3, 'UTC'))
+            u8      Array(UInt8),
+            u32     Array(UInt32),
+            f64     Array(Float64),
+            text1   Array(String),
+            text2   Array(String),
+            date    Array(Date),
+            time    Array(DateTime),
+            time64  Array(DateTime64(3, 'UTC')),
+            bln     Array(Bool)
         ) Engine=Memory";
 
-    let query = "SELECT u8, u32, f64, text1, text2, date, time, time64  FROM clickhouse_array";
+    let query = "SELECT u8, u32, f64, text1, text2, date, time, time64, bln  FROM clickhouse_array";
 
     let date_value: NaiveDate = NaiveDate::from_ymd_opt(2016, 10, 22).unwrap();
     let date_time_value: DateTime<Tz> = UTC.with_ymd_and_hms(2014, 7, 8, 14, 0, 0).unwrap();
@@ -1574,7 +1590,8 @@ async fn test_array() -> Result<(), Error> {
         .column("text2", vec![vec!["B".to_string()]])
         .column("date", vec![vec![date_value]])
         .column("time", vec![vec![date_time_value]])
-        .column("time64", vec![vec![date_time_value]]);
+        .column("time64", vec![vec![date_time_value]])
+        .column("bln", vec![vec![true]]);
 
     let pool = Pool::new(database_url());
 
@@ -1592,6 +1609,7 @@ async fn test_array() -> Result<(), Error> {
     let date_vec: Vec<NaiveDate> = block.get(0, "date")?;
     let time_vec: Vec<DateTime<Tz>> = block.get(0, "time")?;
     let time64_vec: Vec<DateTime<Tz>> = block.get(0, "time64")?;
+    let bln_vec: Vec<bool> = block.get(0, "bln")?;
 
     assert_eq!(1, block.row_count());
     assert_eq!(vec![41_u8], u8_vec);
@@ -1602,6 +1620,7 @@ async fn test_array() -> Result<(), Error> {
     assert_eq!(vec![date_value], date_vec);
     assert_eq!(vec![date_time_value], time_vec);
     assert_eq!(vec![date_time_value], time64_vec);
+    assert_eq!(vec![true], bln_vec);
 
     Ok(())
 }
@@ -1658,7 +1677,8 @@ async fn test_column_iter() -> Result<(), Error> {
             array      Array(UInt32),
             ipv4       IPv4,
             ipv6       IPv6,
-            uuid       UUID
+            uuid       UUID,
+            bln        Bool
         ) Engine=Memory";
 
     let query = r"SELECT * FROM clickhouse_test_column_iter";
@@ -1690,6 +1710,10 @@ async fn test_column_iter() -> Result<(), Error> {
         .column(
             "uuid",
             vec![Uuid::parse_str("936da01f-9abd-4d9d-80c7-02af85c822a8").unwrap(); 3],
+        )
+        .column(
+            "bln",
+            vec![true, false, true],
         );
 
     let pool = Pool::new(database_url());
@@ -1765,6 +1789,9 @@ async fn test_column_iter() -> Result<(), Error> {
             uuid_iter,
             vec![Uuid::parse_str("936da01f-9abd-4d9d-80c7-02af85c822a8").unwrap(); 3]
         );
+
+        let bln: Vec<_> = block.get_column("bln")?.iter::<bool>()?.collect();
+        assert_eq!(bln, vec![&true, &false, &true]);
     }
 
     Ok(())

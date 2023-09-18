@@ -199,6 +199,11 @@ mod test {
     }
 
     #[test]
+    fn test_u128() {
+        test_some::<u128>()
+    }
+
+    #[test]
     fn test_i8() {
         test_some::<i8>()
     }
@@ -216,6 +221,11 @@ mod test {
     #[test]
     fn test_i64() {
         test_some::<i64>()
+    }
+
+    #[test]
+    fn test_i128() {
+        test_some::<i128>()
     }
 
     #[test]

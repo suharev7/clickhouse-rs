@@ -121,10 +121,12 @@ impl dyn ColumnData {
             SqlType::UInt16 => W::wrap(VectorColumnData::<u16>::with_capacity(capacity)),
             SqlType::UInt32 => W::wrap(VectorColumnData::<u32>::with_capacity(capacity)),
             SqlType::UInt64 => W::wrap(VectorColumnData::<u64>::with_capacity(capacity)),
+            SqlType::UInt128 => W::wrap(VectorColumnData::<u128>::with_capacity(capacity)),
             SqlType::Int8 => W::wrap(VectorColumnData::<i8>::with_capacity(capacity)),
             SqlType::Int16 => W::wrap(VectorColumnData::<i16>::with_capacity(capacity)),
             SqlType::Int32 => W::wrap(VectorColumnData::<i32>::with_capacity(capacity)),
             SqlType::Int64 => W::wrap(VectorColumnData::<i64>::with_capacity(capacity)),
+            SqlType::Int128 => W::wrap(VectorColumnData::<i128>::with_capacity(capacity)),
             SqlType::String => W::wrap(StringColumnData::with_capacity(capacity)),
             SqlType::FixedString(len) => {
                 W::wrap(FixedStringColumnData::with_capacity(capacity, len))

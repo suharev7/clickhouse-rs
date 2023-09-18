@@ -54,6 +54,18 @@ impl StatBuffer for u64 {
     }
 }
 
+impl StatBuffer for u128 {
+    type Buffer = [u8; 16];
+
+    fn buffer() -> Self::Buffer {
+        [0; 16]
+    }
+
+    fn sql_type() -> SqlType {
+        SqlType::UInt128
+    }
+}
+
 impl StatBuffer for i8 {
     type Buffer = [u8; 1];
 
@@ -99,6 +111,18 @@ impl StatBuffer for i64 {
 
     fn sql_type() -> SqlType {
         SqlType::Int64
+    }
+}
+
+impl StatBuffer for i128 {
+    type Buffer = [u8; 16];
+
+    fn buffer() -> Self::Buffer {
+        [0; 16]
+    }
+
+    fn sql_type() -> SqlType {
+        SqlType::Int128
     }
 }
 

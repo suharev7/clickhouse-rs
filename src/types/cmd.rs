@@ -133,7 +133,7 @@ fn encode_query(query: &Query, context: &Context) -> Result<Vec<u8>> {
 
 fn serialize_settings(encoder: &mut Encoder, options: &Options, format: SettingsBinaryFormat) {
     if format < SettingsBinaryFormat::Strings {
-        for (&ref name, &ref value) in &options.settings {
+        for (name, value) in &options.settings {
             encoder.string(name);
             match &value.value {
                 SettingType::String(val) => encoder.string(val),
@@ -145,7 +145,7 @@ fn serialize_settings(encoder: &mut Encoder, options: &Options, format: Settings
             }
         }
     } else {
-        for (&ref name, &ref value) in &options.settings {
+        for (name, value) in &options.settings {
             encoder.string(name);
             encoder.write(value.is_important);
             encoder.string(value.to_string());

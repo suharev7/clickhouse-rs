@@ -127,7 +127,7 @@ mod test {
 
     #[test]
     fn test_build_index() {
-        let sizes = vec![2_usize, 3, 4];
+        let sizes = [2_usize, 3, 4];
         let index = build_index(sizes.iter().cloned());
         assert_eq!(index, vec![0, 2, 5, 9])
     }

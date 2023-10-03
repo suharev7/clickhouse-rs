@@ -162,34 +162,34 @@ impl fmt::Display for SettingType {
         }
     }
 }
-impl Into<SettingType> for &str {
-    fn into(self) -> SettingType {
-        SettingType::String(self.into())
+impl From<&str> for SettingType {
+    fn from(val: &str) -> Self {
+        SettingType::String(val.into())
     }
 }
-impl Into<SettingType> for bool {
-    fn into(self) -> SettingType {
-        SettingType::Bool(self)
+impl From<bool> for SettingType {
+    fn from(val: bool) -> Self {
+        SettingType::Bool(val)
     }
 }
-impl Into<SettingType> for u64 {
-    fn into(self) -> SettingType {
-        SettingType::UInt64(self.into())
+impl From<u64> for SettingType {
+    fn from(val: u64) -> Self {
+        SettingType::UInt64(val)
     }
 }
-impl Into<SettingType> for i32 {
-    fn into(self) -> SettingType {
-        SettingType::UInt64((self as u64).into())
+impl From<i32> for SettingType {
+    fn from(val: i32) -> Self {
+        SettingType::UInt64(val as u64)
     }
 }
-impl Into<SettingType> for i64 {
-    fn into(self) -> SettingType {
-        SettingType::UInt64((self as u64).into())
+impl From<i64> for SettingType {
+    fn from(val: i64) -> Self {
+        SettingType::UInt64(val as u64)
     }
 }
-impl Into<SettingType> for f64 {
-    fn into(self) -> SettingType {
-        SettingType::Float64(self)
+impl From<f64> for SettingType {
+    fn from(val: f64) -> Self {
+        SettingType::Float64(val)
     }
 }
 

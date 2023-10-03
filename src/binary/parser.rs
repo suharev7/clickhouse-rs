@@ -6,31 +6,27 @@ use log::{trace, warn};
 use crate::{
     binary::{protocol, ReadEx},
     errors::{DriverError, Error, Result, ServerError},
+    io::transport::TransportInfo,
     types::{Block, Packet, ProfileInfo, Progress, ServerInfo, TableColumns},
 };
 
 /// The internal clickhouse response parser.
-pub(crate) struct Parser<T> {
+pub(crate) struct Parser<'i, T> {
     reader: T,
-    tz: Option<Tz>,
-    compress: bool,
+    info: &'i TransportInfo,
 }
 
 /// The parser can be used to parse clickhouse responses into values.  Generally
 /// you normally do not use this directly as it's already done for you by
 /// the client but in some more complex situations it might be useful to be
 /// able to parse the clickhouse responses.
-impl<T: Read> Parser<T> {
+impl<'i, T: Read> Parser<'i, T> {
     /// Creates a new parser that parses the data behind the reader.  More
     /// than one value can be behind the reader in which case the parser can
     /// be invoked multiple times.  In other words: the stream does not have
     /// to be terminated.
-    pub(crate) fn new(reader: T, tz: Option<Tz>, compress: bool) -> Parser<T> {
-        Self {
-            reader,
-            tz,
-            compress,
-        }
+    pub(crate) fn new(reader: T, info: &'i TransportInfo) -> Parser<T> {
+        Self { reader, info }
     }
 
     /// Parses a single value out of the stream. If there are multiple
@@ -54,11 +50,12 @@ impl<T: Read> Parser<T> {
     }
 
     fn parse_block(&mut self) -> Result<Packet<()>> {
-        match self.tz {
+        match self.info.timezone {
             None => Err(Error::Driver(DriverError::UnexpectedPacket)),
             Some(tz) => {
                 self.reader.skip_string()?;
-                let block = Block::load(&mut self.reader, tz, self.compress)?;
+                let block =
+                    Block::load(&mut self.reader, tz, self.info.compress)?;
                 Ok(Packet::Block(block))
             }
         }
@@ -115,11 +112,12 @@ impl<T: Read> Parser<T> {
             0
         };
 
-        let (written_rows, written_bytes) = if revision >= protocol::DBMS_MIN_REVISION_WITH_CLIENT_WRITE_INFO {
-            (self.reader.read_uvarint()?, self.reader.read_uvarint()?)
-        } else {
-            (0, 0)
-        };
+        let (written_rows, written_bytes) =
+            if revision >= protocol::DBMS_MIN_REVISION_WITH_CLIENT_WRITE_INFO {
+                (self.reader.read_uvarint()?, self.reader.read_uvarint()?)
+            } else {
+                (0, 0)
+            };
 
         let progress = Progress {
             rows,

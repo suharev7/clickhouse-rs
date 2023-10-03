@@ -1,7 +1,8 @@
-use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
 use std::{
-    convert, fmt, mem,
+    collections::HashMap,
+    convert, fmt,
+    hash::{Hash, Hasher},
+    mem,
     net::{Ipv4Addr, Ipv6Addr},
     str,
     sync::Arc,
@@ -68,6 +69,9 @@ impl Hash for Value {
             Self::UInt16(i) => i.hash(state),
             Self::UInt32(i) => i.hash(state),
             Self::UInt64(i) => i.hash(state),
+            Self::Date(d) => d.hash(state),
+            Self::DateTime(t, _) => t.hash(state),
+            Self::DateTime64(t, (prec_a, _)) => (*t, *prec_a).hash(state),
             _ => unimplemented!(),
         }
     }
@@ -152,6 +156,7 @@ impl Value {
             SqlType::Int32 => Value::Int32(0),
             SqlType::Int64 => Value::Int64(0),
             SqlType::String => Value::String(Arc::new(Vec::default())),
+            SqlType::LowCardinality(inner) => Value::default(inner.clone()),
             SqlType::FixedString(str_len) => Value::String(Arc::new(vec![0_u8; str_len])),
             SqlType::Float32 => Value::Float32(0.0),
             SqlType::Float64 => Value::Float64(0.0),
@@ -487,6 +492,16 @@ impl From<Value> for String {
     }
 }
 
+pub(crate) fn get_str_buffer(value: &Value) -> &[u8] {
+    match value {
+        Value::String(bs) => bs.as_slice(),
+        _ => {
+            let from = SqlType::from(value.clone());
+            panic!("Can't convert Value::{} into &[u8].", from);
+        }
+    }
+}
+
 impl From<Value> for Vec<u8> {
     fn from(v: Value) -> Self {
         match v {
@@ -583,7 +598,7 @@ mod test {
 
     fn test_into_t<T>(v: Value, x: &T)
     where
-        Value: convert::Into<T>,
+        Value: Into<T>,
         T: PartialEq + fmt::Debug,
     {
         let a: T = v.into();
@@ -592,7 +607,7 @@ mod test {
 
     fn test_from_rnd<T>()
     where
-        Value: convert::Into<T> + convert::From<T>,
+        Value: Into<T> + From<T>,
         T: PartialEq + fmt::Debug + Clone,
         Standard: Distribution<T>,
     {
@@ -604,7 +619,7 @@ mod test {
 
     fn test_from_t<T>(value: &T)
     where
-        Value: convert::Into<T> + convert::From<T>,
+        Value: Into<T> + From<T>,
         T: PartialEq + fmt::Debug + Clone,
     {
         test_into_t::<T>(Value::from(value.clone()), value);

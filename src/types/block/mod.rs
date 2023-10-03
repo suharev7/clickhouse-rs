@@ -445,8 +445,8 @@ fn text_cells<K: ColumnType>(data: &Column<K>) -> Vec<String> {
 
 #[cfg(test)]
 mod test {
-    use crate::row;
     use super::*;
+    use crate::row;
 
     #[test]
     fn test_write_default() {
@@ -598,9 +598,11 @@ mod test {
     fn test_insert_str_array() {
         let expected: Vec<String> = vec!["A".into(), "B".into()];
         let mut block = Block::new();
-        block.push(row! {
-              tags: expected.clone(),
-        }).unwrap();
+        block
+            .push(row! {
+                  tags: expected.clone(),
+            })
+            .unwrap();
 
         let actual: Vec<String> = block.get(0, 0).unwrap();
         assert_eq!(actual, expected);

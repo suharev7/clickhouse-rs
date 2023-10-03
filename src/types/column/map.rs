@@ -154,6 +154,10 @@ impl ColumnData for MapColumnData {
             None
         }
     }
+
+    fn get_timezone(&self) -> Option<Tz> {
+        self.values.get_timezone()
+    }
 }
 
 impl<V> ColumnFrom for Vec<HashMap<String, V>>
@@ -384,7 +388,7 @@ mod test {
 
         let expected = vec![Some(HashMap::from([(&1_u8, &2_u8)])), None];
 
-        assert_eq!(format!("{:?}", expected), format!("{:?}", actual),);
+        assert_eq!(format!("{expected:?}"), format!("{actual:?}"),);
     }
 
     #[test]
@@ -410,7 +414,7 @@ mod test {
 
         let expected = vec![HashMap::from([(&1_u32, &Some(2_u32))])];
 
-        assert_eq!(format!("{:?}", actual), format!("{:?}", expected));
+        assert_eq!(format!("{actual:?}"), format!("{expected:?}"));
     }
 
     #[test]
@@ -429,6 +433,6 @@ mod test {
 
         let expected = vec![Some(HashMap::from([(&1_u8, &2_u8)])), None];
 
-        assert_eq!(format!("{:?}", actual), format!("{:?}", expected),);
+        assert_eq!(format!("{actual:?}"), format!("{expected:?}"),);
     }
 }

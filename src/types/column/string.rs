@@ -1,3 +1,4 @@
+use chrono_tz::Tz;
 use std::{io::Write, string::ToString, sync::Arc};
 
 use either::Either;
@@ -7,8 +8,8 @@ use crate::{
     errors::Result,
     types::{
         column::{
-            array::ArrayColumnData, list::List, nullable::NullableColumnData, ArcColumnWrapper,
-            ColumnWrapper, StringPool,
+            array::ArrayColumnData, column_data::LowCardinalityAccessor, list::List,
+            nullable::NullableColumnData, ArcColumnWrapper, ColumnWrapper, StringPool,
         },
         Column, ColumnType, FromSql, SqlType, Value, ValueRef,
     },
@@ -161,6 +162,12 @@ fn make_opt_column<W: ColumnWrapper, S: StringSource>(source: Vec<Option<S>>) ->
     W::wrap(data)
 }
 
+impl LowCardinalityAccessor for StringColumnData {
+    fn get_string(&self, index: usize) -> &[u8] {
+        self.pool.get(index)
+    }
+}
+
 impl ColumnData for StringColumnData {
     fn sql_type(&self) -> SqlType {
         SqlType::String
@@ -194,11 +201,24 @@ impl ColumnData for StringColumnData {
         })
     }
 
-    unsafe fn get_internal(&self, pointers: &[*mut *const u8], level: u8, _props: u32) -> Result<()> {
+    unsafe fn get_internal(
+        &self,
+        pointers: &[*mut *const u8],
+        level: u8,
+        _props: u32,
+    ) -> Result<()> {
         assert_eq!(level, 0);
         *pointers[0] = &self.pool as *const StringPool as *const u8;
         *(pointers[1] as *mut usize) = self.len();
         Ok(())
+    }
+
+    fn get_timezone(&self) -> Option<Tz> {
+        None
+    }
+
+    fn get_low_cardinality_accessor(&self) -> Option<&dyn LowCardinalityAccessor> {
+        Some(self)
     }
 }
 
@@ -228,5 +248,9 @@ impl<K: ColumnType> ColumnData for StringAdapter<K> {
 
     fn clone_instance(&self) -> BoxColumnData {
         unimplemented!()
+    }
+
+    fn get_timezone(&self) -> Option<Tz> {
+        None
     }
 }

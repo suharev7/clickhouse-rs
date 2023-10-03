@@ -1,4 +1,4 @@
-use std::{convert, fmt, sync::Arc};
+use std::{fmt, ptr, sync::Arc};
 
 use chrono::prelude::*;
 use chrono_tz::Tz;
@@ -7,15 +7,17 @@ use either::Either;
 use crate::{
     binary::{Encoder, ReadEx},
     errors::Result,
-    types::column::{
-        array::ArrayColumnData,
-        column_data::{BoxColumnData, ColumnData},
-        list::List,
-        nullable::NullableColumnData,
-        numeric::save_data,
-        ArcColumnWrapper, ColumnFrom, ColumnWrapper,
+    types::{
+        column::{
+            array::ArrayColumnData,
+            column_data::{BoxColumnData, ColumnData, LowCardinalityAccessor},
+            list::List,
+            nullable::NullableColumnData,
+            numeric::save_data,
+            ArcColumnWrapper, ColumnFrom, ColumnWrapper,
+        },
+        DateConverter, Marshal, SqlType, StatBuffer, Unmarshal, Value, ValueRef,
     },
-    types::{DateConverter, Marshal, SqlType, StatBuffer, Unmarshal, Value, ValueRef},
 };
 
 pub struct DateColumnData<T>
@@ -24,8 +26,8 @@ where
         + Unmarshal<T>
         + Marshal
         + Copy
-        + convert::Into<Value>
-        + convert::From<Value>
+        + Into<Value>
+        + From<Value>
         + fmt::Display
         + Sync
         + Default
@@ -41,8 +43,8 @@ where
         + Unmarshal<T>
         + Marshal
         + Copy
-        + convert::Into<Value>
-        + convert::From<Value>
+        + Into<Value>
+        + From<Value>
         + fmt::Display
         + Sync
         + Default
@@ -155,14 +157,30 @@ impl ColumnFrom for Vec<Option<NaiveDate>> {
     }
 }
 
+impl<T> LowCardinalityAccessor for DateColumnData<T> where
+    T: StatBuffer
+        + Unmarshal<T>
+        + Marshal
+        + Copy
+        + Into<Value>
+        + From<Value>
+        + fmt::Display
+        + Sync
+        + Send
+        + DateConverter
+        + Default
+        + 'static
+{
+}
+
 impl<T> ColumnData for DateColumnData<T>
 where
     T: StatBuffer
         + Unmarshal<T>
         + Marshal
         + Copy
-        + convert::Into<Value>
-        + convert::From<Value>
+        + Into<Value>
+        + From<Value>
         + fmt::Display
         + Sync
         + Send
@@ -208,6 +226,43 @@ where
         *pointers[1] = &self.tz as *const Tz as *const u8;
         *(pointers[2] as *mut usize) = self.len();
         Ok(())
+    }
+
+    unsafe fn get_internals(&self, data_ptr: *mut (), _level: u8, _props: u32) -> Result<()> {
+        unsafe {
+            let data_ref = &mut *(data_ptr as *mut DateTimeInternals);
+            data_ref.begin = self.data.as_ptr().cast();
+            data_ref.len = self.data.len();
+            data_ref.tz = self.tz;
+            Ok(())
+        }
+    }
+
+    fn get_timezone(&self) -> Option<Tz> {
+        Some(self.tz)
+    }
+
+    fn get_low_cardinality_accessor(&self) -> Option<&dyn LowCardinalityAccessor> {
+        Some(self)
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct DateTimeInternals {
+    pub(crate) begin: *const (),
+    pub(crate) len: usize,
+    pub(crate) tz: Tz,
+    pub(crate) precision: Option<u32>,
+}
+
+impl Default for DateTimeInternals {
+    fn default() -> Self {
+        Self {
+            begin: ptr::null(),
+            len: 0,
+            tz: Tz::Zulu,
+            precision: None,
+        }
     }
 }
 

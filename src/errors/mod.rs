@@ -66,10 +66,7 @@ pub enum UrlError {
     #[error("Invalid or incomplete connection URL")]
     Invalid,
 
-    #[error(
-        "Invalid value `{}' for connection URL parameter `{}'",
-        value, param
-    )]
+    #[error("Invalid value `{}' for connection URL parameter `{}'", value, param)]
     InvalidParamValue { param: String, value: String },
 
     #[error("URL parse error: {}", _0)]
@@ -99,6 +96,9 @@ pub enum DriverError {
 
     #[error("Invalid utf-8 sequence.")]
     Utf8Error(Utf8Error),
+
+    #[error("Deserialize error: `{}`", _0)]
+    Deserialize(Cow<'static, str>),
 }
 
 /// This type enumerates cast from sql type errors.

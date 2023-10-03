@@ -94,6 +94,10 @@ impl ColumnData for Enum16ColumnData {
             None
         }
     }
+
+    fn get_timezone(&self) -> Option<Tz> {
+        self.inner.get_timezone()
+    }
 }
 
 impl<K: ColumnType> ColumnData for Enum16Adapter<K> {
@@ -129,6 +133,10 @@ impl<K: ColumnType> ColumnData for Enum16Adapter<K> {
 
     fn clone_instance(&self) -> BoxColumnData {
         unimplemented!()
+    }
+
+    fn get_timezone(&self) -> Option<Tz> {
+        self.column.data.get_timezone()
     }
 }
 
@@ -178,6 +186,10 @@ impl<K: ColumnType> ColumnData for NullableEnum16Adapter<K> {
 
     fn clone_instance(&self) -> BoxColumnData {
         unimplemented!()
+    }
+
+    fn get_timezone(&self) -> Option<Tz> {
+        self.column.data.get_timezone()
     }
 }
 
@@ -324,6 +336,10 @@ impl ColumnData for Enum8ColumnData {
             None
         }
     }
+
+    fn get_timezone(&self) -> Option<Tz> {
+        self.inner.get_timezone()
+    }
 }
 
 impl<K: ColumnType> ColumnData for Enum8Adapter<K> {
@@ -359,6 +375,10 @@ impl<K: ColumnType> ColumnData for Enum8Adapter<K> {
 
     fn clone_instance(&self) -> BoxColumnData {
         unimplemented!()
+    }
+
+    fn get_timezone(&self) -> Option<Tz> {
+        self.column.data.get_timezone()
     }
 }
 
@@ -409,6 +429,10 @@ impl<K: ColumnType> ColumnData for NullableEnum8Adapter<K> {
 
     fn clone_instance(&self) -> BoxColumnData {
         unimplemented!()
+    }
+
+    fn get_timezone(&self) -> Option<Tz> {
+        self.column.data.get_timezone()
     }
 }
 

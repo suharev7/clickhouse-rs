@@ -1,3 +1,4 @@
+use chrono_tz::Tz;
 use std::{
     marker::PhantomData,
     net::{Ipv4Addr, Ipv6Addr},
@@ -9,7 +10,7 @@ use crate::{
     errors::Result,
     types::{
         column::{column_data::BoxColumnData, nullable::NullableColumnData, ColumnWrapper},
-        SqlType, Value, ValueRef
+        SqlType, Value, ValueRef,
     },
 };
 
@@ -313,9 +314,18 @@ impl<V: IpVersion> ColumnData for IpColumnData<V> {
         })
     }
 
-    unsafe fn get_internal(&self, pointers: &[*mut *const u8], level: u8, _props: u32) -> Result<()> {
+    unsafe fn get_internal(
+        &self,
+        pointers: &[*mut *const u8],
+        level: u8,
+        _props: u32,
+    ) -> Result<()> {
         assert_eq!(level, 0);
         *pointers[0] = &self.inner as *const Vec<u8> as *const u8;
         Ok(())
+    }
+
+    fn get_timezone(&self) -> Option<Tz> {
+        None
     }
 }

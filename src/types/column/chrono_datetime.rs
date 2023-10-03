@@ -134,6 +134,10 @@ impl ColumnData for ChronoDateTimeColumnData {
             None
         }
     }
+
+    fn get_timezone(&self) -> Option<Tz> {
+        Some(self.tz)
+    }
 }
 
 #[inline(always)]
@@ -213,5 +217,9 @@ impl ColumnData for ChronoDateTimeAdapter {
         _props: u32,
     ) -> Result<()> {
         unimplemented!()
+    }
+
+    fn get_timezone(&self) -> Option<Tz> {
+        self.column.get_timezone()
     }
 }

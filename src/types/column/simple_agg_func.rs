@@ -2,8 +2,11 @@ use crate::{
     binary::{Encoder, ReadEx},
     errors::Result,
     types::{
-        column::{column_data::{BoxColumnData, ArcColumnData}, ArcColumnWrapper, ColumnData},
-        SqlType, Value, ValueRef, SimpleAggFunc,
+        column::{
+            column_data::{ArcColumnData, BoxColumnData},
+            ArcColumnWrapper, ColumnData,
+        },
+        SimpleAggFunc, SqlType, Value, ValueRef,
     },
 };
 
@@ -23,7 +26,8 @@ impl SimpleAggregateFunctionColumnData {
         size: usize,
         tz: Tz,
     ) -> Result<Self> {
-        let inner = <dyn ColumnData>::load_data::<ArcColumnWrapper, _>(reader, type_name, size, tz)?;
+        let inner =
+            <dyn ColumnData>::load_data::<ArcColumnWrapper, _>(reader, type_name, size, tz)?;
         Ok(SimpleAggregateFunctionColumnData { inner, func })
     }
 }
@@ -58,7 +62,12 @@ impl ColumnData for SimpleAggregateFunctionColumnData {
         })
     }
 
-    unsafe fn get_internal(&self, pointers: &[*mut *const u8], level: u8, props: u32) -> Result<()> {
+    unsafe fn get_internal(
+        &self,
+        pointers: &[*mut *const u8],
+        level: u8,
+        props: u32,
+    ) -> Result<()> {
         self.inner.get_internal(pointers, level, props)
     }
 
@@ -68,9 +77,13 @@ impl ColumnData for SimpleAggregateFunctionColumnData {
                 return Some(Arc::new(SimpleAggregateFunctionColumnData {
                     inner,
                     func: *func,
-                }))
+                }));
             }
         }
         None
+    }
+
+    fn get_timezone(&self) -> Option<Tz> {
+        self.inner.get_timezone()
     }
 }

@@ -4,7 +4,7 @@ use crate::{
     binary::{protocol, Encoder},
     client_info,
     errors::Result,
-    types::{Context, Query, Simple, Options, SettingType},
+    types::{Context, Options, Query, SettingType, Simple},
     Block,
 };
 

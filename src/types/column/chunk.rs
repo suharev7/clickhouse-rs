@@ -1,3 +1,4 @@
+use chrono_tz::Tz;
 use std::{cmp, ops};
 
 use crate::{
@@ -52,5 +53,9 @@ impl ColumnData for ChunkColumnData {
 
     fn clone_instance(&self) -> BoxColumnData {
         unimplemented!()
+    }
+
+    fn get_timezone(&self) -> Option<Tz> {
+        self.data.get_timezone()
     }
 }

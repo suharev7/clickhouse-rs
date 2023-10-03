@@ -1,4 +1,3 @@
-use std::{marker::PhantomData, sync::Arc};
 use futures_util::stream::BoxStream;
 use futures_util::{
     future,
@@ -6,10 +5,11 @@ use futures_util::{
     TryStreamExt,
 };
 use log::info;
+use std::{marker::PhantomData, sync::Arc};
 
 use crate::{
-    try_opt,
     errors::Result,
+    try_opt,
     types::{
         block::BlockRef, query_result::stream_blocks::BlockStream, Block, Cmd, Complex, Query, Row,
         Rows, Simple,

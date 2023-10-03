@@ -1,4 +1,9 @@
-use std::{io, io::Read, mem, os::raw::{c_int, c_char}};
+use std::{
+    io,
+    io::Read,
+    mem,
+    os::raw::{c_char, c_int},
+};
 
 use byteorder::{LittleEndian, WriteBytesExt};
 use clickhouse_rs_cityhash_sys::{city_hash_128, UInt128};

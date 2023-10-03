@@ -92,7 +92,12 @@ impl fmt::Debug for ServerInfo {
         write!(
             f,
             "{} {}.{}.{}.{} ({:?})",
-            self.name, self.major_version, self.minor_version, self.revision, self.patch_version, self.timezone
+            self.name,
+            self.major_version,
+            self.minor_version,
+            self.revision,
+            self.patch_version,
+            self.timezone
         )
     }
 }

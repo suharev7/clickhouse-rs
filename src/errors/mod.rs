@@ -66,10 +66,7 @@ pub enum UrlError {
     #[error("Invalid or incomplete connection URL")]
     Invalid,
 
-    #[error(
-        "Invalid value `{}' for connection URL parameter `{}'",
-        value, param
-    )]
+    #[error("Invalid value `{}' for connection URL parameter `{}'", value, param)]
     InvalidParamValue { param: String, value: String },
 
     #[error("URL parse error: {}", _0)]

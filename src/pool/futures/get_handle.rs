@@ -1,5 +1,5 @@
-use std::{future::Future, pin::Pin};
 use std::task::{Context, Poll};
+use std::{future::Future, pin::Pin};
 
 use pin_project::pin_project;
 

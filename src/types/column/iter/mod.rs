@@ -854,7 +854,11 @@ impl<'a> Iterable<'a, Simple> for Decimal {
 impl<'a> Iterable<'a, Simple> for bool {
     type Iter = slice::Iter<'a, bool>;
 
-    fn iter_with_props(column: &'a Column<Simple>, column_type: SqlType, props: u32) -> Result<Self::Iter> {
+    fn iter_with_props(
+        column: &'a Column<Simple>,
+        column_type: SqlType,
+        props: u32,
+    ) -> Result<Self::Iter> {
         if !check_type(&column_type, &SqlType::Bool) {
             return Err(Error::FromSql(FromSqlError::InvalidType {
                 src: column.sql_type().to_string(),

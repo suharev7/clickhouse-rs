@@ -3,11 +3,11 @@ use std::convert;
 
 use std::{
     borrow::Cow,
+    collections::HashMap,
     fmt,
     str::FromStr,
     sync::{Arc, Mutex},
     time::Duration,
-    collections::HashMap,
 };
 
 use crate::errors::{Error, Result, UrlError};
@@ -155,9 +155,9 @@ pub enum SettingType {
 impl fmt::Display for SettingType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self {
-            SettingType::Bool(val)   => write!(f, "{}", val),
+            SettingType::Bool(val) => write!(f, "{}", val),
             SettingType::UInt64(val) => write!(f, "{}", val),
-            SettingType::Float64(val)  => write!(f, "{}", val),
+            SettingType::Float64(val) => write!(f, "{}", val),
             SettingType::String(val) => write!(f, "{}", val),
         }
     }
@@ -360,10 +360,13 @@ impl Options {
         V: Into<SettingType>,
     {
         let value: SettingType = value.into();
-        self.settings.insert(name.into(), SettingValue {
-            value,
-            is_important,
-        });
+        self.settings.insert(
+            name.into(),
+            SettingValue {
+                value,
+                is_important,
+            },
+        );
         self
     }
 
@@ -562,11 +565,14 @@ where
             "alt_hosts" => options.alt_hosts = parse_param(key, value, parse_hosts)?,
             _ => {
                 let value = SettingType::String(value.to_string());
-                options.settings.insert(key.to_string(), SettingValue{
-                    value,
-                    is_important: true,
-                });
-            },
+                options.settings.insert(
+                    key.to_string(),
+                    SettingValue {
+                        value,
+                        is_important: true,
+                    },
+                );
+            }
         };
     }
 
@@ -766,15 +772,13 @@ mod test {
             Options {
                 addr: Url::parse("tcp://localhost:9000").unwrap(),
                 database: "foo".into(),
-                settings: HashMap::from([
-                    (
-                        "bar".into(),
-                        SettingValue {
-                            value: SettingType::String("baz".into()),
-                            is_important: true,
-                        }
-                    ),
-                ]),
+                settings: HashMap::from([(
+                    "bar".into(),
+                    SettingValue {
+                        value: SettingType::String("baz".into()),
+                        is_important: true,
+                    }
+                ),]),
                 ..Options::default()
             },
             from_url(url).unwrap(),
@@ -785,58 +789,83 @@ mod test {
     #[test]
     fn test_with_setting() {
         {
-            let opts = Options::from_str("tcp://localhost:9000").unwrap().with_setting("foo", "bar", true);
-            assert_eq!(opts.settings, HashMap::from([(
-                "foo".into(),
-                SettingValue {
-                    value: SettingType::String("bar".into()),
-                    is_important: true,
-                }
-            )]));
+            let opts = Options::from_str("tcp://localhost:9000")
+                .unwrap()
+                .with_setting("foo", "bar", true);
+            assert_eq!(
+                opts.settings,
+                HashMap::from([(
+                    "foo".into(),
+                    SettingValue {
+                        value: SettingType::String("bar".into()),
+                        is_important: true,
+                    }
+                )])
+            );
         }
 
         {
-            let opts = Options::from_str("tcp://localhost:9000").unwrap().with_setting("foo", "bar", false);
-            assert_eq!(opts.settings, HashMap::from([(
-                "foo".into(),
-                SettingValue {
-                    value: SettingType::String("bar".into()),
-                    is_important: false,
-                }
-            )]));
+            let opts = Options::from_str("tcp://localhost:9000")
+                .unwrap()
+                .with_setting("foo", "bar", false);
+            assert_eq!(
+                opts.settings,
+                HashMap::from([(
+                    "foo".into(),
+                    SettingValue {
+                        value: SettingType::String("bar".into()),
+                        is_important: false,
+                    }
+                )])
+            );
         }
 
         {
-            let opts = Options::from_str("tcp://localhost:9000").unwrap().with_setting("foo", 1, true);
-            assert_eq!(opts.settings, HashMap::from([(
-                "foo".into(),
-                SettingValue {
-                    value: SettingType::UInt64(1u64),
-                    is_important: true,
-                }
-            )]));
+            let opts = Options::from_str("tcp://localhost:9000")
+                .unwrap()
+                .with_setting("foo", 1, true);
+            assert_eq!(
+                opts.settings,
+                HashMap::from([(
+                    "foo".into(),
+                    SettingValue {
+                        value: SettingType::UInt64(1u64),
+                        is_important: true,
+                    }
+                )])
+            );
         }
 
         {
-            let opts = Options::from_str("tcp://localhost:9000").unwrap().with_setting("foo", true, true);
-            assert_eq!(opts.settings, HashMap::from([(
-                "foo".into(),
-                SettingValue {
-                    value: SettingType::Bool(true),
-                    is_important: true,
-                }
-            )]));
+            let opts = Options::from_str("tcp://localhost:9000")
+                .unwrap()
+                .with_setting("foo", true, true);
+            assert_eq!(
+                opts.settings,
+                HashMap::from([(
+                    "foo".into(),
+                    SettingValue {
+                        value: SettingType::Bool(true),
+                        is_important: true,
+                    }
+                )])
+            );
         }
 
         {
-            let opts = Options::from_str("tcp://localhost:9000").unwrap().with_setting("foo", 1., true);
-            assert_eq!(opts.settings, HashMap::from([(
-                "foo".into(),
-                SettingValue {
-                    value: SettingType::Float64(1.),
-                    is_important: true,
-                }
-            )]));
+            let opts = Options::from_str("tcp://localhost:9000")
+                .unwrap()
+                .with_setting("foo", 1., true);
+            assert_eq!(
+                opts.settings,
+                HashMap::from([(
+                    "foo".into(),
+                    SettingValue {
+                        value: SettingType::Float64(1.),
+                        is_important: true,
+                    }
+                )])
+            );
         }
     }
 

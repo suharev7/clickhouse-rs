@@ -58,6 +58,9 @@ pub enum ConnectionError {
     #[cfg(feature = "tls")]
     #[error("TLS connection error: `{}`", _0)]
     TlsError(#[source] native_tls::Error),
+
+    #[error("Connection broken")]
+    Broken,
 }
 
 /// This type enumerates connection URL errors.

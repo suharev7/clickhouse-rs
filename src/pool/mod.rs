@@ -250,7 +250,7 @@ impl Pool {
         client.pool = PoolBinding::None;
         client.set_inside(true);
 
-        if self.inner.idle.len() < min && is_attached {
+        if self.inner.idle.len() < min && is_attached && client.inner.is_some() {
             let _ = self.inner.idle.push(client);
         }
         self.inner.ongoing.fetch_sub(1, Ordering::AcqRel);

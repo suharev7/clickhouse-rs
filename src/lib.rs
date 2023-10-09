@@ -129,6 +129,7 @@ use crate::{
 pub use crate::{
     pool::Pool,
     types::{block::Block, Options},
+    errors::ConnectionError,
 };
 
 mod binary;
@@ -335,7 +336,7 @@ impl ClientHandle {
 
                 let mut h = None;
 
-                let transport = self.inner.take().unwrap().clear().await?;
+                let transport = self.get_inner()?.clear().await?;
                 let mut stream = transport.call(Cmd::Ping);
 
                 while let Some(packet) = stream.next().await {
@@ -350,8 +351,13 @@ impl ClientHandle {
                     }
                 }
 
-                self.inner = h;
-                Ok(())
+                match h {
+                    None => { Err(Error::Connection(ConnectionError::Broken)) }
+                    Some(h) => {
+                        self.inner = Some(h);
+                        Ok(())
+                    }
+                }
             },
             timeout,
         )
@@ -394,9 +400,10 @@ impl ClientHandle {
                 self.wrap_future(move |c| {
                     info!("[execute query] {}", query.get_sql());
 
-                    let transport = c.inner.take().unwrap();
+                    let transport = c.get_inner();
 
                     async move {
+                        let transport = transport?;
                         let mut h = None;
 
                         let transport = transport.clear().await?;
@@ -457,10 +464,10 @@ impl ClientHandle {
             async {
                 self.wrap_future(move |c| {
                     info!("[insert]     {}", query.get_sql());
-                    let transport = c.inner.take().unwrap();
+                    let transport = c.get_inner();
 
                     async move {
-                        let transport = transport.clear().await?;
+                        let transport = transport?.clear().await?;
                         let stream = transport.call(Cmd::SendQuery(query, context.clone()));
                         let (transport, b) = stream.read_block().await?;
                         let dst_block = b.unwrap();
@@ -502,7 +509,7 @@ impl ClientHandle {
 
     pub(crate) fn wrap_stream<'a, F>(&'a mut self, f: F) -> BoxStream<'a, Result<Block>>
     where
-        F: (FnOnce(&'a mut Self) -> BlockStream<'a>) + Send + 'static,
+        F: (FnOnce(&'a mut Self) -> Result<BlockStream<'a>>) + Send + 'static,
     {
         let ping_before_query = match self.context.options.get() {
             Ok(val) => val.ping_before_query,
@@ -512,7 +519,12 @@ impl ClientHandle {
         if ping_before_query {
             let fut: BoxFuture<'a, BoxStream<'a, Result<Block>>> = Box::pin(async move {
                 let inner: BoxStream<'a, Result<Block>> = match self.check_connection().await {
-                    Ok(_) => Box::pin(f(self)),
+                    Ok(_) => {
+                        match f(self) {
+                            Ok(s) => Box::pin(s),
+                            Err(err) => Box::pin(stream::once(future::err(err))),
+                        }
+                    },
                     Err(err) => Box::pin(stream::once(future::err(err))),
                 };
                 inner
@@ -520,7 +532,10 @@ impl ClientHandle {
 
             Box::pin(fut.flatten_stream())
         } else {
-            Box::pin(f(self))
+            match f(self) {
+                Ok(s) => Box::pin(s),
+                Err(err) => Box::pin(stream::once(future::err(err)))
+            }
         }
     }
 
@@ -551,6 +566,10 @@ impl ClientHandle {
         } else {
             unreachable!()
         }
+    }
+
+    fn get_inner(&mut self) -> Result<ClickhouseTransport> {
+        self.inner.take().ok_or_else(|| Error::Connection(ConnectionError::Broken))
     }
 }
 

@@ -90,9 +90,9 @@ impl<'a> QueryResult<'a> {
 
                 let context = c.context.clone();
 
-                let inner = c.inner.take().unwrap().call(Cmd::SendQuery(query, context));
+                let inner = c.get_inner()?.call(Cmd::SendQuery(query, context));
 
-                BlockStream::<'a>::new(c, inner, skip_first_block)
+                Ok(BlockStream::<'a>::new(c, inner, skip_first_block))
             })
     }
 

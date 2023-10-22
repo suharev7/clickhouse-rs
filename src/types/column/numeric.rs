@@ -204,11 +204,13 @@ where
             Value::UInt16(x) => ValueRef::UInt16(x),
             Value::UInt32(x) => ValueRef::UInt32(x),
             Value::UInt64(x) => ValueRef::UInt64(x),
+            Value::UInt128(x) => ValueRef::UInt128(x),
 
             Value::Int8(x) => ValueRef::Int8(x),
             Value::Int16(x) => ValueRef::Int16(x),
             Value::Int32(x) => ValueRef::Int32(x),
             Value::Int64(x) => ValueRef::Int64(x),
+            Value::Int128(x) => ValueRef::Int128(x),
 
             Value::Float32(x) => ValueRef::Float32(x),
             Value::Float64(x) => ValueRef::Float64(x),

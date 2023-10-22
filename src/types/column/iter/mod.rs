@@ -75,7 +75,10 @@ simple_num_iterable! {
     i64: Int64,
 
     f32: Float32,
-    f64: Float64
+    f64: Float64,
+
+    i128: Int128,
+    u128: UInt128
 }
 
 macro_rules! iterator {

@@ -2300,3 +2300,79 @@ async fn test_iter_map() -> Result<(), Error> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_int_128() -> Result<(), Error> {
+    let ddl = "
+        CREATE TABLE clickhouse_test_int_128 (
+            i  Int128,
+            u UInt128,
+            oi Nullable(Int128)
+        ) Engine=Memory";
+
+    let query = "SELECT i, u, oi FROM clickhouse_test_int_128";
+
+    let block = Block::new()
+        .column("i", vec![1_000_i128, 2_000_000, 3_000_000_000])
+        .column("u", vec![1_000_u128, 2_000_000, 3_000_000_000])
+        .column("oi", vec![Some(1_000_i128), None, Some(3_000_000_000)]);
+
+    let pool = Pool::new(database_url());
+
+    let mut c = pool.get_handle().await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_test_int_128").await?;
+    c.execute(ddl).await?;
+    c.insert("clickhouse_test_int_128", block).await?;
+    let block = c.query(query).fetch_all().await?;
+
+    let i: i128 = block.get(0, "i")?;
+    let u: u128 = block.get(0, "u")?;
+    let oi: Option<i128> = block.get(0, "oi")?;
+
+    assert_eq!(i, 1_000_i128);
+    assert_eq!(u, 1_000_u128);
+    assert_eq!(oi, Some(1_000_i128));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_iter_int_128() -> Result<(), Error> {
+    let ddl = "
+        CREATE TABLE clickhouse_test_iter_int_128 (
+            i  Int128,
+            u  UInt128,
+            oi Nullable(Int128),
+            ou Nullable(UInt128)
+        ) Engine=Memory";
+
+    let query = "SELECT i, u, oi, ou FROM clickhouse_test_iter_int_128";
+
+    let block = Block::new()
+        .column("i", vec![1_000_i128, 2_000_000, 3_000_000_000])
+        .column("u", vec![1_000_u128, 2_000_000, 3_000_000_000])
+        .column("oi", vec![Some(1_000_i128), None, Some(3_000_000_000)])
+        .column("ou", vec![Some(1_000_u128), None, Some(3_000_000_000)]);
+
+    let pool = Pool::new(database_url());
+
+    let mut c = pool.get_handle().await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_test_iter_int_128").await?;
+    c.execute(ddl).await?;
+    c.insert("clickhouse_test_iter_int_128", block).await?;
+    let block = c.query(query).fetch_all().await?;
+
+    let is: Vec<_> = block.get_column("i")?.iter::<i128>()?.copied().collect();
+    assert_eq!(is, vec![1_000_i128, 2_000_000, 3_000_000_000]);
+
+    let us: Vec<_> = block.get_column("u")?.iter::<u128>()?.copied().collect();
+    assert_eq!(us, vec![1_000_u128, 2_000_000, 3_000_000_000]);
+
+    let ois: Vec<_> = block.get_column("oi")?.iter::<Option<i128>>()?.collect();
+    assert_eq!(ois, vec![Some(&1_000_i128), None, Some(&3_000_000_000)]);
+
+    let ous: Vec<_> = block.get_column("ou")?.iter::<Option<u128>>()?.collect();
+    assert_eq!(ous, vec![Some(&1_000_u128), None, Some(&3_000_000_000)]);
+
+    Ok(())
+}

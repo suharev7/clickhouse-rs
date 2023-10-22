@@ -792,7 +792,7 @@ mod test {
     #[test]
     fn test_size_of() {
         use std::mem;
-        assert_eq!(64, mem::size_of::<[Value; 1]>());
+        assert_eq!(56, mem::size_of::<[Value; 1]>());
     }
 
     #[test]

@@ -90,7 +90,7 @@ impl ColumnData for FixedStringColumnData {
         _props: u32,
     ) -> Result<()> {
         assert_eq!(level, 0);
-        *pointers[0] = self.buffer.as_ptr() as *const u8;
+        *pointers[0] = self.buffer.as_ptr();
         *(pointers[1] as *mut usize) = self.len();
         Ok(())
     }

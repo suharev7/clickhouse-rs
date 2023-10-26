@@ -508,8 +508,8 @@ value_from! {
 
 #[cfg(test)]
 mod test {
-    use crate::types::column::datetime64::DEFAULT_TZ;
     use super::*;
+    use crate::types::column::datetime64::DEFAULT_TZ;
 
     #[test]
     fn test_display() {

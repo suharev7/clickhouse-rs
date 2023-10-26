@@ -2320,7 +2320,8 @@ async fn test_int_128() -> Result<(), Error> {
     let pool = Pool::new(database_url());
 
     let mut c = pool.get_handle().await?;
-    c.execute("DROP TABLE IF EXISTS clickhouse_test_int_128").await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_test_int_128")
+        .await?;
     c.execute(ddl).await?;
     c.insert("clickhouse_test_int_128", block).await?;
     let block = c.query(query).fetch_all().await?;
@@ -2357,7 +2358,8 @@ async fn test_iter_int_128() -> Result<(), Error> {
     let pool = Pool::new(database_url());
 
     let mut c = pool.get_handle().await?;
-    c.execute("DROP TABLE IF EXISTS clickhouse_test_iter_int_128").await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_test_iter_int_128")
+        .await?;
     c.execute(ddl).await?;
     c.insert("clickhouse_test_iter_int_128", block).await?;
     let block = c.query(query).fetch_all().await?;

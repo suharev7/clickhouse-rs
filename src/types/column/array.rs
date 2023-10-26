@@ -139,10 +139,7 @@ mod test {
     use std::io::Cursor;
 
     use super::*;
-    use crate::{
-        types::{column::datetime64::DEFAULT_TZ, Simple, Block},
-        Block,
-    };
+    use crate::types::{column::datetime64::DEFAULT_TZ, Block, Simple};
 
     #[test]
     fn test_write_and_read() {

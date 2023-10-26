@@ -50,7 +50,6 @@ impl Marshal for u128 {
         scratch[6] = (self >> 48) as u8;
         scratch[7] = (self >> 56) as u8;
 
-
         scratch[8] = (self >> 64) as u8;
         scratch[9] = (self >> 72) as u8;
         scratch[10] = (self >> 80) as u8;
@@ -110,7 +109,6 @@ impl Marshal for i128 {
         scratch[5] = (self >> 40) as u8;
         scratch[6] = (self >> 48) as u8;
         scratch[7] = (self >> 56) as u8;
-
 
         scratch[8] = (self >> 64) as u8;
         scratch[9] = (self >> 72) as u8;

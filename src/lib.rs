@@ -127,9 +127,9 @@ use crate::{
     },
 };
 pub use crate::{
+    errors::ConnectionError,
     pool::Pool,
     types::{block::Block, Options},
-    errors::ConnectionError,
 };
 
 mod binary;
@@ -352,7 +352,7 @@ impl ClientHandle {
                 }
 
                 match h {
-                    None => { Err(Error::Connection(ConnectionError::Broken)) }
+                    None => Err(Error::Connection(ConnectionError::Broken)),
                     Some(h) => {
                         self.inner = Some(h);
                         Ok(())
@@ -519,11 +519,9 @@ impl ClientHandle {
         if ping_before_query {
             let fut: BoxFuture<'a, BoxStream<'a, Result<Block>>> = Box::pin(async move {
                 let inner: BoxStream<'a, Result<Block>> = match self.check_connection().await {
-                    Ok(_) => {
-                        match f(self) {
-                            Ok(s) => Box::pin(s),
-                            Err(err) => Box::pin(stream::once(future::err(err))),
-                        }
+                    Ok(_) => match f(self) {
+                        Ok(s) => Box::pin(s),
+                        Err(err) => Box::pin(stream::once(future::err(err))),
                     },
                     Err(err) => Box::pin(stream::once(future::err(err))),
                 };
@@ -534,7 +532,7 @@ impl ClientHandle {
         } else {
             match f(self) {
                 Ok(s) => Box::pin(s),
-                Err(err) => Box::pin(stream::once(future::err(err)))
+                Err(err) => Box::pin(stream::once(future::err(err))),
             }
         }
     }
@@ -569,7 +567,9 @@ impl ClientHandle {
     }
 
     fn get_inner(&mut self) -> Result<ClickhouseTransport> {
-        self.inner.take().ok_or_else(|| Error::Connection(ConnectionError::Broken))
+        self.inner
+            .take()
+            .ok_or_else(|| Error::Connection(ConnectionError::Broken))
     }
 }
 

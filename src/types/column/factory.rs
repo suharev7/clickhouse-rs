@@ -1,4 +1,5 @@
 use chrono_tz::Tz;
+use ethnum::{i256, u256};
 
 use combine::{
     any, choice,
@@ -67,11 +68,13 @@ impl dyn ColumnData {
             "UInt32" => W::wrap(VectorColumnData::<u32>::load(reader, size)?),
             "UInt64" => W::wrap(VectorColumnData::<u64>::load(reader, size)?),
             "UInt128" => W::wrap(VectorColumnData::<u128>::load(reader, size)?),
+            "UInt256" => W::wrap(VectorColumnData::<u256>::load(reader, size)?),
             "Int8" | "TinyInt" => W::wrap(VectorColumnData::<i8>::load(reader, size)?),
             "Int16" | "SmallInt" => W::wrap(VectorColumnData::<i16>::load(reader, size)?),
             "Int32" | "Int" | "Integer" => W::wrap(VectorColumnData::<i32>::load(reader, size)?),
             "Int64" | "BigInt" => W::wrap(VectorColumnData::<i64>::load(reader, size)?),
             "Int128" => W::wrap(VectorColumnData::<i128>::load(reader, size)?),
+            "Int256" => W::wrap(VectorColumnData::<i256>::load(reader, size)?),
             "Float32" | "Float" => W::wrap(VectorColumnData::<f32>::load(reader, size)?),
             "Float64" | "Double" => W::wrap(VectorColumnData::<f64>::load(reader, size)?),
             "String" | "Char" | "Varchar" | "Text" | "TinyText" | "MediumText" | "LongText" | "Blob" | "TinyBlob" | "MediumBlob" | "LongBlob" => W::wrap(StringColumnData::load(reader, size)?),
@@ -124,11 +127,13 @@ impl dyn ColumnData {
             SqlType::UInt32 => W::wrap(VectorColumnData::<u32>::with_capacity(capacity)),
             SqlType::UInt64 => W::wrap(VectorColumnData::<u64>::with_capacity(capacity)),
             SqlType::UInt128 => W::wrap(VectorColumnData::<u128>::with_capacity(capacity)),
+            SqlType::UInt256 => W::wrap(VectorColumnData::<u256>::with_capacity(capacity)),
             SqlType::Int8 => W::wrap(VectorColumnData::<i8>::with_capacity(capacity)),
             SqlType::Int16 => W::wrap(VectorColumnData::<i16>::with_capacity(capacity)),
             SqlType::Int32 => W::wrap(VectorColumnData::<i32>::with_capacity(capacity)),
             SqlType::Int64 => W::wrap(VectorColumnData::<i64>::with_capacity(capacity)),
             SqlType::Int128 => W::wrap(VectorColumnData::<i128>::with_capacity(capacity)),
+            SqlType::Int256 => W::wrap(VectorColumnData::<i256>::with_capacity(capacity)),
             SqlType::String => W::wrap(StringColumnData::with_capacity(capacity)),
             SqlType::FixedString(len) => {
                 W::wrap(FixedStringColumnData::with_capacity(capacity, len))

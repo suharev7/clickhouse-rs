@@ -1,3 +1,5 @@
+use ethnum::{i256, u256};
+
 pub trait Unmarshal<T: Copy> {
     fn unmarshal(scratch: &[u8]) -> T;
 }
@@ -57,6 +59,15 @@ impl Unmarshal<u128> for u128 {
     }
 }
 
+impl Unmarshal<u256> for u256 {
+    fn unmarshal(scratch: &[u8]) -> Self {
+        Self::from_words(
+            u128::unmarshal(&scratch[16..]),
+            u128::unmarshal(&scratch[0..]),
+        )
+    }
+}
+
 impl Unmarshal<i8> for i8 {
     fn unmarshal(scratch: &[u8]) -> Self {
         scratch[0] as Self
@@ -109,6 +120,15 @@ impl Unmarshal<i128> for i128 {
             | Self::from(scratch[13]) << 104
             | Self::from(scratch[14]) << 112
             | Self::from(scratch[15]) << 120
+    }
+}
+
+impl Unmarshal<i256> for i256 {
+    fn unmarshal(scratch: &[u8]) -> Self {
+        Self::from_words(
+            i128::unmarshal(&scratch[16..]),
+            i128::unmarshal(&scratch[0..]),
+        )
     }
 }
 

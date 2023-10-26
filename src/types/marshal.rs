@@ -1,3 +1,5 @@
+use ethnum::{i256, u256};
+
 pub trait Marshal {
     fn marshal(&self, scratch: &mut [u8]);
 }
@@ -62,6 +64,13 @@ impl Marshal for u128 {
     }
 }
 
+impl Marshal for u256 {
+    fn marshal(&self, scratch: &mut [u8]) {
+        self.low().marshal(&mut scratch[0..]);
+        self.high().marshal(&mut scratch[16..]);
+    }
+}
+
 impl Marshal for i8 {
     fn marshal(&self, scratch: &mut [u8]) {
         scratch[0] = *self as u8;
@@ -122,6 +131,13 @@ impl Marshal for i128 {
     }
 }
 
+impl Marshal for i256 {
+    fn marshal(&self, scratch: &mut [u8]) {
+        self.low().marshal(&mut scratch[0..]);
+        self.high().marshal(&mut scratch[16..]);
+    }
+}
+
 impl Marshal for f32 {
     fn marshal(&self, scratch: &mut [u8]) {
         let bits = self.to_bits();
@@ -157,6 +173,7 @@ mod test {
     use std::fmt;
 
     use crate::types::{Marshal, StatBuffer, Unmarshal};
+    use ethnum::{i256, u256};
     use rand::distributions::{Distribution, Standard};
     use rand::random;
 
@@ -202,6 +219,21 @@ mod test {
     }
 
     #[test]
+    fn test_u256() {
+        for _ in 0..100 {
+            let mut buffer = u256::buffer();
+            let v1 = random::<u128>();
+            let v2 = random::<u128>();
+            let v = u256::from_words(v1, v2);
+
+            v.marshal(buffer.as_mut());
+            let u = u256::unmarshal(buffer.as_ref());
+
+            assert_eq!(v, u);
+        }
+    }
+
+    #[test]
     fn test_i8() {
         test_some::<i8>()
     }
@@ -224,6 +256,21 @@ mod test {
     #[test]
     fn test_i128() {
         test_some::<i128>()
+    }
+
+    #[test]
+    fn test_i256() {
+        for _ in 0..100 {
+            let mut buffer = i256::buffer();
+            let v1 = random::<i128>();
+            let v2 = random::<i128>();
+            let v = i256::from_words(v1, v2);
+
+            v.marshal(buffer.as_mut());
+            let u = i256::unmarshal(buffer.as_ref());
+
+            assert_eq!(v, u);
+        }
     }
 
     #[test]

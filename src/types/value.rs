@@ -11,6 +11,7 @@ use std::{
 use chrono::{prelude::*, Duration};
 use chrono_tz::Tz;
 use either::Either;
+use ethnum::{i256, u256};
 use uuid::Uuid;
 
 use crate::types::{
@@ -31,11 +32,13 @@ pub enum Value {
     UInt32(u32),
     UInt64(u64),
     UInt128(u128),
+    UInt256(u256),
     Int8(i8),
     Int16(i16),
     Int32(i32),
     Int64(i64),
     Int128(i128),
+    Int256(i256),
     String(Arc<Vec<u8>>),
     Float32(f32),
     Float64(f64),
@@ -67,11 +70,13 @@ impl Hash for Value {
             Self::Int32(i) => i.hash(state),
             Self::Int64(i) => i.hash(state),
             Self::Int128(i) => i.hash(state),
+            Self::Int256(i) => i.hash(state),
             Self::UInt8(i) => i.hash(state),
             Self::UInt16(i) => i.hash(state),
             Self::UInt32(i) => i.hash(state),
             Self::UInt64(i) => i.hash(state),
             Self::UInt128(i) => i.hash(state),
+            Self::UInt256(i) => i.hash(state),
             _ => unimplemented!(),
         }
     }
@@ -88,11 +93,13 @@ impl PartialEq for Value {
             (Value::UInt32(a), Value::UInt32(b)) => *a == *b,
             (Value::UInt64(a), Value::UInt64(b)) => *a == *b,
             (Value::UInt128(a), Value::UInt128(b)) => *a == *b,
+            (Value::UInt256(a), Value::UInt256(b)) => a.into_words() == b.into_words(),
             (Value::Int8(a), Value::Int8(b)) => *a == *b,
             (Value::Int16(a), Value::Int16(b)) => *a == *b,
             (Value::Int32(a), Value::Int32(b)) => *a == *b,
             (Value::Int64(a), Value::Int64(b)) => *a == *b,
             (Value::Int128(a), Value::Int128(b)) => *a == *b,
+            (Value::Int256(a), Value::Int256(b)) => a.into_words() == b.into_words(),
             (Value::String(a), Value::String(b)) => *a == *b,
             (Value::Float32(a), Value::Float32(b)) => *a == *b,
             (Value::Float64(a), Value::Float64(b)) => *a == *b,
@@ -154,11 +161,13 @@ impl Value {
             SqlType::UInt32 => Value::UInt32(0),
             SqlType::UInt64 => Value::UInt64(0),
             SqlType::UInt128 => Value::UInt128(0),
+            SqlType::UInt256 => Value::UInt256(u256::new(0)),
             SqlType::Int8 => Value::Int8(0),
             SqlType::Int16 => Value::Int16(0),
             SqlType::Int32 => Value::Int32(0),
             SqlType::Int64 => Value::Int64(0),
             SqlType::Int128 => Value::Int128(0),
+            SqlType::Int256 => Value::Int256(i256::new(0)),
             SqlType::String => Value::String(Arc::new(Vec::default())),
             SqlType::FixedString(str_len) => Value::String(Arc::new(vec![0_u8; str_len])),
             SqlType::Float32 => Value::Float32(0.0),
@@ -196,11 +205,13 @@ impl fmt::Display for Value {
             Value::UInt32(ref v) => fmt::Display::fmt(v, f),
             Value::UInt64(ref v) => fmt::Display::fmt(v, f),
             Value::UInt128(ref v) => fmt::Display::fmt(v, f),
+            Value::UInt256(ref v) => fmt::Display::fmt(v, f),
             Value::Int8(ref v) => fmt::Display::fmt(v, f),
             Value::Int16(ref v) => fmt::Display::fmt(v, f),
             Value::Int32(ref v) => fmt::Display::fmt(v, f),
             Value::Int64(ref v) => fmt::Display::fmt(v, f),
             Value::Int128(ref v) => fmt::Display::fmt(v, f),
+            Value::Int256(ref v) => fmt::Display::fmt(v, f),
             Value::String(ref v) => match str::from_utf8(v) {
                 Ok(s) => fmt::Display::fmt(s, f),
                 Err(_) => write!(f, "{v:?}"),
@@ -281,11 +292,13 @@ impl From<Value> for SqlType {
             Value::UInt32(_) => SqlType::UInt32,
             Value::UInt64(_) => SqlType::UInt64,
             Value::UInt128(_) => SqlType::UInt128,
+            Value::UInt256(_) => SqlType::UInt256,
             Value::Int8(_) => SqlType::Int8,
             Value::Int16(_) => SqlType::Int16,
             Value::Int32(_) => SqlType::Int32,
             Value::Int64(_) => SqlType::Int64,
             Value::Int128(_) => SqlType::Int128,
+            Value::Int256(_) => SqlType::Int256,
             Value::String(_) => SqlType::String,
             Value::Float32(_) => SqlType::Float32,
             Value::Float64(_) => SqlType::Float64,
@@ -450,12 +463,14 @@ value_from! {
     u32: UInt32,
     u64: UInt64,
     u128: UInt128,
+    u256: UInt256,
 
     i8: Int8,
     i16: Int16,
     i32: Int32,
     i64: Int64,
     i128: Int128,
+    i256: Int256,
 
     f32: Float32,
     f64: Float64,
@@ -471,12 +486,14 @@ value_array_from! {
     u32: UInt32,
     u64: UInt64,
     u128: UInt128,
+    u256: UInt256,
 
     i8: Int8,
     i16: Int16,
     i32: Int32,
     i64: Int64,
     i128: Int128,
+    i256: Int256,
 
     f32: Float32,
     f64: Float64
@@ -567,11 +584,13 @@ from_value! {
     u32: UInt32,
     u64: UInt64,
     u128: UInt128,
+    u256: UInt256,
     i8: Int8,
     i16: Int16,
     i32: Int32,
     i64: Int64,
     i128: Int128,
+    i256: Int256,
     f32: Float32,
     f64: Float64,
     [u8; 4]: Ipv4
@@ -736,12 +755,20 @@ mod test {
         assert_eq!("42".to_string(), format!("{}", Value::UInt32(42)));
         assert_eq!("42".to_string(), format!("{}", Value::UInt64(42)));
         assert_eq!("42".to_string(), format!("{}", Value::UInt128(42)));
+        assert_eq!(
+            "42".to_string(),
+            format!("{}", Value::UInt256(u256::new(42)))
+        );
 
         assert_eq!("42".to_string(), format!("{}", Value::Int8(42)));
         assert_eq!("42".to_string(), format!("{}", Value::Int16(42)));
         assert_eq!("42".to_string(), format!("{}", Value::Int32(42)));
         assert_eq!("42".to_string(), format!("{}", Value::Int64(42)));
         assert_eq!("42".to_string(), format!("{}", Value::Int128(42)));
+        assert_eq!(
+            "42".to_string(),
+            format!("{}", Value::Int256(i256::new(42)))
+        );
 
         assert_eq!(
             "text".to_string(),

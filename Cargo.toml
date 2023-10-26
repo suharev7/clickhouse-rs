@@ -36,6 +36,7 @@ combine = "^4.6"
 percent-encoding = "^2.3"
 either = "^1.6"
 cfg-if = "1.0.0"
+ethnum = "^1.5.0"
 
 [dependencies.futures-util]
 version = "^0.3"

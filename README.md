@@ -22,7 +22,7 @@ clickhouse-rs = "*"
 * Decimal(P, S)
 * Float32, Float64
 * String, FixedString(N)
-* UInt8, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int32, Int64, Int128
+* UInt8, UInt16, UInt32, UInt64, UInt128, UInt256, Int8, Int16, Int32, Int64, Int128, UInt256
 * Nullable(T)
 * Array(UInt/Int/Float/String/Date/DateTime)
 * SimpleAggregateFunction(F, T)

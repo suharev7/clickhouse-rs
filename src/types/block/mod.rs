@@ -10,6 +10,7 @@ use std::{
 use byteorder::{LittleEndian, WriteBytesExt};
 use chrono_tz::Tz;
 use clickhouse_rs_cityhash_sys::city_hash_128;
+use ethnum::{i256, u256};
 use lz4::liblz4::{LZ4_compressBound, LZ4_compress_default};
 
 use crate::{
@@ -64,12 +65,14 @@ sliceable! {
     u32: UInt32,
     u64: UInt64,
     u128: UInt128,
+    u256: UInt256,
 
     i8: Int8,
     i16: Int16,
     i32: Int32,
     i64: Int64,
-    i128: Int128
+    i128: Int128,
+    i256: Int256
 }
 
 /// Represents Clickhouse Block

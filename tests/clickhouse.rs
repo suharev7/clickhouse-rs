@@ -14,6 +14,7 @@ use clickhouse_rs::{
     types::{Complex, Decimal, Enum16, Enum8, FromSql, SqlType, Value},
     Block, Options, Pool,
 };
+use ethnum::{i256, u256};
 use futures_util::{
     future,
     stream::{StreamExt, TryStreamExt},
@@ -2404,5 +2405,183 @@ async fn test_insert_big_block() -> Result<(), Error> {
         .await?;
 
     assert_eq!(format!("{:?}", expected.as_ref()), format!("{:?}", &actual));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_int_256() -> Result<(), Error> {
+    let ddl = "
+        CREATE TABLE clickhouse_test_int_256 (
+            i  Int256,
+            u UInt256,
+            oi Nullable(Int256)
+        ) Engine=Memory";
+
+    let query = "SELECT i, u, oi FROM clickhouse_test_int_256";
+
+    let block = Block::new()
+        .column(
+            "i",
+            vec![
+                i256::from_str_prefixed("-340282366920938463463374607431768211455000000").unwrap(),
+                2_000_000i64.into(),
+                3_000_000_000i64.into(),
+            ],
+        )
+        .column(
+            "u",
+            vec![
+                u256::from_str_prefixed("340282366920938463463374607431768211455000000").unwrap(),
+                2_000_000u64.into(),
+                3_000_000_000u64.into(),
+            ],
+        )
+        .column(
+            "oi",
+            vec![
+                Some(
+                    i256::from_str_prefixed("-340282366920938463463374607431768211455000000")
+                        .unwrap(),
+                ),
+                None,
+                Some(3_000_000_000i64.into()),
+            ],
+        );
+
+    let pool = Pool::new(database_url());
+
+    let mut c = pool.get_handle().await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_test_int_256")
+        .await?;
+    c.execute(ddl).await?;
+    c.insert("clickhouse_test_int_256", block).await?;
+    let block = c.query(query).fetch_all().await?;
+
+    let i: i256 = block.get(0, "i")?;
+    let u: u256 = block.get(0, "u")?;
+    let oi: Option<i256> = block.get(0, "oi")?;
+
+    assert_eq!(
+        i,
+        i256::from_str_prefixed("-340282366920938463463374607431768211455000000").unwrap()
+    );
+    assert_eq!(
+        u,
+        u256::from_str_prefixed("340282366920938463463374607431768211455000000").unwrap()
+    );
+    assert_eq!(
+        oi,
+        Some(i256::from_str_prefixed("-340282366920938463463374607431768211455000000").unwrap())
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_iter_int_256() -> Result<(), Error> {
+    let ddl = "
+        CREATE TABLE clickhouse_test_iter_int_256 (
+            i  Int256,
+            u  UInt256,
+            oi Nullable(Int256),
+            ou Nullable(UInt256)
+        ) Engine=Memory";
+
+    let query = "SELECT i, u, oi, ou FROM clickhouse_test_iter_int_256";
+
+    let block = Block::new()
+        .column(
+            "i",
+            vec![
+                i256::from_str_prefixed("-340282366920938463463374607431768211455000000").unwrap(),
+                2_000_000i64.into(),
+                3_000_000_000i64.into(),
+            ],
+        )
+        .column(
+            "u",
+            vec![
+                u256::from_str_prefixed("340282366920938463463374607431768211455000000").unwrap(),
+                2_000_000u64.into(),
+                3_000_000_000u64.into(),
+            ],
+        )
+        .column(
+            "oi",
+            vec![
+                Some(
+                    i256::from_str_prefixed("-340282366920938463463374607431768211455000000")
+                        .unwrap(),
+                ),
+                None,
+                Some(3_000_000_000i64.into()),
+            ],
+        )
+        .column(
+            "ou",
+            vec![
+                Some(
+                    u256::from_str_prefixed("340282366920938463463374607431768211455000000")
+                        .unwrap(),
+                ),
+                None,
+                Some(3_000_000_000u64.into()),
+            ],
+        );
+
+    let pool = Pool::new(database_url());
+
+    let mut c = pool.get_handle().await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_test_iter_int_256")
+        .await?;
+    c.execute(ddl).await?;
+    c.insert("clickhouse_test_iter_int_256", block).await?;
+    let block = c.query(query).fetch_all().await?;
+
+    let is: Vec<_> = block.get_column("i")?.iter::<i256>()?.copied().collect();
+    assert_eq!(
+        is,
+        vec![
+            i256::from_str_prefixed("-340282366920938463463374607431768211455000000").unwrap(),
+            2_000_000i64.into(),
+            3_000_000_000i64.into()
+        ]
+    );
+
+    let us: Vec<_> = block.get_column("u")?.iter::<u256>()?.copied().collect();
+    assert_eq!(
+        us,
+        vec![
+            u256::from_str_prefixed("340282366920938463463374607431768211455000000").unwrap(),
+            2_000_000u64.into(),
+            3_000_000_000u64.into()
+        ]
+    );
+
+    let ois: Vec<_> = block.get_column("oi")?.iter::<Option<i256>>()?.collect();
+    assert_eq!(
+        ois,
+        vec![
+            Some(
+                &i256::from_str_prefixed("-340282366920938463463374607431768211455000000").unwrap()
+            ),
+            None,
+            Some(&3_000_000_000i64.into())
+        ]
+    );
+
+    let ous: Vec<_> = block.get_column("ou")?.iter::<Option<u256>>()?.collect();
+    assert_eq!(
+        ous,
+        vec![
+            Some(
+                &u256::from_str_prefixed("340282366920938463463374607431768211455000000").unwrap()
+            ),
+            None,
+            Some(&3_000_000_000u64.into())
+        ]
+    );
+
     Ok(())
 }

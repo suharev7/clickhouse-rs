@@ -140,7 +140,7 @@ mod test {
 
     use super::*;
     use crate::{
-        types::{column::datetime64::DEFAULT_TZ, Simple},
+        types::{column::datetime64::DEFAULT_TZ, Simple, Block},
         Block,
     };
 

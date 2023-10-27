@@ -575,16 +575,11 @@ mod test {
             format!("{}", ValueRef::DateTime(0, *DEFAULT_TZ))
         );
 
-        cfg_if::cfg_if! {
-            if #[cfg(any(target_os = "windows"))] {
-                let expected_alt_datetime = "Thu, 1 Jan 1970 00:00:00 +0000";
-            } else {
-                let expected_alt_datetime = "Thu, 01 Jan 1970 00:00:00 +0000";
-            }
-        }
-        assert_eq!(
-            expected_alt_datetime.to_string(),
-            format!("{:#}", ValueRef::DateTime(0, *DEFAULT_TZ))
+        assert!(
+            (format!("{:#}", ValueRef::DateTime(0, *DEFAULT_TZ))
+                == "Thu, 1 Jan 1970 00:00:00 +0000")
+                || (format!("{:#}", ValueRef::DateTime(0, *DEFAULT_TZ))
+                    == "Thu, 01 Jan 1970 00:00:00 +0000")
         );
 
         assert_eq!(

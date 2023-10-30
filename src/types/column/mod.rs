@@ -147,7 +147,7 @@ impl<K: ColumnType> Column<K> {
     /// # use futures_util::stream::StreamExt;
     /// # let mut rt = tokio::runtime::Runtime::new().unwrap();
     /// # let ret: Result<()> = rt.block_on(async {
-    /// #     let database_url = "tcp://localhost:9000";
+    /// #     let database_url = env::var("DATABASE_URL").unwrap_or("tcp://localhost:9000".into());
     /// #     let pool = Pool::new(database_url);
     /// #     let mut client = pool.get_handle().await?;
     ///       let mut stream = client

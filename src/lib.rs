@@ -122,14 +122,15 @@ use crate::{
     pool::PoolBinding,
     retry_guard::retry_guard,
     types::{
-        query_result::stream_blocks::BlockStream, Cmd, Context, IntoOptions, OptionsSource, Packet,
-        Query, QueryResult, SqlType,
+        block::{ChunkIterator, INSERT_BLOCK_SIZE},
+        query_result::stream_blocks::BlockStream,
+        Cmd, Context, IntoOptions, OptionsSource, Packet, Query, QueryResult, SqlType,
     },
 };
 pub use crate::{
     errors::ConnectionError,
     pool::Pool,
-    types::{block::Block, Options},
+    types::{block::Block, Options, Simple},
 };
 
 mod binary;
@@ -437,26 +438,16 @@ impl ClientHandle {
         Query: From<Q>,
         B: AsRef<Block>,
     {
-        let transport = self.insert_(table, block.as_ref()).await?;
+        let query = Self::make_query(table, block.as_ref())?;
+        let transport = self.insert_(query.clone(), block.as_ref()).await?;
         self.inner = Some(transport);
         Ok(())
     }
 
-    async fn insert_<Q>(&mut self, table: Q, block: &Block) -> Result<ClickhouseTransport>
-    where
-        Query: From<Q>,
-    {
+    async fn insert_(&mut self, query: Query, block: &Block) -> Result<ClickhouseTransport> {
         let timeout = try_opt!(self.context.options.get())
             .insert_timeout
             .unwrap_or_else(|| Duration::from_secs(0));
-        let mut names: Vec<_> = Vec::with_capacity(block.column_count());
-        for column in block.columns() {
-            names.push(try_opt!(column_name_to_string(column.name())));
-        }
-        let fields = names.join(", ");
-
-        let query =
-            Query::from(table).map_sql(|table| format!("INSERT INTO {table} ({fields}) VALUES"));
 
         let context = self.context.clone();
 
@@ -468,22 +459,15 @@ impl ClientHandle {
 
                     async move {
                         let transport = transport?.clear().await?;
-                        let stream = transport.call(Cmd::SendQuery(query, context.clone()));
-                        let (transport, b) = stream.read_block().await?;
-                        let dst_block = b.unwrap();
-
-                        let casted_block = match block.cast_to(&dst_block) {
-                            Ok(value) => value,
-                            Err(err) => return Err(err),
-                        };
-
-                        let send_cmd = Cmd::Union(
-                            Box::new(Cmd::SendData(casted_block, context.clone())),
-                            Box::new(Cmd::SendData(Block::default(), context.clone())),
-                        );
-
-                        let (transport, _) = transport.call(send_cmd).read_block().await?;
-                        Ok(transport)
+                        let (transport, dst_block) =
+                            Self::send_insert_query_(transport, context.clone(), query.clone())
+                                .await?;
+                        let casted_block = block.cast_to(&dst_block)?;
+                        let mut chunks = casted_block.chunks(INSERT_BLOCK_SIZE);
+                        let transport =
+                            Self::insert_block_(transport, context.clone(), chunks.next().unwrap())
+                                .await?;
+                        Self::insert_tail_(transport, context, query, chunks).await
                     }
                 })
                 .await
@@ -491,6 +475,56 @@ impl ClientHandle {
             timeout,
         )
         .await
+    }
+
+    async fn insert_tail_(
+        mut transport: ClickhouseTransport,
+        context: Context,
+        query: Query,
+        chunks: ChunkIterator<Simple>,
+    ) -> Result<ClickhouseTransport> {
+        for chunk in chunks {
+            let (transport_, _) =
+                Self::send_insert_query_(transport, context.clone(), query.clone()).await?;
+            transport = Self::insert_block_(transport_, context.clone(), chunk).await?;
+        }
+        Ok(transport)
+    }
+
+    async fn send_insert_query_(
+        transport: ClickhouseTransport,
+        context: Context,
+        query: Query,
+    ) -> Result<(ClickhouseTransport, Block)> {
+        let stream = transport.call(Cmd::SendQuery(query, context));
+        let (transport, b) = stream.read_block().await?;
+        let dst_block = b.unwrap();
+        Ok((transport, dst_block))
+    }
+
+    async fn insert_block_(
+        transport: ClickhouseTransport,
+        context: Context,
+        block: Block,
+    ) -> Result<ClickhouseTransport> {
+        let send_cmd = Cmd::Union(
+            Box::new(Cmd::SendData(block, context.clone())),
+            Box::new(Cmd::SendData(Block::default(), context)),
+        );
+        let (transport, _) = transport.call(send_cmd).read_block().await?;
+        Ok(transport)
+    }
+
+    fn make_query<Q>(table: Q, block: &Block) -> Result<Query>
+    where
+        Query: From<Q>,
+    {
+        let mut names: Vec<_> = Vec::with_capacity(block.as_ref().column_count());
+        for column in block.as_ref().columns() {
+            names.push(try_opt!(column_name_to_string(column.name())));
+        }
+        let fields = names.join(", ");
+        Ok(Query::from(table).map_sql(|table| format!("INSERT INTO {table} ({fields}) VALUES")))
     }
 
     pub(crate) async fn wrap_future<T, R, F>(&mut self, f: F) -> Result<T>

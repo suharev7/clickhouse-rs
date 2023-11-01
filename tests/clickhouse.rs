@@ -2378,3 +2378,31 @@ async fn test_iter_int_128() -> Result<(), Error> {
 
     Ok(())
 }
+
+#[cfg(feature = "tokio_io")]
+#[tokio::test]
+async fn test_insert_big_block() -> Result<(), Error> {
+    let ddl = r"
+               CREATE TABLE clickhouse_test_insert_big_block (
+               int8  Int8
+               ) Engine=Memory";
+    let big_block_size = 1024*1024 + 1;
+
+    let block = Block::new()
+        .column("int8", vec![-1_i8; big_block_size]);
+
+    let expected = block.clone();
+    let pool = Pool::new(database_url());
+    let mut c = pool.get_handle().await?;
+    c.execute("DROP TABLE IF EXISTS clickhouse_test_insert_big_block")
+        .await?;
+    c.execute(ddl).await?;
+    c.insert("clickhouse_test_insert_big_block", block).await?;
+    let actual = c
+        .query("SELECT * FROM clickhouse_test_insert_big_block")
+        .fetch_all()
+        .await?;
+
+    assert_eq!(format!("{:?}", expected.as_ref()), format!("{:?}", &actual));
+    Ok(())
+}

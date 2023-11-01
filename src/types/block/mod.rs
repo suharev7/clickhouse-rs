@@ -21,13 +21,12 @@ use crate::{
     },
 };
 
-use self::chunk_iterator::ChunkIterator;
-pub(crate) use self::row::BlockRef;
 pub use self::{
     block_info::BlockInfo,
     builder::{RCons, RNil, RowBuilder},
     row::{Row, Rows},
 };
+pub(crate) use self::{chunk_iterator::ChunkIterator, row::BlockRef};
 
 mod block_info;
 mod builder;
@@ -35,7 +34,7 @@ mod chunk_iterator;
 mod compressed;
 mod row;
 
-const INSERT_BLOCK_SIZE: usize = 1_048_576;
+pub(crate) const INSERT_BLOCK_SIZE: usize = 1_048_576;
 
 const DEFAULT_CAPACITY: usize = 100;
 
@@ -372,12 +371,10 @@ impl<K: ColumnType> Block<K> {
     pub(crate) fn send_data(&self, encoder: &mut Encoder, compress: bool) {
         encoder.uvarint(protocol::CLIENT_DATA);
         encoder.string(""); // temporary table
-        for chunk in self.chunks(INSERT_BLOCK_SIZE) {
-            chunk.write(encoder, compress);
-        }
+        self.write(encoder, compress);
     }
 
-    pub(crate) fn chunks(&self, n: usize) -> ChunkIterator<K> {
+    pub(crate) fn chunks(self, n: usize) -> ChunkIterator<K> {
         ChunkIterator::new(n, self)
     }
 }
@@ -571,7 +568,7 @@ mod test {
     #[test]
     fn test_chunks_of_empty_block() {
         let block = Block::default();
-        assert_eq!(1, block.chunks(100_500).count());
+        assert_eq!(1, block.clone().chunks(100_500).count());
         assert_eq!(Some(block.clone()), block.chunks(100_500).next());
     }
 

@@ -7,7 +7,7 @@ use std::{
 };
 
 use futures_util::future::BoxFuture;
-use log::error;
+use log::{error, warn};
 
 use crate::{
     errors::Result,
@@ -147,6 +147,15 @@ impl Pool {
                 hosts.extend(opt.alt_hosts.iter().cloned());
             }
             Err(err) => error!("{}", err),
+        }
+
+        for host in &hosts {
+            if host.port() == Some(8124) {
+                warn!(
+                    "The attempt to establish a connection through the text protocol. clickhouse-rs is for using the binary protocol."
+                );
+                break;
+            }
         }
 
         let inner = Arc::new(Inner {

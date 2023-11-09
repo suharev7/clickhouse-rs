@@ -1,17 +1,18 @@
 use chrono::{prelude::*, Duration};
 use chrono_tz::Tz;
 use either::Either;
-use std::collections::HashMap;
-use std::hash::Hash;
-use std::net::{Ipv4Addr, Ipv6Addr};
+use std::{
+    collections::HashMap,
+    hash::Hash,
+    net::{Ipv4Addr, Ipv6Addr},
+};
 
-use crate::types::{Enum16, Enum8};
 use crate::{
     errors::{Error, FromSqlError, Result},
     types::{
         column::datetime64::to_datetime,
         value::{decode_ipv4, decode_ipv6},
-        Decimal, SqlType, ValueRef,
+        Decimal, Enum16, Enum8, SqlType, ValueRef,
     },
 };
 

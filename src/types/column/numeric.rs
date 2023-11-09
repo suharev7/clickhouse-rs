@@ -1,3 +1,4 @@
+use chrono_tz::Tz;
 use std::{mem, sync::Arc};
 
 use crate::{
@@ -17,12 +18,14 @@ use super::{
     ColumnFrom,
 };
 
+#[derive(Clone)]
 pub struct VectorColumnData<T>
 where
     T: StatBuffer
         + Unmarshal<T>
         + Marshal
         + Copy
+        + Clone
         + Into<Value>
         + From<Value>
         + Sync
@@ -165,6 +168,10 @@ where
         reader.read_bytes(data.as_mut())?;
         Ok(Self { data })
     }
+
+    pub(crate) fn get_by_index(&self, index: usize) -> T {
+        self.data.at(index)
+    }
 }
 
 impl<T> ColumnData for VectorColumnData<T>
@@ -235,6 +242,10 @@ where
         *pointers[0] = self.data.as_ptr() as *const u8;
         *(pointers[1] as *mut usize) = self.len();
         Ok(())
+    }
+
+    fn get_timezone(&self) -> Option<Tz> {
+        None
     }
 }
 

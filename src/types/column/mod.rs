@@ -18,6 +18,7 @@ use crate::{
             fixed_string::{FixedStringAdapter, NullableFixedStringAdapter},
             ip::{IpColumnData, Ipv4, Ipv6},
             iter::Iterable,
+            low_cardinality::LowCardinalityColumnData,
             simple_agg_func::SimpleAggregateFunctionColumnData,
             string::StringAdapter,
         },
@@ -44,6 +45,7 @@ pub(crate) mod fixed_string;
 mod ip;
 pub mod iter;
 mod list;
+mod low_cardinality;
 mod map;
 mod nullable;
 mod numeric;
@@ -86,11 +88,7 @@ impl<K: ColumnType> ColumnFrom for Column<K> {
 
 impl<L: ColumnType, R: ColumnType> PartialEq<Column<R>> for Column<L> {
     fn eq(&self, other: &Column<R>) -> bool {
-        if self.len() != other.len() {
-            return false;
-        }
-
-        if self.sql_type() != other.sql_type() {
+        if self.len() != other.len() || self.sql_type() != other.sql_type() {
             return false;
         }
 
@@ -235,6 +233,28 @@ impl<K: ColumnType> Column<K> {
         }
 
         match (dst_type.clone(), src_type.clone()) {
+            (SqlType::LowCardinality(inner), src_type) if src_type.is_inner_low_cardinality() => {
+                let name = self.name().to_owned();
+                let tz = self.data.get_timezone().unwrap_or(Tz::Zulu);
+                let mut low_card_data = LowCardinalityColumnData::empty(inner, tz, self.len())?;
+                for i in 0..self.len() {
+                    low_card_data.push(self.at(i).into());
+                }
+
+                if inner.is_datetime() {
+                    if let Some(casted_data) =
+                        low_card_data.inner.cast_to(&low_card_data.inner, inner)
+                    {
+                        low_card_data.inner = casted_data;
+                    }
+                }
+
+                Ok(Column {
+                    name,
+                    data: Arc::new(low_card_data),
+                    _marker: marker::PhantomData,
+                })
+            }
             (SqlType::FixedString(str_len), SqlType::String) => {
                 let name = self.name().to_owned();
                 let adapter = FixedStringAdapter {
@@ -461,6 +481,16 @@ impl<K: ColumnType> Column<K> {
         props: u32,
     ) -> Result<()> {
         self.data.get_internal(pointers, level, props)
+    }
+
+    pub(crate) unsafe fn get_internals<D>(
+        &self,
+        data: &mut D,
+        level: u8,
+        props: u32,
+    ) -> Result<()> {
+        self.data
+            .get_internals(data as *mut D as *mut (), level, props)
     }
 }
 

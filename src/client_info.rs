@@ -21,5 +21,11 @@ pub fn description() -> String {
 
 #[test]
 fn test_description() {
-    assert_eq!(description(), format!("Rust SQLDriver {CLICK_HOUSE_DBMSVERSION_MAJOR}.{CLICK_HOUSE_DBMSVERSION_MINOR}.{CLICK_HOUSE_REVISION}"))
+    assert_eq!(
+        description(),
+        format!(
+            "Rust SQLDriver {}.{}.{}",
+            CLICK_HOUSE_DBMSVERSION_MAJOR, CLICK_HOUSE_DBMSVERSION_MINOR, CLICK_HOUSE_REVISION
+        )
+    )
 }

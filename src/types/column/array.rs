@@ -132,6 +132,10 @@ impl ColumnData for ArrayColumnData {
         }
         None
     }
+
+    fn get_timezone(&self) -> Option<Tz> {
+        self.inner.get_timezone()
+    }
 }
 
 #[cfg(test)]

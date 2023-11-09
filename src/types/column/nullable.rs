@@ -116,4 +116,8 @@ impl ColumnData for NullableColumnData {
         }
         None
     }
+
+    fn get_timezone(&self) -> Option<Tz> {
+        self.inner.get_timezone()
+    }
 }

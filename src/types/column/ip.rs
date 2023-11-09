@@ -1,3 +1,4 @@
+use chrono_tz::Tz;
 use std::{
     marker::PhantomData,
     net::{Ipv4Addr, Ipv6Addr},
@@ -322,5 +323,9 @@ impl<V: IpVersion> ColumnData for IpColumnData<V> {
         assert_eq!(level, 0);
         *pointers[0] = &self.inner as *const Vec<u8> as *const u8;
         Ok(())
+    }
+
+    fn get_timezone(&self) -> Option<Tz> {
+        None
     }
 }

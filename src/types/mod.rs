@@ -330,6 +330,7 @@ pub enum SqlType {
     Uuid,
     Nullable(&'static SqlType),
     Array(&'static SqlType),
+    LowCardinality(&'static SqlType),
     Decimal(u8, u8),
     Enum8(Vec<(String, i8)>),
     Enum16(Vec<(String, i16)>),
@@ -374,6 +375,24 @@ impl SqlType {
         matches!(self, SqlType::DateTime(_))
     }
 
+    pub(crate) fn is_inner_low_cardinality(&self) -> bool {
+        matches!(
+            self,
+            SqlType::String
+                | SqlType::FixedString(_)
+                | SqlType::Date
+                | SqlType::DateTime(_)
+                | SqlType::UInt8
+                | SqlType::UInt16
+                | SqlType::UInt32
+                | SqlType::UInt64
+                | SqlType::Int8
+                | SqlType::Int16
+                | SqlType::Int32
+                | SqlType::Int64
+        )
+    }
+
     pub fn to_string(&self) -> Cow<'static, str> {
         match self.clone() {
             SqlType::Bool => "Bool".into(),
@@ -389,6 +408,7 @@ impl SqlType {
             SqlType::Int128 => "Int128".into(),
             SqlType::String => "String".into(),
             SqlType::FixedString(str_len) => format!("FixedString({str_len})").into(),
+            SqlType::LowCardinality(inner) => format!("LowCardinality({})", &inner).into(),
             SqlType::Float32 => "Float32".into(),
             SqlType::Float64 => "Float64".into(),
             SqlType::Date => "Date".into(),
@@ -429,6 +449,7 @@ impl SqlType {
             SqlType::Nullable(inner) => 1 + inner.level(),
             SqlType::Array(inner) => 1 + inner.level(),
             SqlType::Map(_, value) => 1 + value.level(),
+            SqlType::LowCardinality(_) => 1,
             _ => 0,
         }
     }

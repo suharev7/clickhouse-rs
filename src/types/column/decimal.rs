@@ -199,6 +199,10 @@ impl ColumnData for DecimalColumnData {
         *(pointers[2] as *mut NoBits) = self.nobits;
         Ok(())
     }
+
+    fn get_timezone(&self) -> Option<Tz> {
+        None
+    }
 }
 
 impl<K: ColumnType> ColumnData for DecimalAdapter<K> {
@@ -246,6 +250,10 @@ impl<K: ColumnType> ColumnData for DecimalAdapter<K> {
 
     fn clone_instance(&self) -> BoxColumnData {
         unimplemented!()
+    }
+
+    fn get_timezone(&self) -> Option<Tz> {
+        None
     }
 }
 
@@ -306,5 +314,9 @@ impl<K: ColumnType> ColumnData for NullableDecimalAdapter<K> {
 
     fn clone_instance(&self) -> BoxColumnData {
         unimplemented!()
+    }
+
+    fn get_timezone(&self) -> Option<Tz> {
+        self.column.data.get_timezone()
     }
 }

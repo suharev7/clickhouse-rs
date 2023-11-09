@@ -26,6 +26,12 @@ use crate::{
 use futures_core::Stream;
 use futures_util::StreamExt;
 
+pub(crate) struct TransportInfo {
+    pub(crate) timezone: Option<Tz>,
+    pub(crate) revision: u64,
+    pub(crate) compress: bool,
+}
+
 /// Line transport
 #[pin_project(project = ClickhouseTransportProj)]
 pub(crate) struct ClickhouseTransport {
@@ -43,9 +49,10 @@ pub(crate) struct ClickhouseTransport {
     // Queued commands
     cmds: VecDeque<Cmd>,
     // Server time zone
-    timezone: Option<Tz>,
-    revision: u64,
-    compress: bool,
+    // timezone: Option<Tz>,
+    // revision: u64,
+    // compress: bool,
+    info: TransportInfo,
     // Whether there are unread packets
     pub(crate) inconsistent: bool,
     status: Arc<TransportStatus>,
@@ -78,9 +85,11 @@ impl ClickhouseTransport {
             buf_is_incomplete: false,
             wr: io::Cursor::new(vec![]),
             cmds: VecDeque::new(),
-            timezone: None,
-            revision: 0,
-            compress,
+            info: TransportInfo {
+                timezone: None,
+                revision: 0,
+                compress,
+            },
             inconsistent: false,
             status: Arc::new(TransportStatus::new(pool)),
         }
@@ -150,14 +159,14 @@ impl<'p> ClickhouseTransportProj<'p> {
         let ret = {
             let mut cursor = Cursor::new(&self.rd);
             let res = {
-                let mut parser = Parser::new(&mut cursor, *self.timezone, *self.compress);
-                parser.parse_packet(*self.revision)
+                let mut parser = Parser::new(&mut cursor, self.info);
+                parser.parse_packet(self.info.revision)
             };
             pos = cursor.position() as usize;
 
             if let Ok(Packet::Hello(_, ref packet)) = res {
-                *self.timezone = Some(packet.timezone);
-                *self.revision = packet.revision;
+                self.info.timezone = Some(packet.timezone);
+                self.info.revision = packet.revision;
             }
 
             match res {

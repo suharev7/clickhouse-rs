@@ -1,4 +1,4 @@
-use std::iter;
+use chrono_tz::Tz;
 
 use crate::{
     binary::Encoder,
@@ -79,11 +79,15 @@ impl ColumnData for ConcatColumnData {
             Err(Error::FromSql(FromSqlError::UnsupportedOperation))
         }
     }
+
+    fn get_timezone(&self) -> Option<Tz> {
+        self.data.first().and_then(|chunk| chunk.get_timezone())
+    }
 }
 
 fn build_index<'a, I>(sizes: I) -> Vec<usize>
 where
-    I: iter::Iterator<Item = usize> + 'a,
+    I: Iterator<Item = usize> + 'a,
 {
     let mut acc = 0;
     let mut index = vec![acc];

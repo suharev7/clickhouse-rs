@@ -8,6 +8,7 @@ use crate::{
     types::{
         column::{
             column_data::{BoxColumnData, ColumnData},
+            date::DateTimeInternals,
             list::List,
         },
         DateTimeType, SqlType, Value, ValueRef,
@@ -95,6 +96,23 @@ impl ColumnData for DateTime64ColumnData {
         *(pointers[2] as *mut usize) = self.len();
         *(pointers[3] as *mut Option<u32>) = Some(*precision);
         Ok(())
+    }
+
+    unsafe fn get_internals(&self, data_ptr: *mut (), _level: u8, _props: u32) -> Result<()> {
+        let (precision, tz) = &self.params;
+        unsafe {
+            let data_ref = &mut *(data_ptr as *mut DateTimeInternals);
+            data_ref.begin = self.data.as_ptr().cast();
+            data_ref.len = self.data.len();
+            data_ref.tz = *tz;
+            data_ref.precision = Some(*precision);
+            Ok(())
+        }
+    }
+
+    fn get_timezone(&self) -> Option<Tz> {
+        let (_, tz) = self.params;
+        Some(tz)
     }
 }
 

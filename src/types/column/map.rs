@@ -154,6 +154,10 @@ impl ColumnData for MapColumnData {
             None
         }
     }
+
+    fn get_timezone(&self) -> Option<Tz> {
+        self.values.get_timezone()
+    }
 }
 
 impl<V> ColumnFrom for Vec<HashMap<String, V>>

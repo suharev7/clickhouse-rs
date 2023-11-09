@@ -48,6 +48,19 @@ where
     pub(super) unsafe fn as_ptr(&self) -> *const T {
         self.data.as_ptr()
     }
+
+    pub fn map<N, F>(&self, f: F) -> List<N>
+    where
+        N: StatBuffer + Unmarshal<N> + Marshal + Copy + Sync + 'static,
+        F: Fn(T) -> N,
+    {
+        let new_capacity = std::cmp::max(self.data.capacity(), self.len() + 1);
+        let mut new_list = List::<N>::with_capacity(new_capacity);
+        for i in 0..self.len() {
+            new_list.push(f(self.at(i)));
+        }
+        new_list
+    }
 }
 
 impl<T> fmt::Debug for List<T>

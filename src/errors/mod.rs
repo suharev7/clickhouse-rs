@@ -99,6 +99,9 @@ pub enum DriverError {
 
     #[error("Invalid utf-8 sequence.")]
     Utf8Error(Utf8Error),
+
+    #[error("Deserialize error: `{}`", _0)]
+    Deserialize(Cow<'static, str>),
 }
 
 /// This type enumerates cast from sql type errors.

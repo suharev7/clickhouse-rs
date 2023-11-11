@@ -52,6 +52,7 @@ mod numeric;
 mod simple_agg_func;
 mod string;
 mod string_pool;
+mod util;
 
 /// Represents Clickhouse Column
 pub struct Column<K: ColumnType> {

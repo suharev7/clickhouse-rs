@@ -5,8 +5,10 @@ use crate::{
     binary::{Encoder, ReadEx},
     errors::Result,
     types::{
-        column::column_data::{BoxColumnData, LowCardinalityAccessor},
-        from_sql::*,
+        column::{
+            column_data::{BoxColumnData, LowCardinalityAccessor},
+            util::extract_nulls_and_values,
+        },
         value::get_str_buffer,
         Column, ColumnType, SqlType, Value, ValueRef,
     },
@@ -171,17 +173,7 @@ impl<K: ColumnType> ColumnData for NullableFixedStringAdapter<K> {
     }
 
     fn save(&self, encoder: &mut Encoder, start: usize, end: usize) {
-        let size = end - start;
-        let mut nulls = vec![0; size];
-        let mut values: Vec<Option<&[u8]>> = vec![None; size];
-
-        for (i, index) in (start..end).enumerate() {
-            values[i] = Option::from_sql(self.at(index)).unwrap();
-            if values[i].is_none() {
-                nulls[i] = 1;
-            }
-        }
-
+        let (nulls, values) = extract_nulls_and_values::<&[u8], Self>(self, start, end).unwrap();
         encoder.write_bytes(nulls.as_ref());
 
         let mut buffer = Vec::with_capacity(self.str_len);

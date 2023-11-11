@@ -7,9 +7,11 @@ use crate::{
     errors::Result,
     types::{
         column::{
-            column_data::BoxColumnData, column_data::ColumnData, list::List,
-            nullable::NullableColumnData, BoxColumnWrapper, ColumnFrom, ColumnWrapper,
-            VectorColumnData,
+            column_data::{BoxColumnData, ColumnData},
+            list::List,
+            nullable::NullableColumnData,
+            util::extract_nulls_and_values,
+            BoxColumnWrapper, ColumnFrom, ColumnWrapper, VectorColumnData,
         },
         decimal::{Decimal, NoBits},
         from_sql::FromSql,
@@ -263,17 +265,7 @@ impl<K: ColumnType> ColumnData for NullableDecimalAdapter<K> {
     }
 
     fn save(&self, encoder: &mut Encoder, start: usize, end: usize) {
-        let size = end - start;
-        let mut nulls = vec![0; size];
-        let mut values: Vec<Option<Decimal>> = vec![None; size];
-
-        for (i, index) in (start..end).enumerate() {
-            values[i] = Option::from_sql(self.at(index)).unwrap();
-            if values[i].is_none() {
-                nulls[i] = 1;
-            }
-        }
-
+        let (nulls, values) = extract_nulls_and_values::<Decimal, Self>(self, start, end).unwrap();
         encoder.write_bytes(nulls.as_ref());
 
         for value in values {

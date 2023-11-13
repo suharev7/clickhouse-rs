@@ -2,149 +2,33 @@ pub trait Marshal {
     fn marshal(&self, scratch: &mut [u8]);
 }
 
-impl Marshal for u8 {
-    fn marshal(&self, scratch: &mut [u8]) {
-        scratch[0] = *self;
-    }
+macro_rules! int_marshals {
+    ( $( $t:ident ),* ) => {
+        $(
+            impl Marshal for $t {
+                fn marshal(&self, scratch: &mut [u8]) {
+                    scratch.clone_from_slice(&self.to_le_bytes());
+                }
+            }
+        )*
+    };
 }
 
-impl Marshal for u16 {
-    fn marshal(&self, scratch: &mut [u8]) {
-        scratch[0] = *self as u8;
-        scratch[1] = (self >> 8) as u8;
-    }
+macro_rules! float_marshals {
+    ( $( $t:ident ),* ) => {
+        $(
+            impl Marshal for $t {
+                fn marshal(&self, scratch: &mut [u8]) {
+                    let bits = self.to_bits();
+                    scratch.clone_from_slice(&bits.to_le_bytes());
+                }
+            }
+        )*
+    };
 }
 
-impl Marshal for u32 {
-    fn marshal(&self, scratch: &mut [u8]) {
-        scratch[0] = *self as u8;
-        scratch[1] = (self >> 8) as u8;
-        scratch[2] = (self >> 16) as u8;
-        scratch[3] = (self >> 24) as u8;
-    }
-}
-
-impl Marshal for u64 {
-    fn marshal(&self, scratch: &mut [u8]) {
-        scratch[0] = *self as u8;
-        scratch[1] = (self >> 8) as u8;
-        scratch[2] = (self >> 16) as u8;
-        scratch[3] = (self >> 24) as u8;
-
-        scratch[4] = (self >> 32) as u8;
-        scratch[5] = (self >> 40) as u8;
-        scratch[6] = (self >> 48) as u8;
-        scratch[7] = (self >> 56) as u8;
-    }
-}
-
-impl Marshal for u128 {
-    fn marshal(&self, scratch: &mut [u8]) {
-        scratch[0] = *self as u8;
-        scratch[1] = (self >> 8) as u8;
-        scratch[2] = (self >> 16) as u8;
-        scratch[3] = (self >> 24) as u8;
-
-        scratch[4] = (self >> 32) as u8;
-        scratch[5] = (self >> 40) as u8;
-        scratch[6] = (self >> 48) as u8;
-        scratch[7] = (self >> 56) as u8;
-
-        scratch[8] = (self >> 64) as u8;
-        scratch[9] = (self >> 72) as u8;
-        scratch[10] = (self >> 80) as u8;
-        scratch[11] = (self >> 88) as u8;
-
-        scratch[12] = (self >> 96) as u8;
-        scratch[13] = (self >> 104) as u8;
-        scratch[14] = (self >> 112) as u8;
-        scratch[15] = (self >> 120) as u8;
-    }
-}
-
-impl Marshal for i8 {
-    fn marshal(&self, scratch: &mut [u8]) {
-        scratch[0] = *self as u8;
-    }
-}
-
-impl Marshal for i16 {
-    fn marshal(&self, scratch: &mut [u8]) {
-        scratch[0] = *self as u8;
-        scratch[1] = (self >> 8) as u8;
-    }
-}
-
-impl Marshal for i32 {
-    fn marshal(&self, scratch: &mut [u8]) {
-        scratch[0] = *self as u8;
-        scratch[1] = (self >> 8) as u8;
-        scratch[2] = (self >> 16) as u8;
-        scratch[3] = (self >> 24) as u8;
-    }
-}
-
-impl Marshal for i64 {
-    fn marshal(&self, scratch: &mut [u8]) {
-        scratch[0] = *self as u8;
-        scratch[1] = (self >> 8) as u8;
-        scratch[2] = (self >> 16) as u8;
-        scratch[3] = (self >> 24) as u8;
-
-        scratch[4] = (self >> 32) as u8;
-        scratch[5] = (self >> 40) as u8;
-        scratch[6] = (self >> 48) as u8;
-        scratch[7] = (self >> 56) as u8;
-    }
-}
-
-impl Marshal for i128 {
-    fn marshal(&self, scratch: &mut [u8]) {
-        scratch[0] = *self as u8;
-        scratch[1] = (self >> 8) as u8;
-        scratch[2] = (self >> 16) as u8;
-        scratch[3] = (self >> 24) as u8;
-
-        scratch[4] = (self >> 32) as u8;
-        scratch[5] = (self >> 40) as u8;
-        scratch[6] = (self >> 48) as u8;
-        scratch[7] = (self >> 56) as u8;
-
-        scratch[8] = (self >> 64) as u8;
-        scratch[9] = (self >> 72) as u8;
-        scratch[10] = (self >> 80) as u8;
-        scratch[11] = (self >> 88) as u8;
-
-        scratch[12] = (self >> 96) as u8;
-        scratch[13] = (self >> 104) as u8;
-        scratch[14] = (self >> 112) as u8;
-        scratch[15] = (self >> 120) as u8;
-    }
-}
-
-impl Marshal for f32 {
-    fn marshal(&self, scratch: &mut [u8]) {
-        let bits = self.to_bits();
-        scratch[0] = bits as u8;
-        scratch[1] = (bits >> 8) as u8;
-        scratch[2] = (bits >> 16) as u8;
-        scratch[3] = (bits >> 24) as u8;
-    }
-}
-
-impl Marshal for f64 {
-    fn marshal(&self, scratch: &mut [u8]) {
-        let bits = self.to_bits();
-        scratch[0] = bits as u8;
-        scratch[1] = (bits >> 8) as u8;
-        scratch[2] = (bits >> 16) as u8;
-        scratch[3] = (bits >> 24) as u8;
-        scratch[4] = (bits >> 32) as u8;
-        scratch[5] = (bits >> 40) as u8;
-        scratch[6] = (bits >> 48) as u8;
-        scratch[7] = (bits >> 56) as u8;
-    }
-}
+int_marshals! { u8, u16, u32, u64, u128, i8, i16, i32, i64, i128 }
+float_marshals! { f32, f64 }
 
 impl Marshal for bool {
     fn marshal(&self, scratch: &mut [u8]) {

@@ -150,7 +150,7 @@ impl Pool {
         }
 
         for host in &hosts {
-            if host.port() == Some(8124) {
+            if host.port() == Some(8123) {
                 warn!(
                     "The attempt to establish a connection through the text protocol. clickhouse-rs is for using the binary protocol."
                 );

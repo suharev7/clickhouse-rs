@@ -675,7 +675,7 @@ mod test {
 
         assert_eq!(
             SqlType::from(ValueRef::Decimal(Decimal::of(2.0_f64, 4))),
-            SqlType::Decimal(18, 4)
+            SqlType::Decimal(38, 4)
         );
 
         assert_eq!(

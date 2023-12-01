@@ -1712,14 +1712,16 @@ async fn test_decimal() -> Result<(), Error> {
     let ddl = "
         CREATE TABLE clickhouse_decimal (
             x  Decimal(8, 3),
-            ox Nullable(Decimal(10, 2))
+            ox Nullable(Decimal(10, 2)),
+            xx Decimal(30, 4)
         ) Engine=Memory";
 
-    let query = "SELECT x, ox FROM clickhouse_decimal";
+    let query = "SELECT x, ox, xx FROM clickhouse_decimal";
 
     let block = Block::new()
         .column("x", vec![Decimal::of(1.234, 3), Decimal::of(5, 3)])
-        .column("ox", vec![None, Some(Decimal::of(1.23, 2))]);
+        .column("ox", vec![None, Some(Decimal::of(1.23, 2))])
+        .column("xx", vec![Decimal::of(1.23456, 4), Decimal::of(5, 4)]);
 
     let pool = Pool::new(database_url());
 
@@ -1732,11 +1734,13 @@ async fn test_decimal() -> Result<(), Error> {
     let x: Decimal = block.get(0, "x")?;
     let ox: Option<Decimal> = block.get(1, "ox")?;
     let ox0: Option<Decimal> = block.get(0, "ox")?;
+    let xx: Decimal = block.get(0, "xx")?;
 
     assert_eq!(2, block.row_count());
     assert_eq!(1.234, x.into());
     assert_eq!(Some(1.23), ox.map(|v| v.into()));
     assert_eq!(None, ox0);
+    assert_eq!(1.2345, xx.into());
 
     Ok(())
 }

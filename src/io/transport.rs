@@ -119,7 +119,7 @@ impl ClickhouseTransport {
             }
         }
 
-        let mut transport = h.unwrap();
+        let mut transport = h.ok_or(Error::Driver(DriverError::UnexpectedPacket))?;
         transport.inconsistent = false;
         Ok(transport)
     }

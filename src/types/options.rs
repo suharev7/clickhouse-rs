@@ -8,8 +8,6 @@ use std::{
 };
 
 use crate::errors::{Error, Result, UrlError};
-#[cfg(feature = "tls")]
-use native_tls;
 use percent_encoding::percent_decode;
 use url::Url;
 
@@ -93,12 +91,11 @@ impl IntoOptions for String {
     }
 }
 
-/// An X509 certificate.
-#[cfg(feature = "tls")]
+/// An X509 certificate for native-tls.
+#[cfg(feature = "tls-native-tls")]
 #[derive(Clone)]
 pub struct Certificate(Arc<native_tls::Certificate>);
-
-#[cfg(feature = "tls")]
+#[cfg(feature = "tls-native-tls")]
 impl Certificate {
     /// Parses a DER-formatted X509 certificate.
     pub fn from_der(der: &[u8]) -> Result<Certificate> {
@@ -118,6 +115,43 @@ impl Certificate {
         Ok(Certificate(Arc::new(inner)))
     }
 }
+#[cfg(feature = "tls-native-tls")]
+impl From<Certificate> for native_tls::Certificate {
+    fn from(value: Certificate) -> Self {
+        value.0.as_ref().clone()
+    }
+}
+
+/// An X509 certificate for rustls.
+#[cfg(feature = "tls-rustls")]
+#[derive(Clone)]
+pub struct Certificate(Arc<Vec<rustls::pki_types::CertificateDer<'static>>>);
+#[cfg(feature = "tls-rustls")]
+impl Certificate {
+    /// Parses a DER-formatted X509 certificate.
+    pub fn from_der(der: &[u8]) -> Result<Certificate> {
+        let der = der.to_vec();
+        let inner = match rustls::pki_types::CertificateDer::try_from(der) {
+            Ok(certificate) => certificate,
+            Err(err) => return Err(Error::Other(err.to_string().into())),
+        };
+        Ok(Certificate(Arc::new(vec![inner])))
+    }
+
+    /// Parses a PEM-formatted X509 certificate.
+    pub fn from_pem(der: &[u8]) -> Result<Certificate> {
+        let certs = rustls_pemfile::certs(&mut der.as_ref())
+            .map(|result| result.unwrap())
+            .collect();
+        Ok(Certificate(Arc::new(certs)))
+    }
+}
+#[cfg(feature = "tls-rustls")]
+impl From<Certificate> for Vec<rustls::pki_types::CertificateDer<'static>> {
+    fn from(value: Certificate) -> Self {
+        value.0.as_ref().clone()
+    }
+}
 
 #[cfg(feature = "tls")]
 impl fmt::Debug for Certificate {
@@ -125,18 +159,10 @@ impl fmt::Debug for Certificate {
         write!(f, "[Certificate]")
     }
 }
-
 #[cfg(feature = "tls")]
 impl PartialEq for Certificate {
     fn eq(&self, _other: &Self) -> bool {
         true
-    }
-}
-
-#[cfg(feature = "tls")]
-impl From<Certificate> for native_tls::Certificate {
-    fn from(value: Certificate) -> Self {
-        value.0.as_ref().clone()
     }
 }
 

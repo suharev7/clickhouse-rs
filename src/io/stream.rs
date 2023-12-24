@@ -7,8 +7,10 @@ use std::{
 
 #[cfg(feature = "tokio_io")]
 use tokio::{io::ReadBuf, net::TcpStream};
-#[cfg(feature = "tls")]
+#[cfg(feature = "tls-native-tls")]
 use tokio_native_tls::TlsStream;
+#[cfg(feature = "tls-rustls")]
+use tokio_rustls::client::TlsStream;
 
 #[cfg(feature = "async_std")]
 use async_std::io::prelude::*;
@@ -68,10 +70,12 @@ impl Stream {
     pub(crate) fn set_nodelay(&mut self, nodelay: bool) -> io::Result<()> {
         match *self {
             Self::Plain(ref mut stream) => stream.set_nodelay(nodelay),
-            #[cfg(feature = "tls")]
+            #[cfg(feature = "tls-native-tls")]
             Self::Secure(ref mut stream) => {
                 stream.get_mut().get_mut().get_mut().set_nodelay(nodelay)
             }
+            #[cfg(feature = "tls-rustls")]
+            Self::Secure(ref mut stream) => stream.get_mut().0.set_nodelay(nodelay),
         }
         .map_err(|err| io::Error::new(err.kind(), format!("set_nodelay error: {err}")))
     }

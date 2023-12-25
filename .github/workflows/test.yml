@@ -25,3 +25,23 @@ jobs:
         run: cargo build --verbose
       - name: Run tests
         run: cargo test --verbose
+
+  build-native-tls:
+    runs-on: ubuntu-latest
+    services:
+      clickhouse:
+        image: clickhouse/clickhouse-server
+        env:
+          CH_SSL_CERTIFICATE: /etc/clickhouse-server/config.d/server.crt
+          CH_SSL_PRIVATE_KEY: /etc/clickhouse-server/config.d/server.key
+        volumes:
+          - ./extras/ci/generate_certs.sh:/docker-entrypoint-initdb.d/generate_certs.sh "$CH_SSL_CERTIFICATE" "$CH_SSL_PRIVATE_KEY"
+          - ./extras/ci/overrides.xml:/etc/clickhouse-server/config.d/overrides.xml
+        ports:
+          - 9440:9440
+    steps:
+      - uses: actions/checkout@v3
+      - name: Build
+        run: cargo build --features tls-native-tls --verbose
+      - name: Run tests
+        run: cargo test --features tls-native-tls --verbose

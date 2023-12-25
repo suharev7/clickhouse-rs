@@ -28,19 +28,25 @@ jobs:
 
   build-native-tls:
     runs-on: ubuntu-latest
-    services:
-      clickhouse:
-        image: clickhouse/clickhouse-server
-        env:
-          CH_SSL_CERTIFICATE: /etc/clickhouse-server/config.d/server.crt
-          CH_SSL_PRIVATE_KEY: /etc/clickhouse-server/config.d/server.key
-        volumes:
-          - ./extras/ci/generate_certs.sh:/docker-entrypoint-initdb.d/generate_certs.sh "$CH_SSL_CERTIFICATE" "$CH_SSL_PRIVATE_KEY"
-          - ./extras/ci/overrides.xml:/etc/clickhouse-server/config.d/overrides.xml
-        ports:
-          - 9440:9440
     steps:
       - uses: actions/checkout@v3
+      # NOTE:
+      # - we cannot use "services" because they are executed before the steps, i.e. repository checkout.
+      # - "job.container.network" is empty, hence "host"
+      # - not all tests "secure" aware, so both ports are exported
+      # - github actions does not support YAML anchors (sigh)
+      - name: Run clickhouse-server
+        run: docker run
+          -v ./extras/ci/generate_certs.sh:/docker-entrypoint-initdb.d/generate_certs.sh
+          -v ./extras/ci/overrides.xml:/etc/clickhouse-server/config.d/overrides.xml
+          -e CH_SSL_CERTIFICATE=/etc/clickhouse-server/config.d/server.crt
+          -e CH_SSL_PRIVATE_KEY=/etc/clickhouse-server/config.d/server.key
+          --network host
+          --rm
+          --detach
+          --publish 9440:9440
+          --publish 9000:9000
+          clickhouse/clickhouse-server
       - name: Build
         run: cargo build --features tls-native-tls --verbose
       - name: Run tests

@@ -28,12 +28,14 @@ jobs:
 
   build-native-tls:
     runs-on: ubuntu-latest
+    env:
+      # NOTE: not all tests "secure" aware, so let's define DATABASE_URL explicitly
+      DATABASE_URL: "tcp://localhost:9440?compression=lz4&ping_timeout=2s&retry_timeout=3s&secure=true&skip_verify=true"
     steps:
       - uses: actions/checkout@v3
       # NOTE:
       # - we cannot use "services" because they are executed before the steps, i.e. repository checkout.
       # - "job.container.network" is empty, hence "host"
-      # - not all tests "secure" aware, so both ports are exported
       # - github actions does not support YAML anchors (sigh)
       - name: Run clickhouse-server
         run: docker run
@@ -45,7 +47,6 @@ jobs:
           --rm
           --detach
           --publish 9440:9440
-          --publish 9000:9000
           clickhouse/clickhouse-server
       - name: Build
         run: cargo build --features tls-native-tls --verbose
@@ -54,12 +55,14 @@ jobs:
 
   build-rustls:
     runs-on: ubuntu-latest
+    env:
+      # NOTE: not all tests "secure" aware, so let's define DATABASE_URL explicitly
+      DATABASE_URL: "tcp://localhost:9440?compression=lz4&ping_timeout=2s&retry_timeout=3s&secure=true&skip_verify=true"
     steps:
       - uses: actions/checkout@v3
       # NOTE:
       # - we cannot use "services" because they are executed before the steps, i.e. repository checkout.
       # - "job.container.network" is empty, hence "host"
-      # - not all tests "secure" aware, so both ports are exported
       # - github actions does not support YAML anchors (sigh)
       - name: Run clickhouse-server
         run: docker run
@@ -71,7 +74,6 @@ jobs:
           --rm
           --detach
           --publish 9440:9440
-          --publish 9000:9000
           clickhouse/clickhouse-server
       - name: Build
         run: cargo build --features tls-rustls --verbose

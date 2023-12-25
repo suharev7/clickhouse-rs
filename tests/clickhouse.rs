@@ -31,14 +31,14 @@ use std::{
 use uuid::Uuid;
 use Tz::{Asia__Istanbul as IST, UTC};
 
-#[cfg(not(feature = "tls"))]
+#[cfg(not(feature = "_tls"))]
 fn database_url() -> String {
     env::var("DATABASE_URL").unwrap_or_else(|_| {
         "tcp://localhost:9000?compression=lz4&ping_timeout=2s&retry_timeout=3s".into()
     })
 }
 
-#[cfg(feature = "tls")]
+#[cfg(feature = "_tls")]
 fn database_url() -> String {
     env::var("DATABASE_URL").unwrap_or_else(|_| {
         "tcp://localhost:9440?compression=lz4&ping_timeout=2s&retry_timeout=3s&secure=true&skip_verify=true".into()

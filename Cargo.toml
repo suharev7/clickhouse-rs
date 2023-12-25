@@ -15,9 +15,9 @@ exclude = ["tests/*", "examples/*"]
 
 [features]
 default = ["tokio_io"]
-tls = [] # meta feature for the clickhouse-rs generic TLS code
-tls-native-tls = ["tokio-native-tls", "native-tls", "tls"]
-tls-rustls = ["tokio-rustls", "rustls", "rustls-pemfile", "tls"]
+_tls = [] # meta feature for the clickhouse-rs generic TLS code
+tls-native-tls = ["tokio-native-tls", "native-tls", "_tls"]
+tls-rustls = ["tokio-rustls", "rustls", "rustls-pemfile", "_tls"]
 async_std = ["async-std"]
 tokio_io = ["tokio"]
 

@@ -153,13 +153,13 @@ impl From<Certificate> for Vec<rustls::pki_types::CertificateDer<'static>> {
     }
 }
 
-#[cfg(feature = "tls")]
+#[cfg(feature = "_tls")]
 impl fmt::Debug for Certificate {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "[Certificate]")
     }
 }
-#[cfg(feature = "tls")]
+#[cfg(feature = "_tls")]
 impl PartialEq for Certificate {
     fn eq(&self, _other: &Self) -> bool {
         true
@@ -280,15 +280,15 @@ pub struct Options {
     pub(crate) execute_timeout: Option<Duration>,
 
     /// Enable TLS encryption (defaults to `false`)
-    #[cfg(feature = "tls")]
+    #[cfg(feature = "_tls")]
     pub(crate) secure: bool,
 
     /// Skip certificate verification (default is `false`).
-    #[cfg(feature = "tls")]
+    #[cfg(feature = "_tls")]
     pub(crate) skip_verify: bool,
 
     /// An X509 certificate.
-    #[cfg(feature = "tls")]
+    #[cfg(feature = "_tls")]
     pub(crate) certificate: Option<Certificate>,
 
     /// Query settings
@@ -339,11 +339,11 @@ impl Default for Options {
             query_timeout: Duration::from_secs(180),
             insert_timeout: Some(Duration::from_secs(180)),
             execute_timeout: Some(Duration::from_secs(180)),
-            #[cfg(feature = "tls")]
+            #[cfg(feature = "_tls")]
             secure: false,
-            #[cfg(feature = "tls")]
+            #[cfg(feature = "_tls")]
             skip_verify: false,
-            #[cfg(feature = "tls")]
+            #[cfg(feature = "_tls")]
             certificate: None,
             settings: HashMap::new(),
             alt_hosts: Vec::new(),
@@ -481,19 +481,19 @@ impl Options {
         => execute_timeout: Option<Duration>
     }
 
-    #[cfg(feature = "tls")]
+    #[cfg(feature = "_tls")]
     property! {
         /// Establish secure connection (default is `false`).
         => secure: bool
     }
 
-    #[cfg(feature = "tls")]
+    #[cfg(feature = "_tls")]
     property! {
         /// Skip certificate verification (default is `false`).
         => skip_verify: bool
     }
 
-    #[cfg(feature = "tls")]
+    #[cfg(feature = "_tls")]
     property! {
         /// An X509 certificate.
         => certificate: Option<Certificate>
@@ -586,9 +586,9 @@ where
                 options.execute_timeout = parse_param(key, value, parse_opt_duration)?
             }
             "compression" => options.compression = parse_param(key, value, parse_compression)?,
-            #[cfg(feature = "tls")]
+            #[cfg(feature = "_tls")]
             "secure" => options.secure = parse_param(key, value, bool::from_str)?,
-            #[cfg(feature = "tls")]
+            #[cfg(feature = "_tls")]
             "skip_verify" => options.skip_verify = parse_param(key, value, bool::from_str)?,
             "alt_hosts" => options.alt_hosts = parse_param(key, value, parse_hosts)?,
             _ => {
@@ -727,7 +727,7 @@ mod test {
     }
 
     #[test]
-    #[cfg(feature = "tls")]
+    #[cfg(feature = "_tls")]
     fn test_parse_secure_options() {
         let url = "tcp://username:password@host1:9001/database?ping_timeout=42ms&keepalive=99s&compression=lz4&connection_timeout=10s&secure=true&skip_verify=true";
         assert_eq!(

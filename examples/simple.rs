@@ -38,7 +38,7 @@ async fn execute(database_url: String) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-#[cfg(all(feature = "tokio_io", not(feature = "tls")))]
+#[cfg(all(feature = "tokio_io", not(feature = "_tls")))]
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let database_url =
@@ -46,7 +46,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     execute(database_url).await
 }
 
-#[cfg(all(feature = "tokio_io", feature = "tls"))]
+#[cfg(all(feature = "tokio_io", feature = "_tls"))]
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let database_url = env::var("DATABASE_URL")

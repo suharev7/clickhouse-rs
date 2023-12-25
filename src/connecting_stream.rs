@@ -6,7 +6,7 @@ use std::{
 };
 
 use futures_util::future::{select_ok, BoxFuture, SelectOk, TryFutureExt};
-#[cfg(feature = "tls")]
+#[cfg(feature = "_tls")]
 use futures_util::FutureExt;
 
 #[cfg(feature = "async_std")]
@@ -46,7 +46,7 @@ enum TcpState {
     Fail(Option<ConnectionError>),
 }
 
-#[cfg(feature = "tls")]
+#[cfg(feature = "_tls")]
 #[pin_project(project = TlsStateProj)]
 enum TlsState {
     Wait(#[pin] ConnectingFuture<TlsStream<TcpStream>>),
@@ -56,7 +56,7 @@ enum TlsState {
 #[pin_project(project = StateProj)]
 enum State {
     Tcp(#[pin] TcpState),
-    #[cfg(feature = "tls")]
+    #[cfg(feature = "_tls")]
     Tls(#[pin] TlsState),
 }
 
@@ -73,7 +73,7 @@ impl TcpState {
     }
 }
 
-#[cfg(feature = "tls")]
+#[cfg(feature = "_tls")]
 impl TlsState {
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<InnerStream>> {
         match self.project() {
@@ -94,7 +94,7 @@ impl State {
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<InnerStream>> {
         match self.project() {
             StateProj::Tcp(inner) => inner.poll(cx),
-            #[cfg(feature = "tls")]
+            #[cfg(feature = "_tls")]
             StateProj::Tls(inner) => inner.poll(cx),
         }
     }
@@ -104,7 +104,7 @@ impl State {
         State::Tcp(TcpState::Fail(Some(conn_error)))
     }
 
-    #[cfg(feature = "tls")]
+    #[cfg(feature = "_tls")]
     fn tls_host_err() -> Self {
         State::Tls(TlsState::Fail(Some(ConnectionError::TlsHostNotProvided)))
     }
@@ -113,7 +113,7 @@ impl State {
         State::Tcp(TcpState::Wait(socket))
     }
 
-    #[cfg(feature = "tls")]
+    #[cfg(feature = "_tls")]
     fn tls_wait(s: ConnectingFuture<TlsStream<TcpStream>>) -> Self {
         State::Tls(TlsState::Wait(s))
     }
@@ -201,7 +201,7 @@ impl ConnectingStream {
 
                 let socket = select_ok(streams);
 
-                #[cfg(feature = "tls")]
+                #[cfg(feature = "_tls")]
                 {
                     if options.secure {
                         return ConnectingStream::new_tls_connection(addr, socket, options);

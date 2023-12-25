@@ -60,7 +60,7 @@ pub enum ConnectionError {
     #[error("Input/output error: `{}`", _0)]
     IoError(#[source] io::Error),
 
-    #[cfg(feature = "tls")]
+    #[cfg(feature = "_tls")]
     #[error("TLS connection error: `{}`", _0)]
     TlsError(#[source] TlsError),
 
@@ -142,7 +142,7 @@ impl From<ConnectionError> for Error {
     }
 }
 
-#[cfg(feature = "tls")]
+#[cfg(feature = "_tls")]
 impl From<TlsError> for ConnectionError {
     fn from(error: TlsError) -> Self {
         ConnectionError::TlsError(error)

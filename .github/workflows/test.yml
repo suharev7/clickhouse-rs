@@ -13,15 +13,12 @@ env:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
-
     services:
       clickhouse:
-        image: yandex/clickhouse-server
+        image: clickhouse/clickhouse-server
         ports:
           - 9000:9000
-
     steps:
       - uses: actions/checkout@v3
       - name: Build

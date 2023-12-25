@@ -30,7 +30,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # NOTE: not all tests "secure" aware, so let's define DATABASE_URL explicitly
-      DATABASE_URL: "tcp://localhost:9440?compression=lz4&ping_timeout=2s&retry_timeout=3s&secure=true&skip_verify=true"
+      # NOTE: sometimes for native-tls default connection_timeout (500ms) is not enough, interestingly that for rustls it is OK.
+      DATABASE_URL: "tcp://localhost:9440?compression=lz4&ping_timeout=2s&retry_timeout=3s&secure=true&skip_verify=true&connection_timeout=2s"
     steps:
       - uses: actions/checkout@v3
       # NOTE:

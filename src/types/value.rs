@@ -398,11 +398,11 @@ impl From<String> for Value {
     }
 }
 
-impl From<Vec<u8>> for Value {
-    fn from(v: Vec<u8>) -> Value {
-        Value::String(Arc::new(v))
-    }
-}
+// impl From<Vec<u8>> for Value {
+//     fn from(v: Vec<u8>) -> Value {
+//         Value::String(Arc::new(v))
+//     }
+// }
 
 impl From<&[u8]> for Value {
     fn from(v: &[u8]) -> Value {
@@ -415,6 +415,15 @@ impl From<Vec<String>> for Value {
         Value::Array(
             SqlType::String.into(),
             Arc::new(v.into_iter().map(|s| s.into()).collect()),
+        )
+    }
+}
+
+impl From<Vec<&str>> for Value {
+    fn from(v: Vec<&str>) -> Value {
+        Value::Array(
+            SqlType::String.into(),
+            Arc::new(v.into_iter().map(|v| v.into()).collect())
         )
     }
 }
@@ -447,6 +456,24 @@ where
     }
 }
 
+impl From<Vec<AppDateTime>> for Value {
+    fn from(v: Vec<AppDateTime>) -> Self {
+        Value::Array(
+            SqlType::DateTime(DateTimeType::DateTime32).into(),
+            Arc::new(v.into_iter().map(|a| a.into()).collect()),
+        )
+    }
+}
+
+impl From<Vec<AppDate>> for Value {
+    fn from(v: Vec<AppDate>) -> Self {
+        Value::Array(
+            SqlType::Date.into(),
+            Arc::new(v.into_iter().map(|a| a.into()).collect()),
+        )
+    }
+}
+
 value_from! {
     bool: Bool,
     u8: UInt8,
@@ -471,6 +498,7 @@ value_from! {
 }
 
 value_array_from! {
+    u8: UInt8,
     u16: UInt16,
     u32: UInt32,
     u64: UInt64,
@@ -483,7 +511,9 @@ value_array_from! {
     i128: Int128,
 
     f32: Float32,
-    f64: Float64
+    f64: Float64,
+
+    bool: Bool
 }
 
 impl<'a> From<&'a str> for Value {
@@ -835,6 +865,7 @@ mod test {
         let mut block = Block::with_capacity(5);
         block
             .push(row! {
+                u8: vec![1_u8, 2, 3],
                 u16: vec![1_u16, 2, 3],
                 u32: vec![1_u32, 2, 3],
                 u64: vec![1_u64, 2, 3],
@@ -848,6 +879,6 @@ mod test {
             .unwrap();
 
         assert_eq!(block.row_count(), 1);
-        assert_eq!(block.column_count(), 9);
+        assert_eq!(block.column_count(), 10);
     }
 }

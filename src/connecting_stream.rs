@@ -154,35 +154,46 @@ impl ConnectingStream {
         }
     }
 
-    #[cfg(feature = "tls")]
-    fn new_tls_connection(
-        addr: &Url,
-        socket: SelectOk<ConnectingFuture<TcpStream>>,
-        options: &Options,
-    ) -> Self {
-        match addr.host_str().map(|host| host.to_owned()) {
-            None => Self {
-                state: State::tls_host_err(),
-            },
-            Some(host) => {
-                let mut builder = TlsConnector::builder();
-                builder.danger_accept_invalid_certs(options.skip_verify);
-                if let Some(certificate) = options.certificate.clone() {
-                    let native_cert = native_tls::Certificate::from(certificate);
-                    builder.add_root_certificate(native_cert);
-                }
+#[cfg(feature = "tls")]
+fn new_tls_connection(
+    addr: &Url,
+    socket: SelectOk<ConnectingFuture<TcpStream>>,
+    options: &Options,
+) -> Result<Self, Box<dyn std::error::Error>> {
+    match addr.host_str().map(|host| host.to_owned()) {
+        None => Ok(Self {
+            state: State::tls_host_err(),
+        }),
+        Some(host) => {
+            let mut builder = TlsConnector::builder();
+            builder.danger_accept_invalid_certs(options.skip_verify);
 
-                Self {
-                    state: State::tls_wait(Box::pin(async move {
-                        let (s, _) = socket.await?;
+            // Load the client certificate and key.
+            let mut client_cert: Vec<u8> = Vec::new();
+            File::open("tls.crt")?.read_to_end(&mut client_cert)?;
+            let mut client_key: Vec<u8> = Vec::new();
+            File::open("tls.key")?.read_to_end(&mut client_key)?;
+            let client_identity = Identity::from_pkcs8(&client_cert, &client_key)?;
 
-                        let cx = builder.build()?;
-                        let cx = tokio_native_tls::TlsConnector::from(cx);
+            // Set the identity for the connector.
+            builder.identity(client_identity);
 
-                        Ok(cx.connect(&host, s).await?)
-                    })),
-                }
+            if let Some(certificate) = options.certificate.clone() {
+                let native_cert = native_tls::Certificate::from(certificate);
+                builder.add_root_certificate(native_cert);
             }
+
+            let cx = builder.build()?;
+
+            Ok(Self {
+                state: State::tls_wait(Box::pin(async move {
+                    let (s, _) = socket.await?;
+
+                    let cx = tokio_native_tls::TlsConnector::from(cx);
+
+                    Ok(cx.connect(&host, s).await?)
+                })),
+            })
         }
     }
 }

@@ -268,7 +268,11 @@ impl ConnectingStream {
                         .with_no_client_auth()
                 } else {
                     let mut cert_store = RootCertStore::empty();
-                    // TODO: add webpki_roots::TLS_SERVER_ROOTS
+                    cert_store.extend(
+                        webpki_roots::TLS_SERVER_ROOTS
+                            .iter()
+                            .cloned()
+                    );
                     if let Some(certificates) = options.certificate.clone() {
                         for certificate in
                             Into::<Vec<rustls::pki_types::CertificateDer<'static>>>::into(

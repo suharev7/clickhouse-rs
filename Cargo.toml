@@ -15,7 +15,10 @@ exclude = ["tests/*", "examples/*"]
 
 [features]
 default = ["tokio_io"]
-tls = ["tokio-native-tls", "native-tls"]
+_tls = [] # meta feature for the clickhouse-rs generic TLS code
+tls = ["tls-native-tls"] # backward compatibility
+tls-native-tls = ["tokio-native-tls", "native-tls", "_tls"]
+tls-rustls = ["tokio-rustls", "rustls", "rustls-pemfile", "webpki-roots", "_tls"]
 async_std = ["async-std"]
 tokio_io = ["tokio"]
 
@@ -65,6 +68,22 @@ optional = true
 
 [dependencies.tokio-native-tls]
 version = "^0.3"
+optional = true
+
+[dependencies.rustls]
+version = "0.22.1"
+optional = true
+
+[dependencies.rustls-pemfile]
+version = "2.0"
+optional = true
+
+[dependencies.tokio-rustls]
+version = "0.25.0"
+optional = true
+
+[dependencies.webpki-roots]
+version = "*"
 optional = true
 
 [dependencies.chrono]

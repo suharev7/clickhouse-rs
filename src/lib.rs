@@ -66,7 +66,8 @@
 //!
 //! - `tokio_io` *(enabled by default)* — I/O based on [Tokio](https://tokio.rs/).
 //! - `async_std` — I/O based on [async-std](https://async.rs/) (doesn't work together with `tokio_io`).
-//! - `tls` — TLS support (allowed only with `tokio_io`).
+//! - `tls-native-tls` — TLS support with native-tls (allowed only with `tokio_io`).
+//! - `tls-rustls` — TLS support with rustls (allowed only with `tokio_io`).
 //!
 //! ### Example
 //!
@@ -107,6 +108,9 @@
 //! ```
 
 #![recursion_limit = "1024"]
+
+#[cfg(all(feature = "tls-native-tls", feature = "tls-rustls"))]
+compile_error!("tls-native-tls and tls-rustls are mutually exclusive and cannot be enabled together");
 
 use std::{fmt, future::Future, time::Duration};
 

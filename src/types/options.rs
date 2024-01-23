@@ -8,8 +8,6 @@ use std::{
 };
 
 use crate::errors::{Error, Result, UrlError};
-#[cfg(feature = "tls")]
-use native_tls;
 use percent_encoding::percent_decode;
 use url::Url;
 
@@ -93,12 +91,11 @@ impl IntoOptions for String {
     }
 }
 
-/// An X509 certificate.
-#[cfg(feature = "tls")]
+/// An X509 certificate for native-tls.
+#[cfg(feature = "tls-native-tls")]
 #[derive(Clone)]
 pub struct Certificate(Arc<native_tls::Certificate>);
-
-#[cfg(feature = "tls")]
+#[cfg(feature = "tls-native-tls")]
 impl Certificate {
     /// Parses a DER-formatted X509 certificate.
     pub fn from_der(der: &[u8]) -> Result<Certificate> {
@@ -118,25 +115,54 @@ impl Certificate {
         Ok(Certificate(Arc::new(inner)))
     }
 }
+#[cfg(feature = "tls-native-tls")]
+impl From<Certificate> for native_tls::Certificate {
+    fn from(value: Certificate) -> Self {
+        value.0.as_ref().clone()
+    }
+}
 
-#[cfg(feature = "tls")]
+/// An X509 certificate for rustls.
+#[cfg(feature = "tls-rustls")]
+#[derive(Clone)]
+pub struct Certificate(Arc<Vec<rustls::pki_types::CertificateDer<'static>>>);
+#[cfg(feature = "tls-rustls")]
+impl Certificate {
+    /// Parses a DER-formatted X509 certificate.
+    pub fn from_der(der: &[u8]) -> Result<Certificate> {
+        let der = der.to_vec();
+        let inner = match rustls::pki_types::CertificateDer::try_from(der) {
+            Ok(certificate) => certificate,
+            Err(err) => return Err(Error::Other(err.to_string().into())),
+        };
+        Ok(Certificate(Arc::new(vec![inner])))
+    }
+
+    /// Parses a PEM-formatted X509 certificate.
+    pub fn from_pem(der: &[u8]) -> Result<Certificate> {
+        let certs = rustls_pemfile::certs(&mut der.as_ref())
+            .map(|result| result.unwrap())
+            .collect();
+        Ok(Certificate(Arc::new(certs)))
+    }
+}
+#[cfg(feature = "tls-rustls")]
+impl From<Certificate> for Vec<rustls::pki_types::CertificateDer<'static>> {
+    fn from(value: Certificate) -> Self {
+        value.0.as_ref().clone()
+    }
+}
+
+#[cfg(feature = "_tls")]
 impl fmt::Debug for Certificate {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "[Certificate]")
     }
 }
-
-#[cfg(feature = "tls")]
+#[cfg(feature = "_tls")]
 impl PartialEq for Certificate {
     fn eq(&self, _other: &Self) -> bool {
         true
-    }
-}
-
-#[cfg(feature = "tls")]
-impl From<Certificate> for native_tls::Certificate {
-    fn from(value: Certificate) -> Self {
-        value.0.as_ref().clone()
     }
 }
 
@@ -254,15 +280,15 @@ pub struct Options {
     pub(crate) execute_timeout: Option<Duration>,
 
     /// Enable TLS encryption (defaults to `false`)
-    #[cfg(feature = "tls")]
+    #[cfg(feature = "_tls")]
     pub(crate) secure: bool,
 
     /// Skip certificate verification (default is `false`).
-    #[cfg(feature = "tls")]
+    #[cfg(feature = "_tls")]
     pub(crate) skip_verify: bool,
 
     /// An X509 certificate.
-    #[cfg(feature = "tls")]
+    #[cfg(feature = "_tls")]
     pub(crate) certificate: Option<Certificate>,
 
     /// Query settings
@@ -313,11 +339,11 @@ impl Default for Options {
             query_timeout: Duration::from_secs(180),
             insert_timeout: Some(Duration::from_secs(180)),
             execute_timeout: Some(Duration::from_secs(180)),
-            #[cfg(feature = "tls")]
+            #[cfg(feature = "_tls")]
             secure: false,
-            #[cfg(feature = "tls")]
+            #[cfg(feature = "_tls")]
             skip_verify: false,
-            #[cfg(feature = "tls")]
+            #[cfg(feature = "_tls")]
             certificate: None,
             settings: HashMap::new(),
             alt_hosts: Vec::new(),
@@ -455,19 +481,19 @@ impl Options {
         => execute_timeout: Option<Duration>
     }
 
-    #[cfg(feature = "tls")]
+    #[cfg(feature = "_tls")]
     property! {
         /// Establish secure connection (default is `false`).
         => secure: bool
     }
 
-    #[cfg(feature = "tls")]
+    #[cfg(feature = "_tls")]
     property! {
         /// Skip certificate verification (default is `false`).
         => skip_verify: bool
     }
 
-    #[cfg(feature = "tls")]
+    #[cfg(feature = "_tls")]
     property! {
         /// An X509 certificate.
         => certificate: Option<Certificate>
@@ -560,9 +586,9 @@ where
                 options.execute_timeout = parse_param(key, value, parse_opt_duration)?
             }
             "compression" => options.compression = parse_param(key, value, parse_compression)?,
-            #[cfg(feature = "tls")]
+            #[cfg(feature = "_tls")]
             "secure" => options.secure = parse_param(key, value, bool::from_str)?,
-            #[cfg(feature = "tls")]
+            #[cfg(feature = "_tls")]
             "skip_verify" => options.skip_verify = parse_param(key, value, bool::from_str)?,
             "alt_hosts" => options.alt_hosts = parse_param(key, value, parse_hosts)?,
             _ => {
@@ -701,7 +727,7 @@ mod test {
     }
 
     #[test]
-    #[cfg(feature = "tls")]
+    #[cfg(feature = "_tls")]
     fn test_parse_secure_options() {
         let url = "tcp://username:password@host1:9001/database?ping_timeout=42ms&keepalive=99s&compression=lz4&connection_timeout=10s&secure=true&skip_verify=true";
         assert_eq!(

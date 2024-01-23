@@ -377,6 +377,9 @@ mod test {
         let spent = start.elapsed();
 
         assert!(spent >= Duration::from_millis(2000));
+        #[cfg(feature = "_tls")]
+        assert!(spent < Duration::from_millis(5000)); // slow connect
+        #[cfg(not(feature = "_tls"))]
         assert!(spent < Duration::from_millis(2500));
 
         assert_eq!(pool.info().idle_len, 6);

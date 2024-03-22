@@ -145,13 +145,13 @@ impl<'a> fmt::Display for ValueRef<'a> {
             ValueRef::Float64(v) => fmt::Display::fmt(v, f),
             ValueRef::Date(v) if f.alternate() => {
                 let date = NaiveDate::from_ymd_opt(1970, 1, 1)
-                    .map(|unix_epoch| unix_epoch + Duration::days((*v).into()))
+                    .map(|unix_epoch| unix_epoch + Duration::try_days((*v).into()).expect("TimeDelta::days out of bounds"))
                     .unwrap();
                 fmt::Display::fmt(&date, f)
             }
             ValueRef::Date(v) => {
                 let date = NaiveDate::from_ymd_opt(1970, 1, 1)
-                    .map(|unix_epoch| unix_epoch + Duration::days((*v).into()))
+                    .map(|unix_epoch| unix_epoch + Duration::try_days((*v).into()).expect("TimeDelta::days out of bounds"))
                     .unwrap();
                 fmt::Display::fmt(&date.format("%Y-%m-%d"), f)
             }
@@ -428,7 +428,7 @@ macro_rules! value_from {
             impl<'a> From<ValueRef<'a>> for $t {
                 fn from(value: ValueRef<'a>) -> Self {
                     if let ValueRef::$k(v) = value {
-                        return v
+                        return v;
                     }
                     let from = format!("{}", SqlType::from(value.clone()));
                     panic!("Can't convert ValueRef::{} into {}.",
@@ -443,7 +443,7 @@ impl<'a> From<ValueRef<'a>> for AppDate {
     fn from(value: ValueRef<'a>) -> Self {
         if let ValueRef::Date(v) = value {
             return NaiveDate::from_ymd_opt(1970, 1, 1)
-                .map(|unix_epoch| unix_epoch + Duration::days(v.into()))
+                .map(|unix_epoch| unix_epoch + Duration::try_days(v.into()).expect("TimeDelta::days out of bounds"))
                 .unwrap();
         }
         let from = format!("{}", SqlType::from(value.clone()));
@@ -560,8 +560,8 @@ mod test {
                     Arc::new(vec![
                         ValueRef::Int32(1),
                         ValueRef::Int32(2),
-                        ValueRef::Int32(3)
-                    ])
+                        ValueRef::Int32(3),
+                    ]),
                 )
             )
         );
@@ -579,7 +579,7 @@ mod test {
             (format!("{:#}", ValueRef::DateTime(0, *DEFAULT_TZ))
                 == "Thu, 1 Jan 1970 00:00:00 +0000")
                 || (format!("{:#}", ValueRef::DateTime(0, *DEFAULT_TZ))
-                    == "Thu, 01 Jan 1970 00:00:00 +0000")
+                == "Thu, 01 Jan 1970 00:00:00 +0000")
         );
 
         assert_eq!(
@@ -628,12 +628,12 @@ mod test {
                 Arc::new(vec![
                     ValueRef::Int32(1),
                     ValueRef::Int32(2),
-                    ValueRef::Int32(3)
-                ])
+                    ValueRef::Int32(3),
+                ]),
             )),
             Value::Array(
                 SqlType::Int32.into(),
-                Arc::new(vec![Value::Int32(1), Value::Int32(2), Value::Int32(3)])
+                Arc::new(vec![Value::Int32(1), Value::Int32(2), Value::Int32(3)]),
             )
         )
     }
@@ -684,8 +684,8 @@ mod test {
                 Arc::new(vec![
                     ValueRef::Int32(1),
                     ValueRef::Int32(2),
-                    ValueRef::Int32(3)
-                ])
+                    ValueRef::Int32(3),
+                ]),
             )),
             SqlType::Array(SqlType::Int32.into())
         );

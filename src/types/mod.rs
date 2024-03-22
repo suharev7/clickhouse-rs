@@ -46,6 +46,7 @@ mod cmd;
 mod date_converter;
 mod query;
 pub(crate) mod query_result;
+pub(crate) mod query_result_owned;
 
 mod decimal;
 mod enums;

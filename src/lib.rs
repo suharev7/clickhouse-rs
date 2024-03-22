@@ -132,6 +132,8 @@ pub use crate::{
     pool::Pool,
     types::{block::Block, Options, Simple},
 };
+use crate::types::query_result_owned::QueryResultOwned;
+use crate::types::query_result_owned::stream_blocks::BlockStreamOwned;
 
 mod binary;
 mod client_info;
@@ -297,7 +299,7 @@ impl Client {
             },
             timeout,
         )
-        .await
+            .await
     }
 }
 
@@ -362,13 +364,13 @@ impl ClientHandle {
             },
             timeout,
         )
-        .await
+            .await
     }
 
     /// Executes Clickhouse `query` on Conn.
     pub fn query<Q>(&mut self, sql: Q) -> QueryResult
-    where
-        Query: From<Q>,
+        where
+            Query: From<Q>,
     {
         let query = Query::from(sql);
         QueryResult {
@@ -377,10 +379,22 @@ impl ClientHandle {
         }
     }
 
+    /// Executes Clickhouse `query` on Conn.
+    pub fn query_owned<Q>(self, sql: Q) -> QueryResultOwned
+        where
+            Query: From<Q>,
+    {
+        let query = Query::from(sql);
+        QueryResultOwned {
+            client: self,
+            query,
+        }
+    }
+
     /// Convenience method to prepare and execute a single SQL statement.
     pub async fn execute<Q>(&mut self, sql: Q) -> Result<()>
-    where
-        Query: From<Q>,
+        where
+            Query: From<Q>,
     {
         let transport = self.execute_(sql).await?;
         self.inner = Some(transport);
@@ -388,8 +402,8 @@ impl ClientHandle {
     }
 
     async fn execute_<Q>(&mut self, sql: Q) -> Result<ClickhouseTransport>
-    where
-        Query: From<Q>,
+        where
+            Query: From<Q>,
     {
         let timeout = try_opt!(self.context.options.get())
             .execute_timeout
@@ -425,18 +439,18 @@ impl ClientHandle {
                         Ok(h.unwrap())
                     }
                 })
-                .await
+                    .await
             },
             timeout,
         )
-        .await
+            .await
     }
 
     /// Convenience method to insert block of data.
     pub async fn insert<Q, B>(&mut self, table: Q, block: B) -> Result<()>
-    where
-        Query: From<Q>,
-        B: AsRef<Block>,
+        where
+            Query: From<Q>,
+            B: AsRef<Block>,
     {
         let query = Self::make_query(table, block.as_ref())?;
         let transport = self.insert_(query.clone(), block.as_ref()).await?;
@@ -470,11 +484,11 @@ impl ClientHandle {
                         Self::insert_tail_(transport, context, query, chunks).await
                     }
                 })
-                .await
+                    .await
             },
             timeout,
         )
-        .await
+            .await
     }
 
     async fn insert_tail_(
@@ -516,8 +530,8 @@ impl ClientHandle {
     }
 
     fn make_query<Q>(table: Q, block: &Block) -> Result<Query>
-    where
-        Query: From<Q>,
+        where
+            Query: From<Q>,
     {
         let mut names: Vec<_> = Vec::with_capacity(block.as_ref().column_count());
         for column in block.as_ref().columns() {
@@ -528,10 +542,10 @@ impl ClientHandle {
     }
 
     pub(crate) async fn wrap_future<T, R, F>(&mut self, f: F) -> Result<T>
-    where
-        F: FnOnce(&mut Self) -> R + Send,
-        R: Future<Output = Result<T>>,
-        T: 'static,
+        where
+            F: FnOnce(&mut Self) -> R + Send,
+            R: Future<Output=Result<T>>,
+            T: 'static,
     {
         let ping_before_query = try_opt!(self.context.options.get()).ping_before_query;
 
@@ -542,8 +556,8 @@ impl ClientHandle {
     }
 
     pub(crate) fn wrap_stream<'a, F>(&'a mut self, f: F) -> BoxStream<'a, Result<Block>>
-    where
-        F: (FnOnce(&'a mut Self) -> Result<BlockStream<'a>>) + Send + 'static,
+        where
+            F: (FnOnce(&'a mut Self) -> Result<BlockStream<'a>>) + Send + 'static,
     {
         let ping_before_query = match self.context.options.get() {
             Ok(val) => val.ping_before_query,
@@ -558,6 +572,37 @@ impl ClientHandle {
                         Err(err) => Box::pin(stream::once(future::err(err))),
                     },
                     Err(err) => Box::pin(stream::once(future::err(err))),
+                };
+                inner
+            });
+
+            Box::pin(fut.flatten_stream())
+        } else {
+            match f(self) {
+                Ok(s) => Box::pin(s),
+                Err(err) => Box::pin(stream::once(future::err(err))),
+            }
+        }
+    }
+
+    pub(crate) fn wrap_stream_owned<F>(mut self, f: F) -> BoxStream<'static, Result<Block>>
+        where
+            F: (FnOnce(Self) -> Result<BlockStreamOwned>) + Send + 'static,
+    {
+        let ping_before_query = match self.context.options.get() {
+            Ok(val) => val.ping_before_query,
+            Err(err) => return Box::pin(stream::once(future::err(err))),
+        };
+
+        if ping_before_query {
+            let fut: BoxFuture<'static, BoxStream<'static, Result<Block>>> = Box::pin(async move {
+                let inner: BoxStream<'static, Result<Block>> = if let Err(err) = self.check_connection().await {
+                    Box::pin(stream::once(future::err(err)))
+                } else {
+                    match f(self) {
+                        Ok(s) => Box::pin(s),
+                        Err(err) => Box::pin(stream::once(future::err(err))),
+                    }
                 };
                 inner
             });
@@ -622,8 +667,8 @@ fn column_name_to_string(name: &str) -> Result<String> {
 
 #[cfg(feature = "async_std")]
 async fn with_timeout<F, T>(future: F, duration: Duration) -> F::Output
-where
-    F: Future<Output = Result<T>>,
+    where
+        F: Future<Output=Result<T>>,
 {
     use async_std::io;
     use futures_util::future::TryFutureExt;
@@ -635,8 +680,8 @@ where
 
 #[cfg(not(feature = "async_std"))]
 async fn with_timeout<F, T>(future: F, timeout: Duration) -> F::Output
-where
-    F: Future<Output = Result<T>>,
+    where
+        F: Future<Output=Result<T>>,
 {
     tokio::time::timeout(timeout, future).await?
 }

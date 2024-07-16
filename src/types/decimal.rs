@@ -4,7 +4,7 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-static FACTORS10: &[i64] = &[
+static FACTORS10: &[i128] = &[
     1,
     10,
     100,
@@ -24,27 +24,48 @@ static FACTORS10: &[i64] = &[
     10_000_000_000_000_000,
     100_000_000_000_000_000,
     1_000_000_000_000_000_000,
+    10_000_000_000_000_000_000,
+    100_000_000_000_000_000_000,
+    1_000_000_000_000_000_000_000,
+    10_000_000_000_000_000_000_000,
+    100_000_000_000_000_000_000_000,
+    1_000_000_000_000_000_000_000_000,
+    10_000_000_000_000_000_000_000_000,
+    100_000_000_000_000_000_000_000_000,
+    1_000_000_000_000_000_000_000_000_000,
+    10_000_000_000_000_000_000_000_000_000,
+    100_000_000_000_000_000_000_000_000_000,
+    1_000_000_000_000_000_000_000_000_000_000,
+    10_000_000_000_000_000_000_000_000_000_000,
+    100_000_000_000_000_000_000_000_000_000_000,
+    1_000_000_000_000_000_000_000_000_000_000_000,
+    10_000_000_000_000_000_000_000_000_000_000_000,
+    100_000_000_000_000_000_000_000_000_000_000_000,
+    1_000_000_000_000_000_000_000_000_000_000_000_000,
+    10_000_000_000_000_000_000_000_000_000_000_000_000,
+    100_000_000_000_000_000_000_000_000_000_000_000_000,
 ];
 
 pub trait Base {
-    fn scale(self, scale: i64) -> i64;
+    fn scale(self, scale: i128) -> i128;
 }
 
 pub trait InternalResult {
-    fn get(underlying: i64) -> Self;
+    fn get(underlying: i128) -> Self;
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub(crate) enum NoBits {
     N32,
     N64,
+    N128,
 }
 
 /// Provides arbitrary-precision floating point decimal.
 #[derive(Clone)]
 pub struct Decimal {
-    pub(crate) underlying: i64,
-    pub(crate) nobits: NoBits, // its domain is {32, 64}
+    pub(crate) underlying: i128,
+    pub(crate) nobits: NoBits, // its domain is {32, 64, 128}
     pub(crate) precision: u8,
     pub(crate) scale: u8,
 }
@@ -73,8 +94,8 @@ macro_rules! base_for {
     ( $( $t:ty: $cast:expr ),* ) => {
         $(
             impl Base for $t {
-                fn scale(self, scale: i64) -> i64 {
-                    $cast(self * (scale as $t)) as i64
+                fn scale(self, scale: i128) -> i128 {
+                    $cast(self * (scale as $t)) as i128
                 }
             }
         )*
@@ -84,26 +105,35 @@ macro_rules! base_for {
 base_for! {
     f32: std::convert::identity,
     f64: std::convert::identity,
-    i8: i64::from,
-    i16: i64::from,
-    i32: i64::from,
-    i64: std::convert::identity,
-    u8: i64::from,
-    u16: i64::from,
-    u32: i64::from,
-    u64 : std::convert::identity
+    i8: i128::from,
+    i16: i128::from,
+    i32: i128::from,
+    i64: i128::from,
+    i128: std::convert::identity,
+    u8: i128::from,
+    u16: i128::from,
+    u32: i128::from,
+    u64: i128::from,
+    u128: std::convert::identity
 }
 
 impl InternalResult for i32 {
     #[inline(always)]
-    fn get(underlying: i64) -> Self {
+    fn get(underlying: i128) -> Self {
         underlying as Self
     }
 }
 
 impl InternalResult for i64 {
     #[inline(always)]
-    fn get(underlying: i64) -> Self {
+    fn get(underlying: i128) -> Self {
+        underlying as Self
+    }
+}
+
+impl InternalResult for i128 {
+    #[inline(always)]
+    fn get(underlying: i128) -> Self {
         underlying
     }
 }
@@ -114,6 +144,8 @@ impl NoBits {
             Some(NoBits::N32)
         } else if precision <= 18 {
             Some(NoBits::N64)
+        } else if precision <= 38 {
+            Some(NoBits::N128)
         } else {
             None
         }
@@ -177,8 +209,8 @@ impl From<Decimal> for f64 {
 
 impl Decimal {
     /// Method of creating a Decimal.
-    pub fn new(underlying: i64, scale: u8) -> Decimal {
-        let precision = 18;
+    pub fn new(underlying: i128, scale: u8) -> Decimal {
+        let precision = 38;
         if scale > precision {
             panic!("scale can't be greater than 18");
         }
@@ -192,7 +224,7 @@ impl Decimal {
     }
 
     pub fn of<B: Base>(source: B, scale: u8) -> Decimal {
-        let precision = 18;
+        let precision = 38;
         if scale > precision {
             panic!("scale can't be greater than 18");
         }
@@ -210,7 +242,7 @@ impl Decimal {
         }
     }
 
-    /// Get the internal representation of decimal as [`i32`] or [`i64`].
+    /// Get the internal representation of decimal as [`i32`] or [`i64`] or [`i128`].
     ///
     /// example:
     /// ```rust
@@ -303,6 +335,12 @@ mod test {
     fn test_internal64() {
         let internal: i64 = Decimal::of(2, 4).internal();
         assert_eq!(internal, 20000_i64);
+    }
+
+    #[test]
+    fn test_internal128() {
+        let internal: i128 = Decimal::of(2, 4).internal();
+        assert_eq!(internal, 20000_i128);
     }
 
     #[test]

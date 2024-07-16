@@ -309,7 +309,7 @@ impl<'a> DecimalIterator<'a> {
     unsafe fn next_unchecked_<T>(&mut self) -> Decimal
     where
         T: Copy + Sized,
-        i64: From<T>,
+        i128: From<T>,
     {
         let current_value = *(self.ptr as *const T);
         self.ptr = (self.ptr as *const T).offset(1) as *const u8;
@@ -327,6 +327,7 @@ impl<'a> DecimalIterator<'a> {
         match self.nobits {
             NoBits::N32 => self.next_unchecked_::<i32>(),
             NoBits::N64 => self.next_unchecked_::<i64>(),
+            NoBits::N128 => self.next_unchecked_::<i128>(),
         }
     }
 
@@ -336,6 +337,7 @@ impl<'a> DecimalIterator<'a> {
             match self.nobits {
                 NoBits::N32 => self.ptr = (self.ptr as *const i32).add(n) as *const u8,
                 NoBits::N64 => self.ptr = (self.ptr as *const i64).add(n) as *const u8,
+                NoBits::N128 => self.ptr = (self.ptr as *const i128).add(n) as *const u8,
             }
         }
     }
@@ -347,6 +349,7 @@ impl<'a> ExactSizeIterator for DecimalIterator<'a> {
         let size = match self.nobits {
             NoBits::N32 => mem::size_of::<i32>(),
             NoBits::N64 => mem::size_of::<i64>(),
+            NoBits::N128 => mem::size_of::<i128>(),
         };
         (self.end as usize - self.ptr as usize) / size
     }
@@ -983,6 +986,7 @@ impl<'a> Iterable<'a, Simple> for Decimal {
             match nobits {
                 NoBits::N32 => (ptr as *const u32).add(size) as *const u8,
                 NoBits::N64 => (ptr as *const u64).add(size) as *const u8,
+                NoBits::N128 => (ptr as *const u128).add(size) as *const u8,
             }
         };
 

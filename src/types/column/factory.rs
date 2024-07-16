@@ -182,6 +182,7 @@ impl dyn ColumnData {
                 let inner_type = match nobits {
                     NoBits::N32 => SqlType::Int32,
                     NoBits::N64 => SqlType::Int64,
+                    NoBits::N128 => SqlType::Int128,
                 };
 
                 W::wrap(DecimalColumnData {
@@ -382,6 +383,7 @@ fn parse_decimal(source: &str) -> Option<(u8, u8, NoBits)> {
             let precision = match bits {
                 NoBits::N32 => 9,
                 NoBits::N64 => 18,
+                NoBits::N128 => 38,
             };
             Some((precision, scale, bits))
         }
@@ -554,7 +556,7 @@ mod test {
     fn test_parse_decimal() {
         assert_eq!(parse_decimal("Decimal(9, 4)"), Some((9, 4, NoBits::N32)));
         assert_eq!(parse_decimal("Decimal(10, 4)"), Some((10, 4, NoBits::N64)));
-        assert_eq!(parse_decimal("Decimal(20, 4)"), None);
+        assert_eq!(parse_decimal("Decimal(20, 4)"), Some((20, 4, NoBits::N128)));
         assert_eq!(parse_decimal("Decimal(2000, 4)"), None);
         assert_eq!(parse_decimal("Decimal(3, 4)"), None);
         assert_eq!(parse_decimal("Decimal(20, -4)"), None);

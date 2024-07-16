@@ -28,7 +28,8 @@ use crate::{
 };
 
 use self::chunk::ChunkColumnData;
-pub(crate) use self::{column_data::ColumnData, string_pool::StringPool};
+pub(crate) use self::string_pool::StringPool;
+pub use self::column_data::ColumnData;
 pub use self::{concat::ConcatColumnData, numeric::VectorColumnData};
 
 mod array;
@@ -193,6 +194,11 @@ impl<K: ColumnType> Column<K> {
     #[inline(always)]
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    #[inline(always)]
+    pub fn data(&self) -> ArcColumnData {
+        self.data.clone()
     }
 
     #[inline(always)]

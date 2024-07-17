@@ -1673,12 +1673,28 @@ async fn test_array() -> Result<(), Error> {
         .column("time64", vec![vec![date_time_value]])
         .column("bln", vec![vec![true]]);
 
+    let mut block2 = Block::with_capacity(1);
+    for _i in 0..1 {
+        block2.push(row! {
+            u8:vec![31_u8],
+            u32:vec![42_u32],
+            f64:vec![42_f64],
+            text1:vec!["A"],
+            text2:vec!["B".to_string()],
+            date:vec![date_value],
+            time:vec![date_time_value],
+            time64:vec![date_time_value],
+            bln:vec![true],
+        })?;
+    }
+
     let pool = Pool::new(database_url());
 
     let mut c = pool.get_handle().await?;
     c.execute("DROP TABLE IF EXISTS clickhouse_array").await?;
     c.execute(ddl).await?;
     c.insert("clickhouse_array", block).await?;
+    c.insert("clickhouse_array", block2).await?;
     let block = c.query(query).fetch_all().await?;
 
     let u8_vec: Vec<u8> = block.get(0, "u8")?;
@@ -1691,7 +1707,7 @@ async fn test_array() -> Result<(), Error> {
     let time64_vec: Vec<DateTime<Tz>> = block.get(0, "time64")?;
     let bln_vec: Vec<bool> = block.get(0, "bln")?;
 
-    assert_eq!(1, block.row_count());
+    assert_eq!(2, block.row_count());
     assert_eq!(vec![41_u8], u8_vec);
     assert_eq!(vec![42_u32], u32_vec);
     assert_eq!(vec![42_f64], f64_vec);

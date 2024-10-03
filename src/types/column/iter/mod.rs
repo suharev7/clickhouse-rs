@@ -307,9 +307,9 @@ impl FusedIterator for StringIterator<'_> {}
 impl<'a> DecimalIterator<'a> {
     #[inline(always)]
     unsafe fn next_unchecked_<T>(&mut self) -> Decimal
-    where
-        T: Copy + Sized,
-        i64: From<T>,
+        where
+            T: Copy + Sized,
+            i64: From<T>,
     {
         let current_value = *(self.ptr as *const T);
         self.ptr = (self.ptr as *const T).offset(1) as *const u8;
@@ -479,7 +479,7 @@ impl<'a> NativeDateTimeIterator<'a> {
         match &self.inner {
             DateTimeInnerIterator::DateTime32(ptr) => {
                 let current_value = *ptr.add(index_);
-                NaiveDateTime::from_timestamp_opt(i64::from(current_value), 0).unwrap()
+                DateTime::from_timestamp(i64::from(current_value), 0).unwrap().naive_utc()
             }
             DateTimeInnerIterator::DateTime64(ptr, precision) => {
                 let current_value = *ptr.add(index_);
@@ -664,8 +664,8 @@ impl<'a> Iterator for DateTimeIterator<'a> {
 }
 
 impl<'a, I> ExactSizeIterator for NullableIterator<'a, I>
-where
-    I: Iterator,
+    where
+        I: Iterator,
 {
     #[inline(always)]
     fn len(&self) -> usize {
@@ -675,8 +675,8 @@ where
 }
 
 impl<'a, I> Iterator for NullableIterator<'a, I>
-where
-    I: Iterator,
+    where
+        I: Iterator,
 {
     type Item = Option<I::Item>;
 
@@ -758,8 +758,8 @@ impl<'a, I: Iterator> Iterator for ArrayIterator<'a, I> {
 impl<'a, I: Iterator> FusedIterator for ArrayIterator<'a, I> {}
 
 impl<'a, K: Iterator, V: Iterator> ExactSizeIterator for MapIterator<'a, K, V>
-where
-    K::Item: Eq + Hash,
+    where
+        K::Item: Eq + Hash,
 {
     #[inline(always)]
     fn len(&self) -> usize {
@@ -768,8 +768,8 @@ where
 }
 
 impl<'a, K: Iterator, V: Iterator> Iterator for MapIterator<'a, K, V>
-where
-    K::Item: Eq + Hash,
+    where
+        K::Item: Eq + Hash,
 {
     type Item = HashMap<K::Item, V::Item>;
 
@@ -935,7 +935,7 @@ impl<'a> Iterable<'a, Simple> for &[u8] {
                 return Err(Error::FromSql(FromSqlError::InvalidType {
                     src: column.sql_type().to_string(),
                     dst: SqlType::String.to_string(),
-                }))
+                }));
             }
         };
 
@@ -1196,8 +1196,8 @@ fn date_iter(column: &Column<Simple>, props: u32) -> Result<DateTimeInternals> {
 }
 
 impl<'a, T> Iterable<'a, Simple> for Option<T>
-where
-    T: Iterable<'a, Simple>,
+    where
+        T: Iterable<'a, Simple>,
 {
     type Iter = NullableIterator<'a, T::Iter>;
 
@@ -1238,8 +1238,8 @@ where
 }
 
 impl<'a, T> Iterable<'a, Simple> for Vec<T>
-where
-    T: Iterable<'a, Simple>,
+    where
+        T: Iterable<'a, Simple>,
 {
     type Iter = ArrayIterator<'a, T::Iter>;
 
@@ -1279,10 +1279,10 @@ where
 }
 
 impl<'a, K, V> Iterable<'a, Simple> for HashMap<K, V>
-where
-    K: Iterable<'a, Simple>,
-    <<K as Iterable<'a, Simple>>::Iter as Iterator>::Item: Eq + Hash,
-    V: Iterable<'a, Simple>,
+    where
+        K: Iterable<'a, Simple>,
+        <<K as Iterable<'a, Simple>>::Iter as Iterator>::Item: Eq + Hash,
+        V: Iterable<'a, Simple>,
 {
     type Iter = MapIterator<'a, K::Iter, V::Iter>;
 
@@ -1328,8 +1328,8 @@ where
 }
 
 pub struct ComplexIterator<'a, T>
-where
-    T: Iterable<'a, Simple>,
+    where
+        T: Iterable<'a, Simple>,
 {
     column_type: SqlType,
 
@@ -1342,8 +1342,8 @@ where
 }
 
 impl<'a, T> Iterator for ComplexIterator<'a, T>
-where
-    T: Iterable<'a, Simple>,
+    where
+        T: Iterable<'a, Simple>,
 {
     type Item = <<T as Iterable<'a, Simple>>::Iter as Iterator>::Item;
 
@@ -1392,8 +1392,8 @@ where
 }
 
 impl<'a, T> Iterable<'a, Complex> for T
-where
-    T: Iterable<'a, Simple> + 'a,
+    where
+        T: Iterable<'a, Simple> + 'a,
 {
     type Iter = ComplexIterator<'a, T>;
 

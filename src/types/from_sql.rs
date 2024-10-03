@@ -106,9 +106,9 @@ impl<'a> FromSql<'a> for String {
 }
 
 impl<'a, K, V> FromSql<'a> for HashMap<K, V>
-where
-    K: FromSql<'a> + Eq + PartialEq + Hash,
-    V: FromSql<'a>,
+    where
+        K: FromSql<'a> + Eq + PartialEq + Hash,
+        V: FromSql<'a>,
 {
     fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
         if let ValueRef::Map(_k, _v, hm) = value {
@@ -274,8 +274,8 @@ from_sql_vec_impl! {
 }
 
 impl<'a, T> FromSql<'a> for Option<T>
-where
-    T: FromSql<'a>,
+    where
+        T: FromSql<'a>,
 {
     fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
         match value {
@@ -301,7 +301,7 @@ impl<'a> FromSql<'a> for NaiveDate {
     fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
         match value {
             ValueRef::Date(v) => NaiveDate::from_ymd_opt(1970, 1, 1)
-                .map(|unix_epoch| unix_epoch + Duration::days(v.into()))
+                .map(|unix_epoch| unix_epoch + Duration::try_days(v.into()).expect("TimeDelta::days out of bounds"))
                 .ok_or(Error::FromSql(FromSqlError::OutOfRange)),
             _ => {
                 let from = SqlType::from(value).to_string();

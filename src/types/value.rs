@@ -125,22 +125,22 @@ impl PartialEq for Value {
                 #[rustfmt::skip]
                 const MULTIPLIERS: [i64; 10] = [
                     1_000_000_000, // 1 s  is 10^9 nanos
-                      100_000_000,
-                       10_000_000,
-                        1_000_000, // 1 ms is 10^6 nanos
-                          100_000,
-                           10_000,
-                            1_000, // 1 µs is 10^3 nanos
-                              100,
-                               10,
-                                1, // 1 ns is 1 nanos!
+                    100_000_000,
+                    10_000_000,
+                    1_000_000, // 1 ms is 10^6 nanos
+                    100_000,
+                    10_000,
+                    1_000, // 1 µs is 10^3 nanos
+                    100,
+                    10,
+                    1, // 1 ns is 1 nanos!
                 ];
 
                 // The precision must be in the [0 - 9] range. As such, the
                 // following indexing can not fail.
                 prec_a == prec_b
                     && tz_a.timestamp_nanos(a * MULTIPLIERS[*prec_a as usize])
-                        == tz_b.timestamp_nanos(b * MULTIPLIERS[*prec_b as usize])
+                    == tz_b.timestamp_nanos(b * MULTIPLIERS[*prec_b as usize])
             }
 
             _ => false,
@@ -229,13 +229,13 @@ impl fmt::Display for Value {
             }
             Value::Date(v) if f.alternate() => {
                 let date = NaiveDate::from_ymd_opt(1970, 1, 1)
-                    .map(|unix_epoch| unix_epoch + Duration::days((*v).into()))
+                    .map(|unix_epoch| unix_epoch + Duration::try_days((*v).into()).expect("TimeDelta::days out of bounds"))
                     .unwrap();
                 fmt::Display::fmt(&date, f)
             }
             Value::Date(v) => {
                 let date = NaiveDate::from_ymd_opt(1970, 1, 1)
-                    .map(|unix_epoch| unix_epoch + Duration::days((*v).into()))
+                    .map(|unix_epoch| unix_epoch + Duration::try_days((*v).into()).expect("TimeDelta::days out of bounds"))
                     .unwrap();
                 fmt::Display::fmt(&date.format("%Y-%m-%d"), f)
             }
@@ -320,9 +320,9 @@ impl From<Value> for SqlType {
 }
 
 impl<T> From<Option<T>> for Value
-where
-    Value: From<T>,
-    T: HasSqlType,
+    where
+        Value: From<T>,
+        T: HasSqlType,
 {
     fn from(value: Option<T>) -> Value {
         match value {
@@ -429,9 +429,9 @@ impl From<Uuid> for Value {
 }
 
 impl<K, V> From<HashMap<K, V>> for Value
-where
-    K: Into<Value> + HasSqlType,
-    V: Into<Value> + HasSqlType,
+    where
+        K: Into<Value> + HasSqlType,
+        V: Into<Value> + HasSqlType,
 {
     fn from(hm: HashMap<K, V>) -> Self {
         let mut res = HashMap::with_capacity(hm.capacity());
@@ -549,7 +549,7 @@ impl From<Value> for AppDate {
     fn from(v: Value) -> AppDate {
         if let Value::Date(x) = v {
             return NaiveDate::from_ymd_opt(1970, 1, 1)
-                .map(|unix_epoch| unix_epoch + Duration::days(x.into()))
+                .map(|unix_epoch| unix_epoch + Duration::try_days(x.into()).expect("TimeDelta::days out of bounds"))
                 .unwrap();
         }
         let from = SqlType::from(v);
@@ -614,19 +614,19 @@ mod test {
     };
 
     fn test_into_t<T>(v: Value, x: &T)
-    where
-        Value: Into<T>,
-        T: PartialEq + fmt::Debug,
+        where
+            Value: Into<T>,
+            T: PartialEq + fmt::Debug,
     {
         let a: T = v.into();
         assert_eq!(a, *x);
     }
 
     fn test_from_rnd<T>()
-    where
-        Value: Into<T> + From<T>,
-        T: PartialEq + fmt::Debug + Clone,
-        Standard: Distribution<T>,
+        where
+            Value: Into<T> + From<T>,
+            T: PartialEq + fmt::Debug + Clone,
+            Standard: Distribution<T>,
     {
         for _ in 0..100 {
             let value = random::<T>();
@@ -635,9 +635,9 @@ mod test {
     }
 
     fn test_from_t<T>(value: &T)
-    where
-        Value: Into<T> + From<T>,
-        T: PartialEq + fmt::Debug + Clone,
+        where
+            Value: Into<T> + From<T>,
+            T: PartialEq + fmt::Debug + Clone,
     {
         test_into_t::<T>(Value::from(value.clone()), value);
     }
@@ -785,7 +785,7 @@ mod test {
                 "{}",
                 Value::Array(
                     SqlType::Int32.into(),
-                    Arc::new(vec![Value::Int32(1), Value::Int32(2), Value::Int32(3)])
+                    Arc::new(vec![Value::Int32(1), Value::Int32(2), Value::Int32(3)]),
                 )
             )
         );

@@ -316,7 +316,7 @@ impl PacketStream {
             }
         }
 
-        Ok((h.unwrap(), b))
+        Ok((h.ok_or(Error::Driver(DriverError::UnexpectedPacket))?, b))
     }
 
     pub(crate) fn take_transport(&mut self) -> Option<ClickhouseTransport> {

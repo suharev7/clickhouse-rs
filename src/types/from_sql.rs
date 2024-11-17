@@ -176,7 +176,10 @@ impl<'a> FromSql<'a> for uuid::Uuid {
 }
 
 macro_rules! from_sql_vec_impl {
-    ( $( $t:ty: $k:pat => $f:expr ),* ) => {
+    // Base case: Vec<T>
+    (
+        $($t:ty: $k:pat => $f:expr),*
+    ) => {
         $(
             impl<'a> FromSql<'a> for Vec<$t> {
                 fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
@@ -197,6 +200,36 @@ macro_rules! from_sql_vec_impl {
                                 dst: format!("Vec<{}>", stringify!($t)).into(),
                             }))
                         }
+                    }
+                }
+            }
+            // Recursive case: Vec<Vec<T>>
+            impl<'a> FromSql<'a> for Vec<Vec<$t>> {
+                fn from_sql(value: ValueRef<'a>) -> FromSqlResult<Self> {
+                    match value {
+                        ValueRef::Array(SqlType::Array(_), outer_vs) => {
+                            let mut result = Vec::with_capacity(outer_vs.len());
+                            for outer_v in outer_vs.iter() {
+                                match outer_v {
+                                    ValueRef::Array($k, inner_vs) => {
+                                        let f: fn(ValueRef<'a>) -> FromSqlResult<$t> = $f;
+                                        let inner: Vec<$t> = inner_vs.iter().map(|inner_v| f(inner_v.clone())).collect::<std::result::Result<Vec<$t>, _>>()?;
+                                        result.push(inner);
+                                    }
+                                    _ => {
+                                        return Err(Error::FromSql(FromSqlError::InvalidType {
+                                            src: SqlType::from(outer_v.clone()).to_string(),
+                                            dst: format!("Vec<Vec<{}>>", stringify!($t)).into(),
+                                        }));
+                                    }
+                                }
+                            }
+                            Ok(result)
+                        }
+                        _ => Err(Error::FromSql(FromSqlError::InvalidType {
+                            src: SqlType::from(value.clone()).to_string(),
+                            dst: format!("Vec<Vec<{}>>", stringify!($t)).into(),
+                        })),
                     }
                 }
             }

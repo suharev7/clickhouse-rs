@@ -20,6 +20,8 @@ jobs:
         image: clickhouse/clickhouse-server
         ports:
           - 9000:9000
+        env:
+          CLICKHOUSE_SKIP_USER_SETUP: 1
     steps:
       - uses: actions/checkout@v3
       - name: Build
@@ -45,6 +47,7 @@ jobs:
           -v ./extras/ci/overrides.xml:/etc/clickhouse-server/config.d/overrides.xml
           -e CH_SSL_CERTIFICATE=/etc/clickhouse-server/config.d/server.crt
           -e CH_SSL_PRIVATE_KEY=/etc/clickhouse-server/config.d/server.key
+          -e CLICKHOUSE_SKIP_USER_SETUP=1
           --network host
           --rm
           --detach
@@ -72,6 +75,7 @@ jobs:
           -v ./extras/ci/overrides.xml:/etc/clickhouse-server/config.d/overrides.xml
           -e CH_SSL_CERTIFICATE=/etc/clickhouse-server/config.d/server.crt
           -e CH_SSL_PRIVATE_KEY=/etc/clickhouse-server/config.d/server.key
+          -e CLICKHOUSE_SKIP_USER_SETUP=1
           --network host
           --rm
           --detach

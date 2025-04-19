@@ -1,9 +1,10 @@
 <clickhouse>
     <openSSL>
         <server>
-            <certificateFile from_env="CH_SSL_CERTIFICATE" replace="1"></certificateFile>
-            <privateKeyFile from_env="CH_SSL_PRIVATE_KEY" replace="1"></privateKeyFile>
-            <verificationMode>none</verificationMode>
+            <certificateFile>/etc/clickhouse-server/tls/server.crt</certificateFile>
+            <privateKeyFile>/etc/clickhouse-server/tls/server.key</privateKeyFile>
+            <caConfig>/etc/clickhouse-server/tls/ca.pem</caConfig>
+            <verificationMode>relaxed</verificationMode>
             <loadDefaultCAFile>true</loadDefaultCAFile>
             <cacheSessions>true</cacheSessions>
             <disableProtocols>sslv2,sslv3</disableProtocols>

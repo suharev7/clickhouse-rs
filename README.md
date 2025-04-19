@@ -72,7 +72,13 @@ for the most common use cases. The following features are available.
 
 - `tokio_io` *(enabled by default)* — I/O based on [Tokio](https://tokio.rs/).
 - `async_std` — I/O based on [async-std](https://async.rs/) (doesn't work together with `tokio_io`).
-- `tls` — TLS support (allowed only with `tokio_io`).
+- `tls` — TLS support (allowed only with `tokio_io` and one of TLS libraries, under `tls-rustls` or `tls-native-tls` features).
+
+### TLS
+
+- `skip_verify` - do not verify the server certificate (**insecure**)
+- `ca_certificate` - instead of `skip_verify` it is better to pass CA certificate explicitly (in case of self-signed certificates).
+- `client_certificate`/`client_private_key` - authentication using TLS certificates (mTLS) (see [ClickHouse documentation](https://clickhouse.com/docs/operations/external-authenticators/ssl-x509) for more info)
 
 ## Example
 

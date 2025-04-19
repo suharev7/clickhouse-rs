@@ -328,7 +328,7 @@ impl ClientHandle {
         }
 
         self.inner = h;
-        self.context.server_info = info.unwrap();
+        self.context.server_info = info.ok_or(Error::Other("Missing Hello/Exception packet".into()))?;
         Ok(())
     }
 

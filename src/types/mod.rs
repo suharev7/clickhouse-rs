@@ -21,6 +21,8 @@ pub use self::{
     value::Value,
     value_ref::ValueRef,
 };
+#[cfg(feature = "_tls")]
+pub use self::options::ClientTlsIdentity;
 
 pub(crate) use self::{
     cmd::Cmd,

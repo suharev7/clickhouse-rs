@@ -35,6 +35,8 @@ use crate::{errors::ConnectionError, io::Stream as InnerStream, Options};
 use tokio_native_tls::TlsStream;
 #[cfg(feature = "tls-rustls")]
 use tokio_rustls::client::TlsStream;
+#[cfg(feature = "_tls")]
+use crate::types::ClientTlsIdentity;
 
 type Result<T> = std::result::Result<T, ConnectionError>;
 
@@ -104,6 +106,11 @@ impl State {
         State::Tcp(TcpState::Fail(Some(conn_error)))
     }
 
+    #[cfg(feature = "tls-rustls")]
+    fn tls_err(e: TlsError) -> Self {
+        State::Tls(TlsState::Fail(Some(ConnectionError::TlsError(e))))
+    }
+
     #[cfg(feature = "_tls")]
     fn tls_host_err() -> Self {
         State::Tls(TlsState::Fail(Some(ConnectionError::TlsHostNotProvided)))
@@ -125,6 +132,7 @@ pub(crate) struct ConnectingStream {
     state: State,
 }
 
+#[cfg(feature = "tls-rustls")]
 #[derive(Debug)]
 struct DummyTlsVerifier;
 
@@ -231,9 +239,13 @@ impl ConnectingStream {
             Some(host) => {
                 let mut builder = TlsConnector::builder();
                 builder.danger_accept_invalid_certs(options.skip_verify);
-                if let Some(certificate) = options.certificate.clone() {
+                if let Some(certificate) = options.ca_certificate.clone() {
                     let native_cert = native_tls::Certificate::from(certificate);
                     builder.add_root_certificate(native_cert);
+                }
+                if let Some(identity) = &options.client_tls_identity {
+                    let ClientTlsIdentity::Pkcs(pkcs) = identity;
+                    builder.identity(pkcs.clone());
                 }
 
                 Self {
@@ -261,11 +273,10 @@ impl ConnectingStream {
                 state: State::tls_host_err(),
             },
             Some(host) => {
-                let config = if options.skip_verify {
+                let builder = if options.skip_verify {
                     ClientConfig::builder()
                         .dangerous()
                         .with_custom_certificate_verifier(Arc::new(DummyTlsVerifier))
-                        .with_no_client_auth()
                 } else {
                     let mut cert_store = RootCertStore::empty();
                     cert_store.extend(
@@ -273,7 +284,7 @@ impl ConnectingStream {
                             .iter()
                             .cloned()
                     );
-                    if let Some(certificates) = options.certificate.clone() {
+                    if let Some(certificates) = options.ca_certificate.clone() {
                         for certificate in
                             Into::<Vec<rustls::pki_types::CertificateDer<'static>>>::into(
                                 certificates,
@@ -293,7 +304,18 @@ impl ConnectingStream {
                     }
                     ClientConfig::builder()
                         .with_root_certificates(cert_store)
-                        .with_no_client_auth()
+                };
+                let config = if let Some(identity) = &options.client_tls_identity {
+                    let ClientTlsIdentity::Pem { key, certs } = identity;
+                    builder.with_client_auth_cert(certs.clone().into(), key.clone_key())
+                } else {
+                    Ok(builder.with_no_client_auth())
+                };
+                let config = match config {
+                    Ok(config) => config,
+                    Err(err) => {
+                        return Self { state: State::tls_err(err) };
+                    },
                 };
                 Self {
                     state: State::tls_wait(Box::pin(async move {

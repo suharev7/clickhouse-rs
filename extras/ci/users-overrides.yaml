@@ -1,0 +1,6 @@
+---
+users:
+  tls:
+    ssl_certificates:
+      subject_alt_name:
+      - DNS:localhost

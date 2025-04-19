@@ -287,6 +287,15 @@ impl Stream for ClickhouseTransport {
         }
 
         if *this.done {
+            // We still have may have something in buffer, since the client may read something
+            // first, and only after the server will close the connection, likely in case of
+            // exception, let's try to parse it here
+            if !this.rd.is_empty() {
+                if let Poll::Ready(ret) = this.try_parse_msg()? {
+                    return Poll::Ready(ret.map(Ok));
+                }
+            }
+
             return Poll::Ready(None);
         }
 

@@ -233,6 +233,12 @@ impl Pool {
                     let _ = self.inner.new.push(new);
                 }
                 Poll::Ready(Err(err)) => {
+                    // NOTE: we should also wake up waiting tasks when failed to build connection,
+                    // otherwise the waiting futures will sleep a very very long time or forever
+                    // when the connection is impossible to build in a long time or forever.
+                    while let Some(task) = self.inner.tasks.pop() {
+                        task.wake();
+                    }
                     return Err(err);
                 }
             }

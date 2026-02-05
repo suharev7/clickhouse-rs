@@ -337,7 +337,7 @@ uint128 CityHash128WithSeed(const char *s, size_t len, uint128 seed) {
 }
 
 extern "C"
-uint128 CityHash128(char *s, size_t len) {
+uint128 CityHash128(const char *s, size_t len) {
   if (len >= 16) {
     return CityHash128WithSeed(s + 16,
                                len - 16,

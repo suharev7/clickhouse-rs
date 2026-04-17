@@ -182,6 +182,20 @@ impl<S> Packet<S> {
             Packet::Eof(_) => Packet::Eof(transport.take().unwrap()),
         }
     }
+
+    /// Human-readable variant name, used by `DriverError::UnexpectedPacket`.
+    pub(crate) fn variant_name(&self) -> &'static str {
+        match self {
+            Packet::Hello(_, _) => "Hello",
+            Packet::Pong(_) => "Pong",
+            Packet::Progress(_) => "Progress",
+            Packet::ProfileInfo(_) => "ProfileInfo",
+            Packet::TableColumns(_) => "TableColumns",
+            Packet::Exception(_) => "Exception",
+            Packet::Block(_) => "Block",
+            Packet::Eof(_) => "Eof",
+        }
+    }
 }
 
 pub trait HasSqlType {

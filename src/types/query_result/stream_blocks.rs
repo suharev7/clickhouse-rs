@@ -116,7 +116,14 @@ impl<'a> Stream for BlockStream<'a> {
                         return Poll::Ready(Some(Ok(block)));
                     }
                 }
-                _ => return Poll::Ready(Some(Err(Error::Driver(DriverError::UnexpectedPacket)))),
+                other => {
+                    return Poll::Ready(Some(Err(Error::Driver(
+                        DriverError::UnexpectedPacket {
+                            packet: other.variant_name(),
+                            context: "stream_blocks",
+                        },
+                    ))))
+                }
             }
         }
     }

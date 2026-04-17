@@ -323,7 +323,12 @@ impl ClientHandle {
                 }
                 Ok(Packet::Exception(e)) => return Err(Error::Server(e)),
                 Err(e) => return Err(Error::Io(e)),
-                _ => return Err(Error::Driver(DriverError::UnexpectedPacket)),
+                Ok(other) => {
+                    return Err(Error::Driver(DriverError::UnexpectedPacket {
+                        packet: other.variant_name(),
+                        context: "hello",
+                    }))
+                }
             }
         }
 
@@ -352,7 +357,12 @@ impl ClientHandle {
                         }
                         Ok(Packet::Exception(e)) => return Err(Error::Server(e)),
                         Err(e) => return Err(Error::Io(e)),
-                        _ => return Err(Error::Driver(DriverError::UnexpectedPacket)),
+                        Ok(other) => {
+                            return Err(Error::Driver(DriverError::UnexpectedPacket {
+                                packet: other.variant_name(),
+                                context: "ping",
+                            }))
+                        }
                     }
                 }
 
@@ -422,7 +432,12 @@ impl ClientHandle {
                                 | Ok(Packet::Progress(_)) => (),
                                 Ok(Packet::Exception(e)) => return Err(Error::Server(e)),
                                 Err(e) => return Err(Error::Io(e)),
-                                _ => return Err(Error::Driver(DriverError::UnexpectedPacket)),
+                                Ok(other) => {
+                                    return Err(Error::Driver(DriverError::UnexpectedPacket {
+                                        packet: other.variant_name(),
+                                        context: "execute",
+                                    }))
+                                }
                             }
                         }
 

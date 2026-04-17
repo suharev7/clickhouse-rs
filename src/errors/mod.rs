@@ -96,8 +96,13 @@ pub enum DriverError {
     #[error("Unknown packet 0x{:x}.", packet)]
     UnknownPacket { packet: u64 },
 
-    #[error("Unexpected packet.")]
-    UnexpectedPacket,
+    #[error("Unexpected packet `{packet}` at `{context}`.")]
+    UnexpectedPacket {
+        /// Human-readable packet variant name actually received.
+        packet: &'static str,
+        /// Call site that rejected it (e.g. `"read_block"`, `"hello"`).
+        context: &'static str,
+    },
 
     #[error("Timeout error.")]
     Timeout,

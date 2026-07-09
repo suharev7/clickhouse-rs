@@ -21,6 +21,9 @@ pub(crate) struct BlockStream<'a> {
     state: BlockStreamState,
     block_index: usize,
     skip_first_block: bool,
+    /// Buffered schema-only header block, kept so it can still be emitted when
+    /// it turns out to be the only block (see issue #222).
+    first_block: Option<Block>,
 }
 
 #[derive(Clone, Copy)]
@@ -66,6 +69,7 @@ impl<'a> BlockStream<'a> {
             state: BlockStreamState::Reading,
             block_index: 0,
             skip_first_block,
+            first_block: None,
         }
     }
 }
@@ -104,6 +108,13 @@ impl<'a> Stream for BlockStream<'a> {
                         self.client.pool.attach();
                     }
                     self.state = BlockStreamState::Finished;
+
+                    // If the header block turned out to be the only block (e.g. a
+                    // `SELECT` over an empty table), emit it now so its column
+                    // info is not lost. See issue #222.
+                    if let Some(block) = self.first_block.take() {
+                        return Poll::Ready(Some(Ok(block)));
+                    }
                 }
                 Packet::ProfileInfo(_) | Packet::Progress(_) => {}
                 Packet::Exception(exception) => {
@@ -112,8 +123,17 @@ impl<'a> Stream for BlockStream<'a> {
                 }
                 Packet::Block(block) => {
                     self.block_index += 1;
-                    if (self.block_index > 1 || !self.skip_first_block) && !block.is_empty() {
-                        return Poll::Ready(Some(Ok(block)));
+
+                    if !block.is_empty() {
+                        if self.skip_first_block && self.block_index == 1 {
+                            // The first block is the schema-only header. Buffer it
+                            // so we can still expose the column info if it is the
+                            // only block; a following data block makes it redundant.
+                            self.first_block = Some(block);
+                        } else {
+                            self.first_block = None;
+                            return Poll::Ready(Some(Ok(block)));
+                        }
                     }
                 }
                 _ => return Poll::Ready(Some(Err(Error::Driver(DriverError::UnexpectedPacket)))),

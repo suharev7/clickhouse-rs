@@ -810,6 +810,28 @@ async fn test_empty_select() -> Result<(), Error> {
 
 #[cfg(feature = "tokio_io")]
 #[tokio::test]
+async fn test_empty_select_stream_blocks() -> Result<(), Error> {
+    let pool = Pool::new(database_url());
+    let mut c = pool.get_handle().await?;
+
+    let blocks: Vec<_> = c
+        .query("SELECT 1 AS a WHERE 1 <> 1")
+        .stream_blocks()
+        .try_collect()
+        .await?;
+
+    // Even for an empty result set, the schema-only header block must still be
+    // streamed so that column info is not lost (see issue #222).
+    let total_rows: usize = blocks.iter().map(|b| b.row_count()).sum();
+    assert_eq!(total_rows, 0);
+    assert_eq!(blocks.len(), 1);
+    assert_eq!(blocks[0].column_count(), 1);
+
+    Ok(())
+}
+
+#[cfg(feature = "tokio_io")]
+#[tokio::test]
 async fn test_select_settings() -> Result<(), Error> {
     let options = Options::from_str(&database_url())?.with_setting(
         "max_threads",
